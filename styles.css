@@ -3540,3 +3540,324 @@ html.fit-2 .betkey .bbet { font-size: calc(var(--u) * 1.45); }
 @media (prefers-reduced-motion: reduce) {
   .center { transition: none; }
 }
+
+
+/* ========== UI Phase-2: brightness tiers / bet declutter / secondary deck (20261006c2) ========== */
+
+/* --- Tier model: static ~52% · interactive ~80% · event 100% --- */
+
+/* Decorative frame LEDs / side lamps: quieter at rest */
+.rail-dot:not(.on) {
+  opacity: 0.32;
+  filter: brightness(0.75);
+}
+.side-lamp {
+  opacity: 0.45;
+  filter: brightness(0.82);
+}
+.wing-lamp:not(.on) {
+  opacity: 0.38;
+  filter: brightness(0.8) saturate(0.7);
+}
+.hold-lamp:not(.on) {
+  opacity: 0.42;
+  filter: brightness(0.8);
+}
+.hold-rail {
+  opacity: 0.72;
+  filter: brightness(0.9) saturate(0.85);
+}
+.cabinet.fx-spin .hold-rail,
+.cabinet.fx-win .hold-rail,
+.cabinet.fx-reach .hold-rail,
+.cabinet.fx-expect .hold-rail,
+.cabinet.fx-fever .hold-rail {
+  opacity: 1;
+  filter: none;
+}
+
+/* JP / LINE / Mission / Bonus standby: dim until live or hit */
+.mini-meter:not(.is-hit):not(.is-live) {
+  opacity: 0.42;
+  filter: brightness(0.72) saturate(0.65);
+}
+.mini-meter.is-live:not(.is-hit) {
+  opacity: 0.78;
+  filter: brightness(0.92) saturate(0.9);
+}
+.mini-meter.is-hit {
+  opacity: 1;
+  filter: none;
+}
+.mission-bar {
+  opacity: 0.52;
+  filter: brightness(0.82) saturate(0.75);
+}
+.bingo-wrap:not(.is-plaque) {
+  opacity: 0.7;
+  filter: brightness(0.86) saturate(0.88);
+}
+.bingo-wrap:not(.is-plaque) .bingo-cell:not(.on):not(.flash):not(.line) {
+  opacity: 0.55;
+}
+.bingo-cell.on,
+.bingo-cell.flash,
+.bingo-cell.line {
+  opacity: 1;
+  filter: none;
+}
+.cabinet.center-focus .bingo-wrap:not(.is-plaque),
+.cabinet.fx-win .bingo-wrap:not(.is-plaque),
+.cabinet.fx-fever .bingo-wrap:not(.is-plaque) {
+  opacity: 1;
+  filter: none;
+}
+.bonus-lamp:not(.is-on):not(.is-fever) {
+  opacity: 0.48;
+  filter: brightness(0.78) saturate(0.7);
+}
+.bonus-lamp.is-on,
+.bonus-lamp.is-fever {
+  opacity: 1;
+  filter: none;
+}
+.top-plaque {
+  opacity: 0.7;
+  filter: brightness(0.88) saturate(0.85);
+}
+.wing-caption {
+  opacity: 0.55;
+}
+.paint-scroll,
+.screw {
+  opacity: 0.55;
+  filter: brightness(0.85);
+}
+
+/* Status meters stay readable (~82%) */
+.marquee {
+  opacity: 0.96;
+}
+.meter {
+  filter: brightness(0.95);
+}
+
+/* Outer track idle: interactive tier; chase already handled in phase-1 */
+.board:not(.is-chasing) .tile:not(.win):not(.sym-hit):not(.bet-framed) {
+  filter: brightness(0.9);
+  opacity: 0.92;
+}
+.board:not(.is-chasing) .tile.bet-framed {
+  filter: none;
+  opacity: 1;
+}
+
+/* --- Bet strip: only active bets shout --- */
+.paycell {
+  opacity: 0.4;
+  filter: brightness(0.65) saturate(0.75);
+}
+.paycell.is-bet {
+  opacity: 1;
+  filter: none;
+  box-shadow:
+    inset 0 0 0 calc(var(--u) * 0.2) #f0c24a,
+    0 0 calc(var(--u) * 0.9) rgba(255, 200, 60, 0.28);
+}
+.paycell:not(.is-bet) .led {
+  opacity: 0.08;
+  visibility: hidden;
+}
+.paycell.is-bet .led {
+  opacity: 1;
+  visibility: visible;
+}
+.paycell:not(.is-bet) .mult {
+  opacity: 0.55;
+  filter: brightness(0.72) saturate(0.65);
+  text-shadow: none;
+}
+.paycell.hit {
+  opacity: 1;
+  filter: none;
+}
+.paycell.hit .led {
+  opacity: 1;
+  visibility: visible;
+}
+.paycell.hit .mult {
+  opacity: 1;
+  filter: none;
+}
+
+.betkey:not(.is-bet) {
+  opacity: 0.7;
+  filter: brightness(0.82) saturate(0.82);
+}
+.betkey.is-bet {
+  opacity: 1;
+  filter: none;
+}
+.betkey:not(.is-bet)::before {
+  box-shadow:
+    inset 0 0 0 calc(var(--u) * 0.12) rgba(255, 255, 255, 0.55),
+    inset 0 calc(var(--u) * -0.35) calc(var(--u) * 0.5) rgba(90, 60, 20, 0.2),
+    0 calc(var(--u) * 0.45) 0 #7a7464;
+}
+.betkey.is-bet::before {
+  box-shadow:
+    inset 0 0 0 calc(var(--u) * 0.15) rgba(255, 255, 255, 0.85),
+    inset 0 calc(var(--u) * -0.4) calc(var(--u) * 0.55) rgba(90, 60, 20, 0.22),
+    0 calc(var(--u) * 0.5) 0 #8a826e,
+    0 0 calc(var(--u) * 1.2) rgba(255, 200, 60, 0.4);
+}
+
+/* --- Secondary deck (開分／洗分／加倍／續押 + 比倍區): clearly below main CTA --- */
+.deck-func {
+  opacity: 0.5;
+  filter: brightness(0.78) saturate(0.72);
+}
+.deck-func:focus-within,
+.deck-func:hover {
+  opacity: 0.78;
+  filter: brightness(0.9) saturate(0.85);
+}
+.deck-func:has(.btn.flash),
+.deck-func:has(.btn.on) {
+  opacity: 0.92;
+  filter: brightness(0.96) saturate(0.92);
+}
+.deck-func .btn {
+  height: max(44px, calc(var(--u) * 8.2));
+  min-height: 44px;
+  font-size: calc(var(--u) * 2.9);
+  text-shadow: 0 1px 0 rgba(0, 0, 0, 0.5);
+  box-shadow: 0 calc(var(--u) * 0.35) calc(var(--u) * 0.5) rgba(0, 0, 0, 0.5);
+}
+.deck-func .btn::before {
+  box-shadow:
+    inset 0 0 0 calc(var(--u) * 0.12) rgba(255, 255, 255, 0.18),
+    inset 0 calc(var(--u) * -0.35) calc(var(--u) * 0.5) rgba(0, 0, 0, 0.22),
+    0 calc(var(--u) * 0.38) 0 var(--c4),
+    0 calc(var(--u) * 0.5) calc(var(--u) * 0.3) rgba(0, 0, 0, 0.4);
+  filter: saturate(0.85) brightness(0.92);
+}
+.deck-func .btn::after {
+  opacity: 0.45;
+  height: 22%;
+}
+.deck-func .btn.flash:not(.off)::before,
+.deck-func .btn.on::before {
+  filter: brightness(1.15) saturate(1);
+}
+.deck-func .pgroup {
+  box-shadow: inset 0 0 0 calc(var(--u) * 0.22) var(--pg);
+  filter: saturate(0.75) brightness(0.88);
+}
+.deck-func .plate {
+  opacity: 0.75;
+  filter: saturate(0.8) brightness(0.9);
+}
+
+/* Main row: clear / all / auto ~80%; Start stays 100% */
+.deck-main .btn:not(.btn-start) {
+  opacity: 0.84;
+  filter: brightness(0.9) saturate(0.9);
+  text-shadow: 0 1px 0 rgba(0, 0, 0, 0.55);
+  box-shadow: 0 calc(var(--u) * 0.4) calc(var(--u) * 0.55) rgba(0, 0, 0, 0.55);
+}
+.deck-main .btn:not(.btn-start)::before {
+  box-shadow:
+    inset 0 0 0 calc(var(--u) * 0.14) rgba(255, 255, 255, 0.22),
+    inset 0 calc(var(--u) * -0.4) calc(var(--u) * 0.55) rgba(0, 0, 0, 0.25),
+    0 calc(var(--u) * 0.42) 0 var(--c4),
+    0 calc(var(--u) * 0.55) calc(var(--u) * 0.35) rgba(0, 0, 0, 0.42);
+}
+.deck-main .btn:not(.btn-start)::after {
+  opacity: 0.5;
+  height: 24%;
+}
+.deck-main .btn-start {
+  opacity: 1;
+  filter: none;
+  box-shadow:
+    0 calc(var(--u) * 0.45) calc(var(--u) * 0.75) rgba(0, 0, 0, 0.65),
+    0 0 calc(var(--u) * 2.4) rgba(80, 255, 140, 0.32);
+}
+.deck-main .btn-start::before {
+  filter: brightness(1.05);
+  box-shadow:
+    inset 0 0 0 calc(var(--u) * 0.16) rgba(255, 255, 255, 0.26),
+    inset 0 calc(var(--u) * -0.45) calc(var(--u) * 0.65) rgba(0, 0, 0, 0.28),
+    0 calc(var(--u) * 0.5) 0 var(--c4),
+    0 calc(var(--u) * 0.7) calc(var(--u) * 0.4) rgba(0, 0, 0, 0.5);
+}
+
+/* Soften deck chrome bevel / glow ~15% */
+.deck {
+  box-shadow:
+    inset 0 calc(var(--u) * 0.3) 0 rgba(255, 255, 255, 0.12),
+    inset 0 0 0 calc(var(--u) * 0.25) #000,
+    0 0 0 calc(var(--u) * 0.28) #6a6a70,
+    0 0 0 calc(var(--u) * 0.5) #2a1206,
+    0 calc(var(--u) * 0.45) calc(var(--u) * 0.9) rgba(0, 0, 0, 0.5);
+}
+.betkey {
+  box-shadow: 0 calc(var(--u) * 0.38) calc(var(--u) * 0.55) rgba(0, 0, 0, 0.55);
+}
+.btn {
+  box-shadow: 0 calc(var(--u) * 0.38) calc(var(--u) * 0.55) rgba(0, 0, 0, 0.55);
+  text-shadow: 0 1px 0 rgba(0, 0, 0, 0.55);
+}
+.btn::before {
+  box-shadow:
+    inset 0 0 0 calc(var(--u) * 0.14) rgba(255, 255, 255, 0.22),
+    inset 0 calc(var(--u) * -0.4) calc(var(--u) * 0.6) rgba(0, 0, 0, 0.24),
+    0 calc(var(--u) * 0.42) 0 var(--c4),
+    0 calc(var(--u) * 0.6) calc(var(--u) * 0.35) rgba(0, 0, 0, 0.42);
+}
+.btn::after {
+  opacity: 0.55;
+  background: linear-gradient(180deg, rgba(255, 255, 255, 0.55), rgba(255, 255, 255, 0));
+}
+.btn.on::before {
+  filter: brightness(1.2);
+  box-shadow:
+    inset 0 0 calc(var(--u) * 1.1) rgba(255, 255, 255, 0.45),
+    0 calc(var(--u) * 0.45) 0 var(--c4),
+    0 0 calc(var(--u) * 2.2) var(--glow);
+}
+.btn.flash:not(.off)::before {
+  animation: capFlashSoft 0.55s ease-in-out infinite alternate;
+}
+@keyframes capFlashSoft {
+  from { filter: brightness(1); }
+  to {
+    filter: brightness(1.3) saturate(1.1);
+    box-shadow:
+      inset 0 0 0 calc(var(--u) * 0.14) rgba(255, 255, 255, 0.4),
+      0 calc(var(--u) * 0.42) 0 var(--c4),
+      0 0 calc(var(--u) * 2.2) var(--glow);
+  }
+}
+
+/* Event overrides stay full brightness */
+.cabinet.fx-win .rail-dot,
+.cabinet.fx-reach .rail-dot,
+.cabinet.fx-expect .rail-dot,
+.cabinet.fx-spin .side-lamp,
+.cabinet.fx-win .side-lamp,
+.cabinet.fx-reach .side-lamp,
+.cabinet.fx-expect .side-lamp,
+.cabinet.fx-fever .side-lamp,
+.board.is-chasing .tile.lit,
+.tile.win,
+.tile.sym-hit {
+  opacity: 1;
+  filter: none;
+}
+
+html.fit-2 .deck-func .btn {
+  height: max(44px, calc(var(--u) * 7.4));
+  font-size: calc(var(--u) * 2.5);
+}
