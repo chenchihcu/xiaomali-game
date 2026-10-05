@@ -14,3 +14,12 @@ const row = (label, s) => {
 for (const k of Object.keys(E.PRESETS)) row(E.PRESETS[k].label, E.applyPreset(E.normalizeSettings({}), k));
 const off = E.normalizeSettings({ modes: { song: false, train: false, sanyuan: false, jp: false } });
 row('標準無彩蛋', off);
+
+// Sanity: JP pot must freeze when modes.jp is off (engine nextJpPot).
+{
+  const off = E.normalizeSettings({ modes: { jp: false } });
+  let pot = E.JP.seed;
+  for (let i = 0; i < 200; i++) pot = E.nextJpPot(pot, 8, 0, off);
+  const ok = Math.abs(pot - E.JP.seed) < 1e-9;
+  console.log(ok ? 'JP-off pot freeze  OK' : `JP-off pot freeze  FAIL pot=${pot}`);
+}

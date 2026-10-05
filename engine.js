@@ -32,29 +32,29 @@
     { s: 'bell',   w: 3 },
     { s: 'bar',    small: true, pay: 50, w: 0.8 },
     { s: 'bar',    w: 0.5 },
-    { s: 'apple',  w: 3 },
+    { s: 'apple',  w: 5 },
     { s: 'melon',  small: true, pay: 3, w: 14 },
     { s: 'mango',  w: 3 },
     // right column (top → bottom)
     { s: 'melon',  w: 3 },
-    { s: 'apple',  w: 3 },
+    { s: 'apple',  w: 5 },
     { s: 'once',   w: 4.175 },
     { s: 'orange', small: true, pay: 3, w: 14 },
     { s: 'star',   w: 2.4 },
     { s: 'mango',  small: true, pay: 3, w: 14 },
     // bottom row (right → left)
     { s: 'seven',  w: 1.95 },
-    { s: 'apple',  w: 3 },
+    { s: 'apple',  w: 5 },
     { s: 'bell',   small: true, pay: 3, w: 14 },
     { s: 'seven',  small: true, pay: 3, w: 5.6 },
-    { s: 'apple',  w: 3 },
+    { s: 'apple',  w: 5 },
     { s: 'orange', w: 3 },
     // left column (bottom → top)
-    { s: 'apple',  w: 3 },
+    { s: 'apple',  w: 5 },
     { s: 'star',   small: true, pay: 3, w: 8.4 },
     { s: 'once',   w: 4.175 },
     { s: 'mango',  w: 3 },
-    { s: 'apple',  w: 3 },
+    { s: 'apple',  w: 5 },
   ];
   const N = TRACK.length; // 24
   /** Max free light-runs (symbol stops) from ONCE MORE / 連跑 / 大 ONCE MORE in one round. */
@@ -138,7 +138,7 @@
     jp: '大 BAR＋有押 BAR→吃彩池（僅開啟時累積）',
     slotBonus: '特殊燈／ONCE→三輪拉霸',
     fever: 'JP／高倍／特殊／大贏→連跑',
-    bingo: '有中／雙燈標格；連線 max(1,floor(押/4))',
+    bingo: '有中／雙燈／超跑／FEVER 標格；連線 max(1,floor(押/4))',
     luckyWheel: '特殊燈／ONCE→轉輪；max(1,floor(押×倍/6))（×0除外）',
     gacha: '特殊燈／ONCE→轉蛋；該圖有押才賠',
     sicbo: '特殊燈／ONCE→三骰；大／小／豹給分（至少1）',
@@ -725,6 +725,21 @@
       ? opts.forceStage
       : null;
 
+    /** Mark bingo for a paying symbol stop (land / 雙燈 / 超跑 / FEVER). */
+    const pushBingoPay = (symId) => {
+      if (!s.modes.bingo || !symId || symId === 'once') return;
+      const cell = BINGO_CELLS.indexOf(symId);
+      if (cell < 0) return;
+      // Already lit — skip no-op re-flash (common when 超跑 hits same fruit twice).
+      if (bingoBoard[cell]) return;
+      const bm = applyBingoMark(bingoBoard, symId, totalBet, rng);
+      bingoBoard = bm.board;
+      if (bm.cell >= 0) {
+        steps.push({ type: 'bingo', cell: bm.cell, lines: bm.lines, gained: bm.gained, board: bingoBoard.slice() });
+        win += bm.gained;
+      }
+    };
+
     const pushSlotChain = (trigger = null) => {
       if (!s.modes.slotBonus || slotOpens >= 3) return;
       slotOpens++;
@@ -832,25 +847,10 @@
       win += p.gained;
 
       // Bingo mark only when the land paid (mission progress, not free fills)
-      if (s.modes.bingo && p.gained > 0 && TRACK[target].s !== 'once') {
-        const bm = applyBingoMark(bingoBoard, TRACK[target].s, totalBet, rng);
-        bingoBoard = bm.board;
-        if (bm.cell >= 0) {
-          steps.push({ type: 'bingo', cell: bm.cell, lines: bm.lines, gained: bm.gained, board: bingoBoard.slice() });
-          win += bm.gained;
-        }
-      }
+      if (p.gained > 0) pushBingoPay(TRACK[target].s);
       // 雙燈 second pay also marks bingo (same 「有中標格」 rule as primary)
-      if (s.modes.bingo && landStep.double && landStep.double.gained > 0) {
-        const dSym = TRACK[landStep.double.target].s;
-        if (dSym && dSym !== 'once') {
-          const bm2 = applyBingoMark(bingoBoard, dSym, totalBet, rng);
-          bingoBoard = bm2.board;
-          if (bm2.cell >= 0) {
-            steps.push({ type: 'bingo', cell: bm2.cell, lines: bm2.lines, gained: bm2.gained, board: bingoBoard.slice() });
-            win += bm2.gained;
-          }
-        }
+      if (landStep.double && landStep.double.gained > 0) {
+        pushBingoPay(TRACK[landStep.double.target].s);
       }
 
       const bonus = rollBonus(target, s, rng);
@@ -893,6 +893,10 @@
         }
         steps.push({ type: 'super', stops, gained: superGain, count: n });
         win += superGain;
+        // 超跑有中也標賓果（與主燈／雙燈同一「有中標格」規則）
+        for (const st of stops) {
+          if (st.gained > 0 && st.si >= 0) pushBingoPay(SYMBOLS[st.si].id);
+        }
       }
 
       // Special tile → 三輪 Bonus stage / cabinet mini-stages (tagged with trigger lamp)
@@ -932,6 +936,9 @@
         }
         steps.push({ type: 'fever', runs, gained: feverGain, count: n });
         win += feverGain;
+        for (const fr of runs) {
+          if (fr.gained > 0 && fr.si >= 0) pushBingoPay(SYMBOLS[fr.si].id);
+        }
       }
 
       if (queue > 0) continue;
@@ -942,8 +949,10 @@
     return { steps, win: win + jpWin, jpWin, bingoBoard };
   }
 
-  /** Pot after a round: grows by JP.rate × jpRate × bet; a JP win resets it to the seed. */
+  /** Pot after a round: grows by JP.rate × jpRate × bet; a JP win resets it to the seed.
+   *  When modes.jp is off, freeze the pot (no silent growth for later re-enable shocks). */
   function nextJpPot(pot, totalBet, jpWin, settings) {
+    if (settings && settings.modes && settings.modes.jp === false) return pot;
     const rate = JP.rate * (settings && settings.jpRate != null ? settings.jpRate : 1);
     const grown = Math.min(JP.max, pot + totalBet * rate);
     return jpWin > 0 ? JP.seed : grown;

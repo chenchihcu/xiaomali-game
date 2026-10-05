@@ -93,3 +93,89 @@ DevTools: mid-spin refresh → stake refunded, WIN/bingo/hold/LINE not partially
 ## 20261005c — bingo icons + cache bust
 - Confirmed Pages already had iconHTML bingo, save/settings, mini-wheel, fidelity; user still saw 蘋橙芒 from cached game.js.
 - Hardened buildBingo/renderBingo to rebuild any text-glyph cells; asset URLs `?v=20261005c`.
+
+---
+
+# Audit — 第二批十輪（Pass 11–20 / Batch-2 Pass 1–10）（2026-10-05→06）
+
+Scope: `/workspace/xiaomali` from `3485ba5` → (this push). Cloud agent quota exhausted; local executor.
+Method: code review + `node --check` + `node sim.js` + forceStage / win-sum / bingo / JP-freeze / mode census probes.
+
+## Pass summary (newest first)
+
+| Pass | Focus | Fixes |
+|---|---|---|
+| **20 / B2-10** | RTP / sim | 蘋果軌道權重↑後單押 RTP；`sim.js` JP-off pot freeze 斷言 |
+| **19 / B2-9** | MODE 文案 | `MODE_HINTS.bingo` + 玩法說明對齊超跑／FEVER 標格 |
+| **18 / B2-8** | 自動／中途刷新 | `autoTick` 遇 dialog 改 `queueAuto` 等待（不再 `stopAuto`）；設定開啟 toast |
+| **17 / B2-7** | fitCabinet | viewport／賓果狀態簽名，略過重複 refit 風暴 |
+| **16 / B2-6** | AudioContext | `visibilitychange` 回來後 `unlock().then(Music.update)` |
+| **15 / B2-5** | bingo | 超跑／FEVER 有中標格；同格略過重複 step；`pushBingoPay` |
+| **14 / B2-4** | bonus 舞台 | `stageGen` 中止轉輪／骰寶／輪盤 orphan RAF |
+| **13 / B2-3** | persist | 比大小 `roundPersist` 凍結未開獎 WIN；匯入／清除 confirm 後再檢查 `busy` |
+| **12 / B2-2** | UI 閘門 | 忙碌中忽略遊戲快捷鍵；設定開啟時自動暫停提示 |
+| **11 / B2-1** | engine 機率 | `nextJpPot` 在 `modes.jp===false` 凍結彩池；蘋果格 `w:3→5` |
+
+## Issues found → fixed (by area)
+
+| Area | Issue | Pass |
+|---|---|---|
+| Engine / JP | `nextJpPot` 在 JP 關閉時仍成長（simulate／重開 JP 驚嚇） | 11 |
+| Engine / RTP | 蘋果單押 ≈65%（無小圖、權重偏弱） | 11 / 20 |
+| Engine / bingo | 超跑／FEVER 有中不標格（與「有中標格」不符） | 15 |
+| Engine / bingo | 超跑同圖多次 → 無意義重複 bingo step | 15 |
+| UI / stage RAF | abort 後轉輪／輪盤 RAF 仍寫已 detach 節點 | 14 |
+| UI / keyboard | 忙碌中快捷鍵仍進 `why.*` deny 洗版 | 12 |
+| UI / settings | 自動中開設定 → 下一 tick `start` deny 直接 `stopAuto` | 18 |
+| Persist / gamble | 比大小無 `roundPersist`，未開獎中途刷新語意不清 | 13 |
+| Persist / import | 選檔／confirm 競態可在 `busy` 後仍套用備份 | 13 |
+| Audio | 回前景只 `unlock()`，BGM 可能不重掛 | 16 |
+| fitCabinet | visualViewport 重複 resize 反覆量測／改 `--W` | 17 |
+| Copy | 賓果說明未提超跑／FEVER | 19 |
+| sim | 缺 JP-off pot 凍結回歸檢查 | 20 |
+
+## All-modes-ON trigger census (N=10000, 全押1, after B2)
+
+| Mode / event | ≈ per-round |
+|---|---|
+| land | 100% |
+| bingo (any mark) | ≈60% |
+| fakeStop / reverse / skip (fx hits) | ≈12% / 11% / 9% |
+| once | ≈3.1% |
+| doubleRun | ≈2.9% |
+| song / train / sanyuan | ≈1.9% / 1.3% / 1.1% |
+| super / fever / slot | ≈1.3% / 0.8% / 0.7% |
+| cabinet stages (each) | ≈0.15–0.37%（共用入口） |
+| jp | ≈0.2% |
+| forceStage 6/6 | **30/30** each |
+| train ONCE tiles / 大三元 short / stage mult>0 zero-pay / win≠steps | **0** |
+
+## RTP (`node sim.js 12000`)
+
+| Preset | 全押 RTP | 蘋果單押 |
+|---|---|---|
+| 輕鬆 | ≈124% | ≈130% |
+| **標準** | **≈103%** | **≈88%**（原 ≈65%） |
+| 困難 | ≈84% | ≈74% |
+| 標準無彩蛋 | ≈79% | ≈73% |
+| JP-off pot freeze | **OK** |
+
+## Remaining risks (watch)
+
+1. 六閣舞台仍共用 `STAGE_ENTRY`（全開時各 ≈0.2–0.4%/局）— 設計取捨，非 bug。
+2. 星星／77 單押仍偏軟（高倍權重低）— 未強制拉高。
+3. 比大小開獎後、`finally` 前殺進程仍可能留下已提交結果（預期）。
+4. iOS 無手勢時 `AudioContext.resume` 仍可能失敗 — 需下次點擊解鎖。
+5. `fitCabinet` 簽名略過時，若僅 CSS 字體／橫幅高度變、viewport 不變，可能少一次 refit（賓果開關已纳入簽名）。
+
+## How to re-check
+
+```bash
+node --check engine.js && node --check game.js
+node sim.js 12000
+# DevTools: __xiaomali.build === '20261006b2'
+# 比大小骰動中刷新 → WIN 維持（未開獎）；開設定時自動不離線停止
+# 舞台中途丟例外 → 轉輪 RAF 停止；JP 關閉打 100 局後重開 → 彩池未默默膨脹
+```
+
+Build / cache: `__xiaomali.build = '20261006b2'`, assets `?v=20261006b2`.

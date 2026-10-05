@@ -537,6 +537,8 @@
   let roundPersist = null; // { win, bingo, jp, bingoLineWins, holdCount } | null
   /** Bumped when a round ends/aborts so orphan reel RAFs stop writing. */
   let animGen = 0;
+  /** Bumped when a stage overlay closes/aborts so orphan wheel/roulette RAFs stop. */
+  let stageGen = 0;
 
   function loadSettings() {
     try {
@@ -1859,6 +1861,7 @@
   }
 
   function closeStageOverlay() {
+    stageGen++; // abort orphan stage RAFs touching detached nodes
     const overlay = $('stageOverlay');
     if (!overlay) return;
     overlay.hidden = true;
@@ -1916,12 +1919,14 @@
     const dur = reduced ? 500 : 3200;
     const t0 = performance.now();
     let lastTick = -1;
+    const gen = stageGen;
     await new Promise((resolve) => {
       const tick = (now) => {
+        if (gen !== stageGen) { resolve(); return; }
         const p = Math.min(1, (now - t0) / dur);
         const ease = 1 - Math.pow(1 - p, 3);
         const ang = targetAngle * ease;
-        wheel.style.transform = `rotate(${ang}deg)`;
+        if (wheel) wheel.style.transform = `rotate(${ang}deg)`;
         const seg = Math.floor(((ang % 360) / segAngle)) % n;
         if (seg !== lastTick) {
           lastTick = seg;
@@ -1932,6 +1937,7 @@
       };
       requestAnimationFrame(tick);
     });
+    if (gen !== stageGen) return;
     await sleep(280);
     if (step.gained > 0) {
       celebrateHit({ amount: step.gained, mult: step.mult || 10, kind: step.tone === 'jp' ? 'jp' : 'win', originEl: wrap });
@@ -2006,8 +2012,10 @@
     const reduced = window.matchMedia('(prefers-reduced-motion: reduce)').matches;
     const rollMs = reduced ? 200 : 900;
     const t0 = performance.now();
+    const gen = stageGen;
     await new Promise((resolve) => {
       const tick = (now) => {
+        if (gen !== stageGen) { resolve(); return; }
         if (now - t0 < rollMs) {
           diceEls.forEach((el) => { el.textContent = String(1 + Math.floor(randomFloat() * 6)); });
           if (Math.floor((now - t0) / 80) !== Math.floor((now - t0 - 16) / 80)) Sound.dice();
@@ -2016,6 +2024,7 @@
       };
       requestAnimationFrame(tick);
     });
+    if (gen !== stageGen) return;
     diceEls.forEach((el, i) => {
       el.classList.remove('rolling');
       el.textContent = String(step.dice[i]);
@@ -2160,9 +2169,11 @@
     Sound.roulette();
     const t0 = performance.now();
     let lastTick = -1;
+    const gen = stageGen;
     if (ball) ball.classList.add('show');
     await new Promise((resolve) => {
       const tick = (now) => {
+        if (gen !== stageGen) { resolve(); return; }
         const p = Math.min(1, (now - t0) / dur);
         const ease = 1 - Math.pow(1 - p, 3.2);
         const ang = targetAngle * ease;
@@ -2179,6 +2190,7 @@
       };
       requestAnimationFrame(tick);
     });
+    if (gen !== stageGen) return;
     if (hub) hub.textContent = String(step.number);
     const colorEl = info.querySelector('#srColor');
     const kindEl = info.querySelector('#srKind');
@@ -2737,6 +2749,16 @@
     const reason = why.gamble();
     if (reason) { deny(reason); return; }
     state.busy = true;
+    // Freeze pre-reveal WIN so mid-gamble refresh cancels an unrevealed 比大小
+    // (same roundPersist path as mid-spin). Commit result into the snapshot
+    // once the dice settle so a lose/win is not rolled back by pagehide.
+    roundPersist = {
+      win: state.win,
+      bingo: state.bingo.slice(),
+      jp: state.jp,
+      bingoLineWins: state.bingoLineWins,
+      holdCount,
+    };
     clearHighlights();
     render();
     try {
@@ -2758,23 +2780,28 @@
       if (result === 5) {
         setMsg('開 5・和', '');
         Sound.beep(660, 0.15, 'triangle', 0.07);
+        if (roundPersist) roundPersist.win = state.win;
       } else if ((choice === 'small' && isSmall) || (choice === 'big' && isBig)) {
         const before = state.win;
         if (before >= CREDIT_CAP) {
           setMsg(`開 ${result}・中！WIN 已滿`, 'hot');
           Sound.win();
           toast('WIN 已達上限', 'warn');
+          if (roundPersist) roundPersist.win = state.win;
         } else {
           setMsg(`開 ${result}・中！×2`, 'hot');
           Sound.win();
           await animateWin(before, before * 2);
+          if (roundPersist) roundPersist.win = state.win;
         }
       } else {
         setMsg(`開 ${result}・錯`, 'bad');
         Sound.lose();
         state.win = 0;
+        if (roundPersist) roundPersist.win = 0;
       }
     } finally {
+      roundPersist = null;
       state.busy = false;
       render();
       save();
@@ -2805,6 +2832,8 @@
 
   async function autoTick() {
     if (!state.auto || state.busy) return;
+    // Settings/help/confirm open between rounds — wait, don't stopAuto via start()'s deny.
+    if (dialogOpen()) { queueAuto(); return; }
     if (state.win > 0) {
       if (state.credit >= CREDIT_CAP) {
         stopAuto('CREDIT 已達上限・自動已停', 'warn');
@@ -3366,6 +3395,7 @@
           const ok = await confirmBox('匯入備份',
             `將覆蓋目前進度${set ? '與設定' : ''}（CREDIT ${Math.floor(prog.credit)}）。確定？`, '匯入');
           if (!ok) { toast('已取消匯入', 'info'); return; }
+          if (state.busy) { deny(BUSY_MSG); return; }
           applyProgressData(prog, { restoreHold: true });
           if (set && typeof set === 'object') {
             const v = validateSettings(set);
@@ -3392,6 +3422,7 @@
         const ok = await confirmBox('清除進度',
           'CREDIT／WIN／押注／賓果／JP／保留燈將歸零（設定保留）。確定？', '清除');
         if (!ok) { toast('已取消', 'info'); return; }
+        if (state.busy) { deny(BUSY_MSG); return; }
         state.credit = startCreditAmount();
         state.win = 0;
         state.bets = new Array(SYMBOLS.length).fill(0);
@@ -3413,6 +3444,8 @@
   function openSettings() {
     if (state.busy) { deny(BUSY_MSG); return; }
     if (confirmDlg?.open) { deny('請先關閉視窗'); return; }
+    // Auto keeps running but autoTick waits while the sheet is open (see queueAuto).
+    if (state.auto) toast('自動遊玩暫停於設定開啟時', 'info', 1800);
     wireSettingsChrome();
     const search = $('setSearch');
     if (search) { search.value = ''; filterSettings(''); }
@@ -3785,6 +3818,8 @@
 
   window.addEventListener('keydown', (e) => {
     if (settingsDlg.open || helpDlg.open || confirmDlg?.open || e.metaKey || e.ctrlKey || e.altKey) return;
+    // Ignore game keys while a round/gamble/collect animates (why.* would deny anyway).
+    if (state.busy) return;
     const k = e.key;
     if (k >= '1' && k <= '8') { stopAuto(); bet(Number(k) - 1); e.preventDefault(); return; }
     // Focused <button> handles its own Space/Enter → avoid firing twice.
@@ -3813,7 +3848,9 @@
       Music.update();
     } else {
       // Tab/app resume often leaves AudioContext suspended — re-unlock then BGM.
-      Sound.unlock();
+      const p = Sound.unlock();
+      if (p && typeof p.then === 'function') p.then(() => Music.update()).catch(() => Music.update());
+      else Music.update();
     }
   });
   window.addEventListener('pagehide', save);
@@ -3831,7 +3868,8 @@
     el.remove();
     return h || 0;
   }
-  function fitCabinet() {
+  let _fitSig = '';
+  function fitCabinet(force = false) {
     const root = document.documentElement;
     const cab = cabinetEl || $('cabinet');
     if (!cab) return;
@@ -3843,6 +3881,12 @@
     const vv = window.visualViewport;
     const vh = (vv && vv.height) ? vv.height : (window.innerHeight || root.clientHeight);
     const vw = (vv && vv.width) ? vv.width : (window.innerWidth || root.clientWidth);
+    const bingoHidden = !!( $('bingoBoard') && $('bingoBoard').hidden );
+    const sig = [Math.round(vw), Math.round(vh), Math.round(padT), Math.round(padB),
+      Math.round(safeL), Math.round(safeR), bingoHidden ? 1 : 0].join('|');
+    // Skip duplicate visualViewport/orientation storms when nothing material changed.
+    if (!force && sig === _fitSig && root.style.getPropertyValue('--W')) return;
+    _fitSig = sig;
     const Wmax = Math.min(vw - 2 * gutter - safeL - safeR, 480);
     const Hav = Math.max(240, vh - padT - padB);
 
@@ -3928,7 +3972,7 @@
   setTimeout(maybeFirstRunTip, 500);
 
   window.__xiaomali = {
-    build: '20261005c',
+    build: '20261006b2',
     state, settings, TRACK, SYMBOLS, pickTarget, resetCredit, Music, Sound, E, fitCabinet,
     setSettings(s) {
       const v = validateSettings(s);
