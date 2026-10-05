@@ -151,7 +151,7 @@
   const MUSIC_TRACKS = {
     off: { name: '安靜' },
     arcade: {
-      name: '經典街機', bpm: 138, leadWave: 'square', bassWave: 'triangle', leadVol: 0.022, bassVol: 0.05,
+      name: '街機', bpm: 138, leadWave: 'square', bassWave: 'triangle', leadVol: 0.022, bassVol: 0.05,
       lead: [72,0,76,0,79,0,76,0, 77,0,74,0,71,0,74,0, 72,0,76,0,79,0,84,0, 83,0,79,0,74,0,0,0],
       bass: [48,0,0,0,55,0,0,0, 50,0,0,0,55,0,0,0, 48,0,0,0,55,0,0,0, 43,0,0,0,47,0,0,0],
       drums: 'h.h.h.h.h.h.h.h.h.h.h.h.h.h.h.h.',
@@ -404,10 +404,10 @@
 
   $('paytable').innerHTML = SYMBOLS.map((s) =>
     `<tr><td>${iconHTML(s.id)}</td><td>${s.name}</td><td>× ${s.mult}</td></tr>`).join('') +
-    '<tr><td>×3</td><td>小圖示（BAR 小圖示為 50）</td><td>× 3 / × 50</td></tr>' +
-    '<tr><td><span class="ic-once" style="font-size:8px">ONCE<br>MORE</span></td><td>免費再跑一次</td><td>FREE</td></tr>' +
-    `<tr><td>JP</td><td>停大 BAR 且押 BAR（滿 ${JP.fullBet} 拿全額）</td><td>彩金</td></tr>` +
-    '<tr><td>★</td><td>送燈／開火車／三元四喜</td><td>中彩</td></tr>';
+    '<tr><td>×3</td><td>小圖／BAR50</td><td>×3／×50</td></tr>' +
+    '<tr><td><span class="ic-once" style="font-size:8px">ONCE<br>MORE</span></td><td>再跑／連跑</td><td>FREE</td></tr>' +
+    `<tr><td>JP</td><td>大 BAR＋押 BAR</td><td>彩金</td></tr>` +
+    '<tr><td>★</td><td>送燈／火車／三元</td><td>中彩</td></tr>';
 
   // --- 3 fruit reels --------------------------------------------------------
   const REEL_LOOPS = 8; // repeated strip length multiplier
@@ -523,6 +523,24 @@
     msgEl.className = 'msg' + (cls ? ' ' + cls : '');
   }
 
+  const onceBanner = $('onceBanner');
+  const onceBannerTag = $('onceBannerTag');
+  const onceBannerCount = $('onceBannerCount');
+  const ONCE_VARIANT_LABEL = { single: 'ONCE MORE', multi: '連跑', big: '大 ONCE MORE' };
+
+  function showOnceBanner(variant, remaining) {
+    if (!onceBanner) return;
+    onceBannerTag.textContent = ONCE_VARIANT_LABEL[variant] || 'ONCE MORE';
+    onceBannerCount.textContent = remaining > 0 ? `再跑 ${remaining} 次` : '結束';
+    onceBanner.hidden = remaining <= 0;
+    onceBanner.classList.toggle('pulse', remaining > 0);
+  }
+  function hideOnceBanner() {
+    if (!onceBanner) return;
+    onceBanner.hidden = true;
+    onceBanner.classList.remove('pulse');
+  }
+
   function setLight(pos, trail = 0) {
     for (const el of tileEls) el.classList.remove('lit', 'trail1', 'trail2');
     tileEls[pos].classList.add('lit');
@@ -565,6 +583,7 @@
     $('lblBig').classList.remove('on');
     $('jpRow')?.classList.remove('jp-hit');
     reelStrips.forEach((r) => r.parent.classList.remove('landed', 'spinning'));
+    hideOnceBanner();
   }
 
   // ---------------------------------------------------------------------------
@@ -605,12 +624,12 @@
     clearHighlights();
     freshBets();
     if (state.bets[i] >= MAX_BET_PER_SYMBOL) {
-      setMsg(`${SYMBOLS[i].name} 最多押 ${MAX_BET_PER_SYMBOL}`, 'bad');
+      setMsg(`${SYMBOLS[i].name} 上限 ${MAX_BET_PER_SYMBOL}`, 'bad');
       render();
       return false;
     }
     if (state.credit < 1) {
-      setMsg('分數不足！可在 ⚙️ 重設分數', 'bad');
+      setMsg('分數不足・⚙️ 可重設', 'bad');
       Sound.error();
       render();
       return false;
@@ -618,7 +637,7 @@
     state.bets[i]++;
     state.credit--;
     Sound.bet();
-    setMsg(`已押 ${sum(state.bets)} 分，按「開始」`);
+    setMsg(`已押 ${sum(state.bets)}・按開始`);
     render();
     save();
     return true;
@@ -637,8 +656,8 @@
       state.credit--;
       added++;
     }
-    if (added) { Sound.seq([784, 988, 1175], 0.05, 'triangle', 0.07); setMsg(`全押！共押 ${sum(state.bets)} 分`); }
-    else { Sound.error(); setMsg('無法再加注', 'bad'); }
+    if (added) { Sound.seq([784, 988, 1175], 0.05, 'triangle', 0.07); setMsg(`全押 ${sum(state.bets)}`); }
+    else { Sound.error(); setMsg('無法加注', 'bad'); }
     render();
     save();
   }
@@ -650,7 +669,7 @@
     state.bets.fill(0);
     state.betsPaid = true;
     Sound.beep(440, 0.08, 'triangle', 0.07);
-    setMsg('已清除押注');
+    setMsg('已清除');
     render();
     save();
   }
@@ -709,14 +728,14 @@
     clearHighlights();
     const total = sum(state.bets);
     if (total === 0) {
-      setMsg('請先點水果押注', 'bad');
+      setMsg('請先押注', 'bad');
       Sound.error();
       render();
       return;
     }
     if (!state.betsPaid) {
       if (state.credit < total) {
-        setMsg(`分數不足（需 ${total}），請清除後重押`, 'bad');
+        setMsg(`分數不足（需 ${total}）`, 'bad');
         Sound.error();
         render();
         return;
@@ -731,28 +750,36 @@
     const potBefore = settings.modes.jp ? state.jp : 0;
     const result = E.resolveRound(state.bets, settings, randomFloat, potBefore);
     let roundWin = 0;
-    let chain = 0;
+    let inOnceRun = false;
+    let onceVariant = 'single';
 
     for (const step of result.steps) {
       if (step.type === 'once') {
-        setMsg(chain ? `ONCE MORE 免費再跑！（${chain}）` : 'ONCE MORE…', 'hot');
+        const label = ONCE_VARIANT_LABEL[step.variant] || 'ONCE MORE';
+        showOnceBanner(step.variant, step.remaining);
+        setMsg(step.remaining > 0 ? `${label}…` : `${label}・上限`, 'hot');
         const dur = estimateLightMs(step.target);
         await Promise.all([runLight(step.target), spinReels('once', Math.max(900, dur - 400))]);
         tileEls[step.target].classList.add('win');
         Sound.once();
-        chain++;
-        if (chain > MAX_ONCE_MORE_CHAIN) {
-          setMsg('ONCE MORE 已達上限');
+        if (step.remaining <= 0) {
+          setMsg(step.capped ? '再跑已達上限' : `${label}`, 'hot');
+          await sleep(700);
+          tileEls[step.target].classList.remove('win');
+          hideOnceBanner();
           break;
         }
-        setMsg('ONCE MORE！同押注免費再跑一次', 'hot');
-        await sleep(900);
+        setMsg(`${label}！再跑 ${step.remaining} 次`, 'hot');
+        await sleep(850);
         tileEls[step.target].classList.remove('win');
+        onceVariant = step.variant || 'single';
+        inOnceRun = true;
         continue;
       }
 
       if (step.type === 'land') {
-        setMsg(chain ? `ONCE MORE 後轉動中…` : '轉動中…', chain ? 'hot' : '');
+        setMsg(inOnceRun ? '連跑中…' : '轉動中…', inOnceRun ? 'hot' : '');
+        if (inOnceRun) showOnceBanner(onceVariant, step.runsLeft + 1);
         const dur = estimateLightMs(step.target);
         const landId = TRACK[step.target].s;
         await Promise.all([runLight(step.target), spinReels(landId, Math.max(900, dur - 400))]);
@@ -762,29 +789,39 @@
           tileEls[step.target].classList.add('win');
           betKeys[step.si].el.classList.add('hit');
           if (step.mult >= 40) Sound.big(); else Sound.win();
-          setMsg(`${sym.name}${TRACK[step.target].small ? '（小）' : ''} ${state.bets[step.si]} × ${step.mult} = ${step.gained}！`, 'hot');
+          const small = TRACK[step.target].small ? '小' : '';
+          setMsg(`${sym.name}${small} ${state.bets[step.si]}×${step.mult}=${step.gained}`, 'hot');
           await animateWin(state.win, state.win + step.gained);
         } else if (sym) {
-          setMsg(`停在 ${sym.name}${TRACK[step.target].small ? '（小）' : ''}，沒押中`, 'bad');
+          setMsg(`${sym.name}${TRACK[step.target].small ? '小' : ''}・沒中`, 'bad');
           Sound.lose();
+        }
+        if (step.runsLeft > 0) {
+          showOnceBanner(onceVariant, step.runsLeft);
+          setMsg(`再跑 ${step.runsLeft} 次`, 'hot');
+          await sleep(550);
+          inOnceRun = true;
+        } else {
+          hideOnceBanner();
+          inOnceRun = false;
         }
         continue;
       }
 
       if (step.type === 'bonus') {
         Sound.lucky();
-        setMsg(`中彩！${step.name}`, 'hot');
-        for (const t of step.tiles) {
-          tileEls[t.i].classList.add('win', 'lit2');
-          if (t.si >= 0 && t.gained > 0) betKeys[t.si].el.classList.add('hit');
+        setMsg(`中彩・${step.name}`, 'hot');
+        for (const bt of step.tiles) {
+          tileEls[bt.i].classList.add('win', 'lit2');
+          if (bt.si >= 0 && bt.gained > 0) betKeys[bt.si].el.classList.add('hit');
           await sleep(220);
         }
         if (step.gained > 0) {
           roundWin += step.gained;
           await animateWin(state.win, state.win + step.gained);
-          setMsg(`${step.name} 再得 ${step.gained}！`, 'hot');
+          setMsg(`${step.name} +${step.gained}`, 'hot');
         } else {
-          setMsg(`${step.name}（未押中額外燈）`, 'hot');
+          setMsg(`${step.name}・沒押中`, 'hot');
         }
         await sleep(500);
         continue;
@@ -793,24 +830,25 @@
       if (step.type === 'jp') {
         Sound.jp();
         $('jpRow')?.classList.add('jp-hit');
-        setMsg(`JP 彩金！+${step.amount}`, 'hot');
+        setMsg(`JP！+${step.amount}`, 'hot');
         roundWin += step.amount;
         await animateWin(state.win, state.win + step.amount);
         await sleep(600);
       }
     }
+    hideOnceBanner();
 
     state.jp = E.nextJpPot(state.jp, total, result.jpWin);
 
-    if (roundWin > 0) setMsg(`本局共贏 ${roundWin}！可得分或比大小`, 'hot');
-    else if (!msgEl.textContent.includes('沒押中') && !msgEl.textContent.includes('上限')) {
+    if (roundWin > 0) setMsg(`本局 +${roundWin}・得分或比大小`, 'hot');
+    else if (!msgEl.textContent.includes('沒中') && !msgEl.textContent.includes('上限')) {
       /* keep prior lose message */
     }
 
     state.betsPaid = false;
     state.busy = false;
     if (state.credit === 0 && state.win === 0) {
-      setMsg('分數用完了，點右上 ⚙️ 重設分數', 'bad');
+      setMsg('分數用完・⚙️ 重設', 'bad');
     }
     render();
     save();
@@ -836,7 +874,7 @@
     state.win = 0;
     state.credit = startCredit + amount;
     state.busy = false;
-    setMsg(`得分 ${amount}！繼續押注或直接「開始」`);
+    setMsg(`得分 ${amount}`);
     render();
     save();
   }
@@ -846,7 +884,7 @@
     state.busy = true;
     clearHighlights();
     render();
-    setMsg(choice === 'small' ? '押「小」…' : '押「大」…');
+    setMsg(choice === 'small' ? '小…' : '大…');
     const result = 1 + Math.floor(randomFloat() * 9);
     for (let k = 0; k < 16; k++) {
       diceLed.set(String(1 + Math.floor(randomFloat() * 9)));
@@ -862,15 +900,15 @@
     $('lblBig').classList.toggle('on', isBig);
 
     if (result === 5) {
-      setMsg('開 5，和局！WIN 不變', '');
+      setMsg('開 5・和', '');
       Sound.beep(660, 0.15, 'triangle', 0.07);
     } else if ((choice === 'small' && isSmall) || (choice === 'big' && isBig)) {
       const before = state.win;
-      setMsg(`開 ${result}，猜中！WIN 加倍`, 'hot');
+      setMsg(`開 ${result}・中！×2`, 'hot');
       Sound.win();
       await animateWin(before, before * 2);
     } else {
-      setMsg(`開 ${result}，猜錯… WIN 歸零`, 'bad');
+      setMsg(`開 ${result}・錯`, 'bad');
       Sound.lose();
       state.win = 0;
     }
@@ -888,7 +926,7 @@
     state.jp = JP.seed;
     clearHighlights();
     diceLed.set('-');
-    setMsg('分數已重設為 1000');
+    setMsg('已重設 1000');
     render();
     save();
   }
@@ -937,7 +975,7 @@
     try {
       const sim = E.simulate(settings, 2500, Math.random);
       const pct = (sim.rtp * 100).toFixed(0);
-      oddsHint.textContent = `預估 RTP（全押）約 ${pct}%・中彩 ${(sim.bonusRate * 100).toFixed(1)}%・JP ${(sim.jpRate * 100).toFixed(2)}%（模擬值，娛樂用）`;
+      oddsHint.textContent = `RTP約 ${pct}%・中彩 ${(sim.bonusRate * 100).toFixed(1)}%・JP ${(sim.jpRate * 100).toFixed(2)}%`;
     } catch {
       oddsHint.textContent = '預估 RTP —';
     }
@@ -1092,7 +1130,7 @@
   diceLed.set('-');
   setLight(state.pos);
   requestAnimationFrame(() => idleReels());
-  if (!state.betsPaid && sum(state.bets) > 0) setMsg('按「開始」以上局押注再玩，或重新押注');
+  if (!state.betsPaid && sum(state.bets) > 0) setMsg('按開始續玩，或重押');
   render();
 
   window.__xiaomali = {

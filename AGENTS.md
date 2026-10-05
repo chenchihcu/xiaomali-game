@@ -10,28 +10,29 @@ Repo: https://github.com/chenchihcu/xiaomali-game
 ## Structure
 | File | Role |
 |---|---|
-| `index.html` | Top bar (🔊 / ⚙️), `#board` 7×7 (24 tiles injected before `#center`), center = compact WIN/CREDIT + JP + **3 reels** + dice + msg, bet panel, controls, `#settingsDialog`, `#helpDialog`. Scripts: `engine.js` then `game.js` (both `defer`). |
-| `styles.css` | Sized from `--u` = 1/100 of `--W`. Portrait-first. Reel / settings / JP styles appended after base cabinet rules. |
-| `engine.js` | Pure logic IIFE → `window.XiaomaliEngine` / `module.exports`. `TRACK`, `SYMBOLS`, presets, `effectiveWeights`, `resolveRound` (ONCE MORE chain + bonus + JP), `nextJpPot`, `simulate`. |
-| `game.js` | DOM/UI IIFE. Sound + procedural `Music` (Web Audio loops). Settings persistence. Light run + reel spin animation. Consumes `E.resolveRound` for payouts. |
+| `index.html` | Top bar, `#board` 7×7, center = WIN/CREDIT + JP + **3 reels** + dice + `#onceBanner` + msg, bets, controls, settings/help dialogs. Scripts: `engine.js` then `game.js` (`defer`). |
+| `styles.css` | `--u` = 1/100 of `--W`. Portrait-first. Reels / JP / once-banner / settings. |
+| `engine.js` | Pure logic → `XiaomaliEngine`. `resolveRound` queues free runs on ONCE MORE (`once` / `onceMulti` 連跑 / `onceBig`), then bonus + JP. Cap `MAX_ONCE_MORE_CHAIN`. |
+| `game.js` | UI: light run, reels, sound/BGM, settings, **「再跑 N 次」** banner. Animates `E.resolveRound` steps only. |
 | `sim.js` | `node sim.js [rounds]` balance check (not loaded in browser). |
 | `icon*`, `manifest.webmanifest` | PWA-ish home screen (no service worker). |
 
 ## Settings (localStorage `xiaomali.settings.v1`)
 - `preset`: `easy` \| `normal` \| `hard` \| `custom`
-- `weights`: per-symbol (+ `once`, `small`) multipliers 0–3
-- `bonusRate`: scales LUCKY chances (送燈／開火車／三元四喜)
-- `modes`: `{ once, song, train, sanyuan, jp }` booleans
+- `weights`: per-symbol (+ `once`, `small`) 0–3
+- `bonusRate`: scales LUCKY + 連跑／大 ONCE MORE grant chances
+- `modes`: `{ once, onceMulti, onceBig, song, train, sanyuan, jp }`
 - `music`: `off` \| `arcade` \| `breezy` \| `festive` \| `retro` \| `neon`
 
-Credit/win/sound/jp/lastBets: `xiaomali.v1`. Bump keys if schema breaks.
+Credit/win/sound/jp/lastBets: `xiaomali.v1`.
 
 ## Game rules in code
-- Stop tile = weighted pick via `effectiveWeights(settings)` (ONCE MORE weight 0 if mode off).
-- `resolveRound(bets, settings, rng, jpPot)` returns ordered `steps`: `once` \| `land` \| `bonus` \| `jp`. UI only animates; do not re-roll in `game.js`.
-- Bonus kinds: `song` (extra lights), `train` (adjacent streak), `sanyuan` (set lights). JP: land on big BAR tile with BAR bet → fraction of pot.
-- Big/small: 1–9; 1–4 small, 6–9 big, 5 push.
-- Center reels are **cosmetic companions**: spin with the light run; middle settles to landed symbol (or ONCE MORE). Outer 24-tile track is still the real payboard.
+- Stop = `effectiveWeights` (ONCE MORE weight 0 if `modes.once` off).
+- `resolveRound` steps: `once` `{grant,remaining,variant}` → `land` `{runsLeft}` → optional `bonus` / `jp`.
+  - Landing on ONCE MORE queues free light-runs (`single` 1 / `multi` 2–4 / `big` 3–5). Each free stop may pay; another ONCE MORE adds more (cap `MAX_ONCE_MORE_CHAIN`). UI shows countdown banner — do not re-roll in `game.js`.
+- Bonus: `song` / `train` / `sanyuan`. JP: big BAR + BAR bet.
+- Big/small: 1–4 / 6–9 / 5 push. Center reels are cosmetic; outer track pays.
+- Prefer short Traditional Chinese UI copy on portrait.
 
 ## How to test
 ```bash

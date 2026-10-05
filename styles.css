@@ -586,7 +586,41 @@ button {
 .center .dice-row { gap: calc(var(--u) * 2.4); margin-top: calc(var(--u) * -0.4); }
 .center .dice svg { width: calc(var(--u) * 5); height: calc(var(--u) * 8.4); }
 .center .ds-label { font-size: calc(var(--u) * 3.6); }
-.center .msg { font-size: calc(var(--u) * 2.9); min-height: 1.2em; padding: 0 calc(var(--u) * 1); }
+.once-banner {
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  gap: calc(var(--u) * 1.6);
+  min-height: calc(var(--u) * 4.2);
+  padding: calc(var(--u) * 0.4) calc(var(--u) * 2);
+  border-radius: calc(var(--u) * 2);
+  background: linear-gradient(90deg, #ff2d6a, #ff8a00 50%, #ff2d6a);
+  box-shadow: 0 0 10px rgba(255, 80, 120, 0.55);
+  font-family: "Arial Black", Impact, "Noto Sans TC", sans-serif;
+  font-weight: 900;
+  letter-spacing: 0.04em;
+  line-height: 1.1;
+}
+.once-banner[hidden] { display: none !important; }
+.once-banner-tag {
+  color: #fff;
+  font-size: calc(var(--u) * 2.8);
+  text-shadow: 0 1px 0 #7a0030;
+}
+.once-banner-count {
+  color: #fff36b;
+  font-size: calc(var(--u) * 3.2);
+  font-variant-numeric: tabular-nums;
+  text-shadow: 0 0 6px rgba(255, 243, 107, 0.7);
+}
+.once-banner.pulse { animation: pulse 0.45s ease-in-out infinite alternate; }
+.center .msg {
+  font-size: calc(var(--u) * 2.9);
+  min-height: 1.2em;
+  padding: 0 calc(var(--u) * 1);
+  margin-top: calc(var(--u) * 0.2);
+}
+
 
 .tile.lit2 {
   box-shadow: 0 0 0 calc(var(--u) * 0.5) #ff6ad5, 0 0 calc(var(--u) * 3) rgba(255, 106, 213, 0.8);

@@ -59,7 +59,11 @@
             <div class="led dice" id="diceLed" data-digits="1"></div>
             <span class="ds-label" id="lblBig">大<br><em>6–9</em></span>
           </div>
-          <div class="msg" id="msg" role="status" aria-live="polite">點下方水果押注，再按「開始」</div>
+          <div class="once-banner" id="onceBanner" hidden>
+            <span class="once-banner-tag" id="onceBannerTag">ONCE MORE</span>
+            <span class="once-banner-count" id="onceBannerCount">再跑 0 次</span>
+          </div>
+          <div class="msg" id="msg" role="status" aria-live="polite">點水果押注，再按開始</div>
         </div>
       </section>
 
@@ -67,7 +71,7 @@
 
       <section class="controls" aria-label="操作">
         <button class="btn btn-purple" id="btnSmall" type="button">小<small>1–4</small></button>
-        <button class="btn btn-orange" id="btnCollect" type="button">得分<small>WIN→CREDIT</small></button>
+        <button class="btn btn-orange" id="btnCollect" type="button">得分</button>
         <button class="btn btn-purple" id="btnBig" type="button">大<small>6–9</small></button>
         <button class="btn btn-blue" id="btnClear" type="button">清除</button>
         <button class="btn btn-yellow" id="btnAll" type="button">全押</button>
@@ -83,7 +87,7 @@
       <h2>設定</h2>
 
       <section class="set-sec">
-        <h3>難度（影響停燈機率）</h3>
+        <h3>難度</h3>
         <div class="preset-row" id="presetRow" role="group" aria-label="難度">
           <button type="button" class="chip" data-preset="easy">輕鬆</button>
           <button type="button" class="chip" data-preset="normal">標準</button>
@@ -93,18 +97,18 @@
           <input type="range" id="bonusRate" min="0" max="2" step="0.1" value="1">
           <span id="bonusRateVal">1.0×</span>
         </label>
-        <p class="hint" id="oddsHint">預估 RTP（全押）約 —</p>
+        <p class="hint" id="oddsHint">RTP約 —</p>
       </section>
 
       <section class="set-sec">
-        <h3>中彩玩法</h3>
+        <h3>玩法開關</h3>
         <div class="mode-list" id="modeList"></div>
       </section>
 
       <section class="set-sec">
-        <h3>背景音樂</h3>
+        <h3>音樂</h3>
         <div class="music-row" id="musicRow" role="group" aria-label="BGM"></div>
-        <p class="hint">音樂為 Web Audio 程序合成，無版權曲。🔇 總開關也會關閉 BGM。</p>
+        <p class="hint">程序合成音・🔇 一併關 BGM</p>
       </section>
 
       <div class="sheet-actions triple">
@@ -112,28 +116,28 @@
         <button class="btn btn-yellow" value="reset" id="btnReset" type="submit">重設 1000</button>
         <button class="btn btn-green" value="close" type="submit">完成</button>
       </div>
-      <p class="disclaimer">本遊戲僅供娛樂，分數為虛擬點數，不能兌換任何金錢或獎品，非真實賭博。</p>
+      <p class="disclaimer">娛樂用・虛擬分數・非賭博</p>
     </form>
   </dialog>
 
   <dialog class="sheet" id="helpDialog">
     <form method="dialog">
-      <h2>小瑪莉 玩法</h2>
+      <h2>玩法</h2>
       <ol>
-        <li>點下方水果鍵押注，每點一下押 1 分（按住可連押）。「全押」每種各押 1 分。</li>
-        <li>按「開始」，外圈燈號跑動，同時中央三轉盤轉動後停下。</li>
-        <li>停在你有押的圖案就贏：押注 × 倍率。小圖示（標 ×3）只付 3 倍，「BAR 50」付 50 倍。</li>
-        <li>停在 <b>ONCE MORE</b>：用同樣押注免費再跑一次（可在設定關閉）。</li>
-        <li>中彩（可在設定開關）：<b>送燈</b>額外亮燈計分、<b>開火車</b>連燈、<b>三元四喜</b>成套亮燈、<b>JP</b> 停大 BAR 且有押 BAR 可拿累積彩金。</li>
-        <li>贏分在 WIN。按「得分」轉入 CREDIT，或按「小／大」比大小：亮 1–4 小、6–9 大，猜中加倍、猜錯歸零，亮 5 和局。</li>
-        <li>右上 ⚙️ 可調難度、中彩、背景音樂。分數存在本機瀏覽器。</li>
+        <li>點水果押 1 分（按住連押）；「全押」每種各 1。</li>
+        <li>「開始」→ 外圈跑燈＋中央轉盤。</li>
+        <li>停在有押的圖案：押注 × 倍率（小圖 ×3、BAR50 ×50）。</li>
+        <li><b>ONCE MORE</b> 免費再跑；可連跑／大 ONCE MORE（設定開關）。</li>
+        <li>中彩：送燈、開火車、三元四喜；JP＝停大 BAR 且押 BAR。</li>
+        <li>WIN 可「得分」或比大小（1–4 小、6–9 大；5 和）。</li>
+        <li>⚙️ 調難度／玩法／音樂。分數存本機。</li>
       </ol>
       <table class="paytable" id="paytable"></table>
-      <p class="disclaimer">本遊戲僅供娛樂，分數為虛擬點數，不能兌換任何金錢或獎品，非真實賭博。</p>
+      <p class="disclaimer">娛樂用・虛擬分數・非賭博</p>
       <div class="sheet-actions">
         <button class="btn btn-green" value="close" type="submit">關閉</button>
       </div>
-      <p class="keys">鍵盤：1–8 押注、A 全押、C 清除、Space／Enter 開始、S 得分、← 小、→ 大</p>
+      <p class="keys">鍵：1–8 押、A 全押、C 清、空白開始、S 得分、←小 →大</p>
     </form>
   </dialog>
 

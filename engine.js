@@ -57,7 +57,22 @@
     { s: 'apple',  w: 3 },
   ];
   const N = TRACK.length; // 24
-  const MAX_ONCE_MORE_CHAIN = 5;
+  /** Max free light-runs (symbol stops) from ONCE MORE / 連跑 / 大 ONCE MORE in one round. */
+  const MAX_ONCE_MORE_CHAIN = 8;
+
+  /**
+   * When the light lands on ONCE MORE, roll how many free re-runs to queue.
+   * Chances scale with settings.bonusRate. Toggled via modes.onceMulti / onceBig.
+   *   single → 1 (classic)
+   *   multi  → 2–5 sequential free stops that each pay if bet matches (連跑)
+   *   big    → 3–5 guaranteed (大 ONCE MORE)
+   */
+  const ONCE_GRANT = {
+    multiChance: 0.18,
+    bigChance:   0.08,
+    multiMin: 2, multiMax: 4,
+    bigMin: 3, bigMax: 5,
+  };
 
   /** Keys that have a weight multiplier in settings (8 symbols + ONCE MORE). */
   const WEIGHT_KEYS = [...SYMBOLS.map((s) => s.id), 'once', 'small'];
@@ -83,13 +98,15 @@
   // ---------------------------------------------------------------------------
   // Settings + presets
   // ---------------------------------------------------------------------------
-  const MODE_KEYS = ['once', 'song', 'train', 'sanyuan', 'jp'];
+  const MODE_KEYS = ['once', 'onceMulti', 'onceBig', 'song', 'train', 'sanyuan', 'jp'];
   const MODE_LABELS = {
-    once: 'ONCE MORE 再跑一次',
-    song: '送燈（多燈）',
-    train: '開火車（連燈）',
-    sanyuan: '大三元／小三元／大四喜',
-    jp: 'JP 累積彩金',
+    once: 'ONCE MORE',
+    onceMulti: '連跑（再跑 2–4 次）',
+    onceBig: '大 ONCE MORE（≥3 次）',
+    song: '送燈',
+    train: '開火車',
+    sanyuan: '三元四喜',
+    jp: 'JP 彩金',
   };
 
   const ones = () => Object.fromEntries(WEIGHT_KEYS.map((k) => [k, 1]));
@@ -118,7 +135,7 @@
     preset: 'normal',
     weights: { ...PRESETS.normal.weights },
     bonusRate: 1,
-    modes: { once: true, song: true, train: true, sanyuan: true, jp: true },
+    modes: { once: true, onceMulti: true, onceBig: true, song: true, train: true, sanyuan: true, jp: true },
   };
 
   const clamp = (v, lo, hi, d) => (Number.isFinite(+v) ? Math.min(hi, Math.max(lo, +v)) : d);
@@ -229,13 +246,35 @@
     return { kind, name: '大四喜', tiles: shuffled(apples, rng).slice(0, 4) };
   }
 
+  /** Roll free-run grant when landing on an ONCE MORE tile. */
+  function rollOnceGrant(settings, rng) {
+    const br = settings.bonusRate || 1;
+    const g = ONCE_GRANT;
+    if (settings.modes.onceBig && rng() < g.bigChance * br) {
+      const span = g.bigMax - g.bigMin + 1;
+      return { grant: g.bigMin + Math.floor(rng() * span), variant: 'big' };
+    }
+    if (settings.modes.onceMulti && rng() < g.multiChance * br) {
+      const span = g.multiMax - g.multiMin + 1;
+      return { grant: g.multiMin + Math.floor(rng() * span), variant: 'multi' };
+    }
+    return { grant: 1, variant: 'single' };
+  }
+
   /**
-   * Resolve one full round (incl. ONCE MORE chain + bonus + JP) without any UI.
+   * Resolve one full round (ONCE MORE / 連跑 / 大 ONCE MORE + bonus + JP) without UI.
    * Returns { steps, win, jpWin }. Steps (in order) drive the animation:
-   *   { type: 'once', target, chain }
-   *   { type: 'land', target, si, mult, gained }
+   *   { type: 'once', target, grant, remaining, variant, capped? }
+   *     grant = newly queued free runs; remaining = queue size after this hit;
+   *     variant = 'single' | 'multi' | 'big'
+   *   { type: 'land', target, si, mult, gained, runsLeft }
+   *     runsLeft = free runs still queued AFTER this land (連跑 continues if > 0)
    *   { type: 'bonus', kind, name, target, tiles: [{ i, si, mult, gained }], gained }
    *   { type: 'jp', amount }
+   *
+   * Free-run model: landing on ONCE MORE queues N free light-runs. Each free run
+   * may pay on a symbol stop; if it hits ONCE MORE again, more runs are queued
+   * (capped by MAX_ONCE_MORE_CHAIN). 連跑 = several sequential paying stops.
    */
   function resolveRound(bets, settings, rng, jpPot = 0) {
     const s = settings || DEFAULT_SETTINGS;
@@ -243,16 +282,52 @@
     const steps = [];
     let win = 0;
     let jpWin = 0;
-    let chain = 0;
+    let queue = 0;      // pending free light-runs
+    let freesDone = 0;  // completed free symbol-stops
+    let paidDone = false;
+
     for (;;) {
       const target = pickWeighted(weights, rng);
+
       if (TRACK[target].s === 'once') {
-        steps.push({ type: 'once', target, chain });
-        if (chain < MAX_ONCE_MORE_CHAIN) { chain++; continue; }
-        break; // chain cap reached: round ends with no payout
+        if (!s.modes.once) {
+          // Weight should be 0; treat as empty stop.
+          if (paidDone && queue > 0) { queue--; freesDone++; }
+          paidDone = true;
+          steps.push({ type: 'land', target, si: -1, mult: 0, gained: 0, runsLeft: queue });
+          if (queue > 0) continue;
+          break;
+        }
+        const rolled = rollOnceGrant(s, rng);
+        const room = Math.max(0, MAX_ONCE_MORE_CHAIN - freesDone - queue);
+        const grant = Math.min(rolled.grant, room);
+        queue += grant;
+        let variant = rolled.variant;
+        if (grant <= 1 && variant !== 'big') variant = 'single';
+        else if (grant >= 3 && variant === 'big') variant = 'big';
+        else if (grant >= 2) variant = variant === 'big' ? 'big' : 'multi';
+        steps.push({
+          type: 'once',
+          target,
+          grant,
+          remaining: queue,
+          variant,
+          capped: grant < rolled.grant,
+        });
+        paidDone = true;
+        if (queue <= 0) break; // cap with nothing left to run
+        continue; // ONCE MORE itself does not consume a queued free run
       }
+
+      // Symbol land — consume one free run if this stop is from the queue
+      if (paidDone && queue > 0) {
+        queue--;
+        freesDone++;
+      }
+      paidDone = true;
+
       const p = tilePay(target, bets);
-      steps.push({ type: 'land', target, ...p });
+      steps.push({ type: 'land', target, ...p, runsLeft: queue });
       win += p.gained;
 
       const bonus = rollBonus(target, s, rng);
@@ -262,10 +337,13 @@
         steps.push({ type: 'bonus', kind: bonus.kind, name: bonus.name, target, tiles, gained });
         win += gained;
       }
-      if (s.modes.jp && target === BIG_BAR_TILE && bets[SYM_INDEX.bar] > 0 && jpPot > 0) {
+      // JP only on the first (paid) big-BAR land of the round — keep simple: any land
+      if (s.modes.jp && target === BIG_BAR_TILE && bets[SYM_INDEX.bar] > 0 && jpPot > 0 && jpWin === 0) {
         jpWin = Math.floor(jpPot * Math.min(1, bets[SYM_INDEX.bar] / JP.fullBet));
         if (jpWin > 0) steps.push({ type: 'jp', amount: jpWin });
       }
+
+      if (queue > 0) continue; // 連跑：還有免費跑燈
       break;
     }
     return { steps, win: win + jpWin, jpWin };
@@ -297,10 +375,10 @@
   }
 
   const api = {
-    SYMBOLS, SYM_INDEX, TRACK, N, MAX_ONCE_MORE_CHAIN, WEIGHT_KEYS,
+    SYMBOLS, SYM_INDEX, TRACK, N, MAX_ONCE_MORE_CHAIN, ONCE_GRANT, WEIGHT_KEYS,
     BONUS, JP, BIG_BAR_TILE, MODE_KEYS, MODE_LABELS, PRESETS, DEFAULT_SETTINGS,
     normalizeSettings, applyPreset, effectiveWeights, landingOdds, pickWeighted,
-    tilePay, resolveRound, nextJpPot, simulate,
+    tilePay, rollOnceGrant, resolveRound, nextJpPot, simulate,
   };
   if (typeof module === 'object' && module.exports) module.exports = api;
   else root.XiaomaliEngine = api;
