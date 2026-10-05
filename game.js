@@ -526,6 +526,7 @@
     auto: false,
     jp: JP.seed,
     bingo: new Array(9).fill(false),
+    bingoLineWins: 0, // lifetime LINE meter (board clears on complete so live count≈0)
   };
 
   let settings = E.normalizeSettings(null);
@@ -533,7 +534,7 @@
   /** While a round animates, persist WIN/bingo as of round-start so a mid-spin
    *  refresh refunds the stake WITHOUT keeping partial round wins / bingo marks
    *  (visibilitychange / pagehide call save() while busy). */
-  let roundPersist = null; // { win, bingo, jp } | null
+  let roundPersist = null; // { win, bingo, jp, bingoLineWins } | null
   /** Bumped when a round ends/aborts so orphan reel RAFs stop writing. */
   let animGen = 0;
 
@@ -566,6 +567,7 @@
         Sound.on = d.sound !== false;
         if (Number.isFinite(d.jp) && d.jp >= 0) state.jp = Math.min(JP.max, d.jp);
         if (Array.isArray(d.bingo) && d.bingo.length === 9) state.bingo = d.bingo.map(Boolean);
+        if (Number.isFinite(d.bingoLineWins)) state.bingoLineWins = Math.max(0, Math.min(9999, d.bingoLineWins | 0));
         if (Array.isArray(d.lastBets) && d.lastBets.length === SYMBOLS.length) {
           state.bets = d.lastBets.map((n) => Math.min(MAX_BET_PER_SYMBOL, Math.max(0, n | 0)));
           state.betsPaid = false;
@@ -593,6 +595,7 @@
       const win = roundPersist ? roundPersist.win : state.win;
       const bingo = roundPersist ? roundPersist.bingo : state.bingo;
       const jp = roundPersist ? roundPersist.jp : state.jp;
+      const bingoLineWins = roundPersist ? roundPersist.bingoLineWins : state.bingoLineWins;
       localStorage.setItem(STORAGE_KEY, JSON.stringify({
         credit: state.credit + refund,
         win,
@@ -602,6 +605,7 @@
         lastPlayedBets: state.lastPlayedBets,
         jp,
         bingo,
+        bingoLineWins,
         holdCount,
       }));
     } catch { /* */ }
@@ -1466,7 +1470,7 @@
     });
 
     const marked = state.bingo.reduce((n, v) => n + (v ? 1 : 0), 0);
-    const lines = countBingoLines(state.bingo);
+    const liveLines = countBingoLines(state.bingo);
     const missionBar = $('missionBar');
     const missionFill = $('missionFill');
     const missionCnt = $('missionCnt');
@@ -1480,10 +1484,11 @@
 
     const lineMini = $('lineMini');
     const lineMiniVal = $('lineMiniVal');
-    if (lineMiniVal) lineMiniVal.textContent = String(lines);
+    // LINE meter = lifetime completed lines (board clears on hit, so live count≈0).
+    if (lineMiniVal) lineMiniVal.textContent = String(state.bingoLineWins | 0);
     if (lineMini) {
       lineMini.classList.toggle('off', !bingoOn);
-      lineMini.classList.toggle('is-hit', bingoOn && lines > 0);
+      lineMini.classList.toggle('is-hit', bingoOn && (liveLines > 0 || state.bingoLineWins > 0));
     }
 
     if (was !== root.hidden && typeof scheduleFit === 'function') scheduleFit();
@@ -2254,7 +2259,7 @@
     state.lastPlayedBets = state.bets.slice();
     state.busy = true;
     // Snapshot for mid-spin persist + exception rollback (see roundPersist / save).
-    roundPersist = { win: state.win, bingo: state.bingo.slice(), jp: state.jp };
+    roundPersist = { win: state.win, bingo: state.bingo.slice(), jp: state.jp, bingoLineWins: state.bingoLineWins };
     FX.spin();
     render();
     save();
@@ -2460,6 +2465,7 @@
           flashBingoCell(step.cell);
         }
         if (step.lines && step.lines.length) {
+          state.bingoLineWins = Math.min(9999, (state.bingoLineWins | 0) + step.lines.length);
           celebrateHit({
             amount: step.gained || 30,
             mult: 15 * step.lines.length,
@@ -2578,6 +2584,7 @@
         state.win = roundPersist.win;
         state.bingo = roundPersist.bingo.slice();
         state.jp = roundPersist.jp;
+        state.bingoLineWins = roundPersist.bingoLineWins;
         try { FX.idle(); } catch (_) { /* */ }
       } else {
         // Success: drop stuck spin/expect/fever but keep end-of-round fx-win pulse
@@ -2887,6 +2894,7 @@
     state.betsPaid = true;
     state.jp = JP.seed;
     state.bingo = new Array(9).fill(false);
+    state.bingoLineWins = 0;
     FX.holdsSet(0);
     renderBingo();
     clearHighlights();
