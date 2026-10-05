@@ -957,6 +957,11 @@
   }
 
   const confirmDlg = $('confirmDialog');
+  const settingsDlgEarly = $('settingsDialog');
+  const helpDlgEarly = $('helpDialog');
+  function dialogOpen() {
+    return !!(settingsDlgEarly?.open || helpDlgEarly?.open || confirmDlg?.open);
+  }
   /** Cabinet-styled confirm. Resolves true on 確定. */
   function confirmBox(title, text, okLabel = '確定') {
     if (!confirmDlg || typeof confirmDlg.showModal !== 'function') {
@@ -982,7 +987,8 @@
     if (!onceBanner) return;
     onceBannerTag.textContent = ONCE_VARIANT_LABEL[variant] || 'ONCE MORE';
     onceBannerCount.textContent = remaining > 0 ? `×${remaining}` : '結束';
-    onceBanner.hidden = remaining <= 0;
+    // Always show — previously remaining<=0 set hidden and the 「結束」cue never appeared.
+    onceBanner.hidden = false;
     onceBanner.classList.toggle('pulse', remaining > 0);
   }
   function hideOnceBanner() {
@@ -1010,6 +1016,7 @@
   const why = {
     start() {
       if (state.busy) return BUSY_MSG;
+      if (dialogOpen()) return '請先關閉視窗';
       const total = sum(state.bets);
       if (total <= 0) return '請先押注';
       if (!state.betsPaid && avail() < total) return `需 ${total}・請清押或開分`;
@@ -1017,17 +1024,32 @@
     },
     clear() {
       if (state.busy) return BUSY_MSG;
+      if (dialogOpen()) return '請先關閉視窗';
       if (sum(state.bets) <= 0) return '目前沒有押注';
       return null;
     },
     all() {
       if (state.busy) return BUSY_MSG;
+      if (dialogOpen()) return '請先關閉視窗';
       if (avail() < 1) return NO_CREDIT;
-      if (state.betsPaid && state.bets.every((b) => b >= MAX_BET_PER_SYMBOL)) return `已全部押滿 ${MAX_BET_PER_SYMBOL}`;
+      if (state.bets.every((b) => b >= MAX_BET_PER_SYMBOL)) return `已全部押滿 ${MAX_BET_PER_SYMBOL}`;
+      if (!state.betsPaid) {
+        // Mirror betAll affordability (betUnit), not just avail>=1.
+        const unit = betUnit();
+        let trial = sum(state.bets);
+        let can = false;
+        for (let i = 0; i < SYMBOLS.length; i++) {
+          if (state.bets[i] >= MAX_BET_PER_SYMBOL) continue;
+          const add = Math.min(unit, MAX_BET_PER_SYMBOL - state.bets[i]);
+          if (add >= 1 && avail() >= trial + add) { can = true; break; }
+        }
+        if (!can) return '需更多分數・請開分';
+      }
       return null;
     },
     bet(i) {
       if (state.busy) return BUSY_MSG;
+      if (dialogOpen()) return '請先關閉視窗';
       if (state.bets[i] >= MAX_BET_PER_SYMBOL) return `${SYMBOLS[i].name} 已達上限 ${MAX_BET_PER_SYMBOL}`;
       // Paid: need credit in hand. Unpaid preview: need current pattern + next unit (betUnit).
       const unit = betUnit();
@@ -1043,6 +1065,7 @@
     },
     dbl() {
       if (state.busy) return BUSY_MSG;
+      if (dialogOpen()) return '請先關閉視窗';
       const total = sum(state.bets);
       if (total <= 0) return '請先押注';
       const dbl = doubledTotal();
@@ -1053,6 +1076,7 @@
     },
     rebet() {
       if (state.busy) return BUSY_MSG;
+      if (dialogOpen()) return '請先關閉視窗';
       const need = sum(lastPattern());
       if (need <= 0) return '沒有上一局押注';
       if (avail() + paidRefund() < need) return `續押需 ${need}`;
@@ -1061,6 +1085,7 @@
     auto() {
       if (state.auto) return null; // always allowed to switch off
       if (state.busy) return BUSY_MSG;
+      if (dialogOpen()) return '請先關閉視窗';
       const need = sum(lastPattern());
       if (need <= 0) return '請先押注';
       if (!(state.betsPaid && sum(state.bets) > 0) && avail() + paidRefund() < need) return `自動需 ${need}`;
@@ -1068,26 +1093,31 @@
     },
     collect() {
       if (state.busy) return BUSY_MSG;
+      if (dialogOpen()) return '請先關閉視窗';
       if (state.win <= 0) return '沒有 WIN';
       return null;
     },
     gamble() {
       if (state.busy) return BUSY_MSG;
+      if (dialogOpen()) return '請先關閉視窗';
       if (state.win <= 0) return '沒有 WIN 可比倍';
       return null;
     },
     open() {
       if (state.busy) return BUSY_MSG;
+      if (dialogOpen()) return '請先關閉視窗';
       if (state.credit >= CREDIT_CAP) return 'CREDIT 已達上限';
       return null;
     },
     wash() {
       if (state.busy) return BUSY_MSG;
+      if (dialogOpen()) return '請先關閉視窗';
       if (avail() + paidRefund() <= 0) return '沒有分數可洗';
       return null;
     },
     reset() {
       if (state.busy) return BUSY_MSG;
+      if (dialogOpen()) return '請先關閉視窗';
       return null;
     },
   };
@@ -2840,8 +2870,8 @@
   // 7. Settings UI
   // ---------------------------------------------------------------------------
 
-  const settingsDlg = $('settingsDialog');
-  const helpDlg = $('helpDialog');
+  const settingsDlg = settingsDlgEarly || $('settingsDialog');
+  const helpDlg = helpDlgEarly || $('helpDialog');
   const modeList = $('modeList');
   const weightList = $('weightList');
   const musicRow = $('musicRow');
@@ -3496,7 +3526,9 @@
     cancelAnimationFrame(_fitRaf);
     _fitRaf = requestAnimationFrame(() => {
       fitCabinet();
-      idleReels();
+      // Never reset reels mid-round — resize/orientation used to call idleReels
+      // and wipe spinning/landed state while spinReels was still animating.
+      if (!state.busy) idleReels();
     });
   }
   window.addEventListener('resize', scheduleFit);
