@@ -1409,7 +1409,8 @@
     let dist = (target - state.pos + N) % N;
     if (fx && fx.reverse) dist = (state.pos - target + N) % N;
     if (skip && dist % 2 === 1) dist += 1; // align nudge approx
-    const laps = 2;
+    // runLight picks 2 or 3 laps; use 2.5 mean so reel sync stays close
+    const laps = 2.5;
     const totalSteps = Math.floor((laps * N + dist) / step);
     const FAST = skip ? 36 : 28;
     const DECEL = 15;
@@ -2632,9 +2633,15 @@
         Sound.beep(660, 0.15, 'triangle', 0.07);
       } else if ((choice === 'small' && isSmall) || (choice === 'big' && isBig)) {
         const before = state.win;
-        setMsg(`開 ${result}・中！×2`, 'hot');
-        Sound.win();
-        await animateWin(before, before * 2);
+        if (before >= CREDIT_CAP) {
+          setMsg(`開 ${result}・中！WIN 已滿`, 'hot');
+          Sound.win();
+          toast('WIN 已達上限', 'warn');
+        } else {
+          setMsg(`開 ${result}・中！×2`, 'hot');
+          Sound.win();
+          await animateWin(before, before * 2);
+        }
       } else {
         setMsg(`開 ${result}・錯`, 'bad');
         Sound.lose();
@@ -3066,6 +3073,8 @@
   }
 
   function openSettings() {
+    if (state.busy) { deny(BUSY_MSG); return; }
+    if (confirmDlg?.open) { deny('請先關閉視窗'); return; }
     refreshSettingsUI();
     if (typeof settingsDlg.showModal === 'function') settingsDlg.showModal();
     else settingsDlg.setAttribute('open', '');
@@ -3078,6 +3087,8 @@
     if (tip) tip.hidden = true;
   }
   function openHelp() {
+    if (state.busy) { deny(BUSY_MSG); return; }
+    if (confirmDlg?.open) { deny('請先關閉視窗'); return; }
     markSeenHelp();
     if (typeof helpDlg.showModal === 'function') helpDlg.showModal();
     else helpDlg.setAttribute('open', '');
