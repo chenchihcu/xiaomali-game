@@ -2512,7 +2512,11 @@
     if (Array.isArray(result.bingoBoard)) state.bingo = result.bingoBoard.map(Boolean);
     renderBingo();
 
-    state.jp = E.nextJpPot(state.jp, total, result.jpWin, settings);
+    // Only accumulate / reset JP when the mode is on — otherwise the pot
+    // kept growing invisibly and shocked players who re-enabled JP later.
+    if (settings.modes.jp) {
+      state.jp = E.nextJpPot(state.jp, total, result.jpWin, settings);
+    }
 
     if (roundWin > 0) setMsg(`本局 +${roundWin}・得分或比大小`, 'hot');
     else if (!msgEl.textContent.includes('沒中') && !msgEl.textContent.includes('上限')) {
@@ -2843,6 +2847,7 @@
     state.betsPaid = true;
     const cashed = state.credit;
     state.credit = 0;
+    FX.holdsSet(0);
     stopAuto();
     Sound.seq([520, 400, 300], 0.07, 'triangle', 0.06);
     setMsg(cashed > 0 ? `洗分 ${cashed}` : '已洗分');
@@ -2866,6 +2871,7 @@
     state.betsPaid = true;
     state.jp = JP.seed;
     state.bingo = new Array(9).fill(false);
+    FX.holdsSet(0);
     renderBingo();
     clearHighlights();
     diceLed.set('-');
