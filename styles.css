@@ -3861,3 +3861,229 @@ html.fit-2 .deck-func .btn {
   height: max(44px, calc(var(--u) * 7.4));
   font-size: calc(var(--u) * 2.5);
 }
+
+
+/* ========== UI Phase-3: sharp deck icons / WIN readable / less chrome (20261006c3) ========== */
+/*
+ * Blur root cause: parent `filter` on .deck-func / .pgroup forces a rasterized
+ * intermediate bitmap → soft SVG strokes + CJK labels. Dim only via opacity and
+ * ::before (cap) filters — never filter containers that hold text/SVG.
+ */
+
+/* --- Kill container filters (override phase-1/2) --- */
+.deck-func {
+  opacity: 0.84;
+  filter: none;
+}
+.deck-func:focus-within,
+.deck-func:hover {
+  opacity: 0.95;
+  filter: none;
+}
+.deck-func:has(.btn.flash),
+.deck-func:has(.btn.on) {
+  opacity: 1;
+  filter: none;
+}
+.deck-func .pgroup {
+  filter: none;
+  box-shadow: inset 0 0 0 calc(var(--u) * 0.24) var(--pg);
+}
+.deck-func .plate {
+  opacity: 0.9;
+  filter: none;
+}
+
+/* Cap-only dim (safe: no glyphs inside ::before) */
+.deck-func .btn::before {
+  filter: brightness(0.94) saturate(0.92);
+  box-shadow:
+    inset 0 0 0 calc(var(--u) * 0.12) rgba(255, 255, 255, 0.2),
+    inset 0 calc(var(--u) * -0.3) calc(var(--u) * 0.45) rgba(0, 0, 0, 0.2),
+    0 calc(var(--u) * 0.36) 0 var(--c4),
+    0 calc(var(--u) * 0.45) calc(var(--u) * 0.28) rgba(0, 0, 0, 0.38);
+}
+
+/* Specular glare: keep at top only — do not cross mid icon / label */
+.deck-func .btn::after {
+  top: calc(var(--u) * 0.5);
+  left: 20%;
+  right: 20%;
+  height: 14%;
+  opacity: 0.26;
+  border-radius: 40%;
+  background: linear-gradient(180deg, rgba(255, 255, 255, 0.5), rgba(255, 255, 255, 0));
+  pointer-events: none;
+  z-index: 0;
+}
+
+/* Icons + CJK labels: crisp vector / readable type */
+.deck-func .btn-svg {
+  width: max(20px, calc(var(--u) * 4.6));
+  height: max(20px, calc(var(--u) * 4.6));
+  filter: none;
+  shape-rendering: geometricPrecision;
+  image-rendering: auto;
+  flex-shrink: 0;
+}
+.deck-func .btn-lab {
+  font-size: max(11px, calc(var(--u) * 2.55));
+  font-weight: 800;
+  letter-spacing: 0.04em;
+  line-height: 1.05;
+  font-family: "PingFang TC", "Noto Sans TC", "Microsoft JhengHei", "Hiragino Sans GB", system-ui, sans-serif;
+  -webkit-font-smoothing: antialiased;
+  -moz-osx-font-smoothing: grayscale;
+  text-rendering: geometricPrecision;
+  text-shadow: 0 1px 0 rgba(0, 0, 0, 0.7);
+}
+.deck-func .btn {
+  height: max(46px, calc(var(--u) * 8.6));
+  min-height: 46px;
+  gap: calc(var(--u) * 0.2);
+  color: rgba(255, 255, 255, 0.96);
+  text-shadow: 0 1px 0 rgba(0, 0, 0, 0.65);
+  box-shadow: 0 calc(var(--u) * 0.32) calc(var(--u) * 0.45) rgba(0, 0, 0, 0.48);
+}
+
+/* Ensure glyph layer paints above cap glare */
+.deck-func .btn-ico .btn-svg,
+.deck-func .btn-ico .btn-lab {
+  position: relative;
+  z-index: 2;
+}
+
+/* --- WIN / 比倍: secondary when idle, readable; flash/on = lit --- */
+.deck-func .pgroup-win {
+  /* less cave-dark felt so purple/orange caps read */
+  background:
+    var(--tx-felt) 0 0 / 72px 72px,
+    radial-gradient(ellipse at 50% 0%, rgba(255, 255, 255, 0.12), transparent 70%),
+    linear-gradient(180deg, #6a2222 0%, #4a1212 100%);
+}
+.deck-func .pgroup-win .btn.off {
+  color: rgba(255, 255, 255, 0.82);
+  opacity: 1;
+}
+.deck-func .pgroup-win .btn.off::before {
+  /* was saturate(0.4) brightness(0.5) — too dark with secondary deck */
+  filter: saturate(0.7) brightness(0.82);
+}
+.deck-func .pgroup-win .btn.off::after {
+  opacity: 0.18;
+}
+.deck-func .pgroup-win .btn.off .btn-lab {
+  color: rgba(255, 255, 255, 0.88);
+  text-shadow: 0 1px 0 rgba(0, 0, 0, 0.75);
+}
+.deck-func .pgroup-win:has(.btn.flash),
+.deck-func .pgroup-win:has(.btn.on) {
+  background:
+    var(--tx-felt) 0 0 / 72px 72px,
+    radial-gradient(ellipse at 50% 0%, rgba(255, 220, 120, 0.16), transparent 70%),
+    linear-gradient(180deg, #7a2a1a 0%, #4a1008 100%);
+  box-shadow: inset 0 0 0 calc(var(--u) * 0.28) #f0b028;
+}
+.deck-func .pgroup-win .btn.flash:not(.off),
+.deck-func .pgroup-win .btn.on {
+  color: #fff;
+  opacity: 1;
+}
+.deck-func .pgroup-win .btn.flash:not(.off)::before,
+.deck-func .pgroup-win .btn.on::before {
+  filter: brightness(1.22) saturate(1.05);
+}
+.deck-func .btn.flash:not(.off)::before,
+.deck-func .btn.on::before {
+  filter: brightness(1.18) saturate(1);
+}
+
+/* Other secondary keys (.off): stay dimmer than WIN, but not mushy */
+.deck-func .pgroup:not(.pgroup-win) .btn.off {
+  color: rgba(255, 255, 255, 0.7);
+}
+.deck-func .pgroup:not(.pgroup-win) .btn.off::before {
+  filter: saturate(0.55) brightness(0.7);
+}
+
+/* fit-2: keep labels readable */
+html.fit-2 .deck-func .btn {
+  height: max(44px, calc(var(--u) * 7.8));
+  font-size: calc(var(--u) * 2.6);
+}
+html.fit-2 .deck-func .btn-lab {
+  font-size: max(10px, calc(var(--u) * 2.15));
+}
+html.fit-2 .deck-func .btn-svg {
+  width: max(18px, calc(var(--u) * 4));
+  height: max(18px, calc(var(--u) * 4));
+}
+
+/* --- Phase-3 chrome: metal / wing / marquee less simultaneous glow --- */
+.wing-panel {
+  box-shadow:
+    inset 0 0 0 calc(var(--u) * 0.18) #000,
+    inset 0 0 0 calc(var(--u) * 0.38) #c49228,
+    inset 0 0 0 calc(var(--u) * 0.55) #3a1604,
+    inset 0 calc(var(--u) * 0.5) calc(var(--u) * 0.9) rgba(255, 255, 255, 0.07),
+    inset 0 calc(var(--u) * -0.5) calc(var(--u) * 0.85) rgba(0, 0, 0, 0.35),
+    0 1px 2px rgba(0, 0, 0, 0.4);
+  background:
+    var(--tx-noise-light),
+    radial-gradient(ellipse 70% 90% at 50% 35%, rgba(255, 220, 120, 0.12), transparent 68%),
+    repeating-conic-gradient(from -6deg at 50% 50%, #7a1010 0 9deg, #a82016 9deg 18deg),
+    #8a1212;
+}
+.wing-art {
+  opacity: 0.72;
+  filter: drop-shadow(0 calc(var(--u) * 0.2) calc(var(--u) * 0.35) rgba(0, 0, 0, 0.65));
+}
+.cabinet.fx-win .wing-art,
+.cabinet.fx-fever .wing-art {
+  opacity: 0.95;
+}
+.wing-lamp:not(.on) {
+  opacity: 0.28;
+  filter: brightness(0.72) saturate(0.6);
+}
+.marquee {
+  box-shadow:
+    inset 0 0 0 calc(var(--u) * 0.24) #000,
+    inset 0 calc(var(--u) * 0.35) 0 rgba(255, 255, 255, 0.07),
+    0 0 0 calc(var(--u) * 0.28) #6a6a70,
+    0 0 0 calc(var(--u) * 0.48) #2a1206;
+}
+.rail-dot:not(.on) {
+  opacity: 0.26;
+  filter: brightness(0.68);
+}
+.side-lamp {
+  opacity: 0.36;
+  filter: brightness(0.75);
+}
+
+/* Bevel / glow another ~10–12% quieter on deck chrome */
+.deck {
+  box-shadow:
+    inset 0 calc(var(--u) * 0.22) 0 rgba(255, 255, 255, 0.09),
+    inset 0 0 0 calc(var(--u) * 0.2) #000,
+    0 0 0 calc(var(--u) * 0.22) #5a5a60,
+    0 0 0 calc(var(--u) * 0.42) #2a1206,
+    0 calc(var(--u) * 0.35) calc(var(--u) * 0.7) rgba(0, 0, 0, 0.42);
+}
+.btn::after {
+  opacity: 0.42;
+  height: 22%;
+  background: linear-gradient(180deg, rgba(255, 255, 255, 0.42), rgba(255, 255, 255, 0));
+}
+.deck-main .btn:not(.btn-start)::after {
+  opacity: 0.38;
+  height: 18%;
+}
+.btn.on::before {
+  filter: brightness(1.12);
+  box-shadow:
+    inset 0 0 calc(var(--u) * 0.9) rgba(255, 255, 255, 0.35),
+    0 calc(var(--u) * 0.4) 0 var(--c4),
+    0 0 calc(var(--u) * 1.6) var(--glow);
+}
