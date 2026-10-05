@@ -534,6 +534,8 @@
    *  refresh refunds the stake WITHOUT keeping partial round wins / bingo marks
    *  (visibilitychange / pagehide call save() while busy). */
   let roundPersist = null; // { win, bingo, jp } | null
+  /** Bumped when a round ends/aborts so orphan reel RAFs stop writing. */
+  let animGen = 0;
 
   function loadSettings() {
     try {
@@ -867,12 +869,14 @@
   /** Spin all three reels; settle middle on `centerId`, sides on random fruits. */
   async function spinReels(centerId, durationMs) {
     measureReelCells();
+    const gen = animGen;
     const reduced = window.matchMedia('(prefers-reduced-motion: reduce)').matches;
     const sideL = REEL_IDS[Math.floor(randomFloat() * REEL_IDS.length)];
     const sideR = REEL_IDS[Math.floor(randomFloat() * REEL_IDS.length)];
     const targets = [sideL, centerId === 'once' ? 'once' : (SYM_INDEX[centerId] != null ? centerId : REEL_IDS[0]), sideR];
 
     if (reduced) {
+      if (gen !== animGen) return;
       targets.forEach((id, ri) => {
         setReelOffset(ri, findReelIndex(ri, id, true), false);
         reelStrips[ri].parent.classList.add('landed');
@@ -891,6 +895,11 @@
     let raf = 0;
     await new Promise((resolve) => {
       const tick = (now) => {
+        if (gen !== animGen) {
+          cancelAnimationFrame(raf);
+          resolve();
+          return;
+        }
         const t = now - start;
         if (t >= durationMs) {
           cancelAnimationFrame(raf);
@@ -907,8 +916,11 @@
       raf = requestAnimationFrame(tick);
     });
 
+    if (gen !== animGen) return;
+
     // staggered settle
     for (let ri = 0; ri < 3; ri++) {
+      if (gen !== animGen) return;
       const idx = findReelIndex(ri, targets[ri], true);
       setReelOffset(ri, idx, true);
       reelStrips[ri].parent.classList.remove('spinning');
@@ -2153,9 +2165,11 @@
     });
     const spinMs = [900, 1300, 1700];
     const start = performance.now();
+    const gen = animGen;
     let done = [false, false, false];
     await new Promise((resolve) => {
       const tick = (now) => {
+        if (gen !== animGen) { resolve(); return; }
         const t = now - start;
         let all = true;
         reelStrips.forEach((r, ri) => {
@@ -2178,6 +2192,7 @@
       };
       requestAnimationFrame(tick);
     });
+    if (gen !== animGen) return;
     await sleep(350);
     if (step.gained > 0) {
       celebrateHit({
@@ -2572,6 +2587,7 @@
         } catch (_) { /* */ }
       }
       roundPersist = null;
+      animGen++; // abort orphan spinReels RAF if this round threw mid-await
       state.busy = false;
       render();
       save();
