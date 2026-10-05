@@ -665,7 +665,7 @@
   }
 
   /** Mark bingo cell for a landed symbol; return completed lines (clears those cells). */
-  function applyBingoMark(board, symId, totalBet, rng) {
+  function applyBingoMark(board, symId, totalBet, _rng) {
     if (!board || board.length !== 9) board = new Array(9).fill(false);
     const next = board.slice();
     const cell = BINGO_CELLS.indexOf(symId);

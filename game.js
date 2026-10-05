@@ -1424,13 +1424,17 @@
     const step = skip ? 2 : 1;
     let dist = (target - state.pos + N) % N;
     if (fx && fx.reverse) dist = (state.pos - target + N) % N;
-    if (skip && dist % 2 === 1) dist += 1; // align nudge approx
+    let alignMs = 0;
+    if (skip && dist % 2 === 1) {
+      dist += 1; // align nudge approx
+      alignMs = 40; // runLight sleeps 40ms after the parity nudge
+    }
     // runLight picks 2 or 3 laps; use 2.5 mean so reel sync stays close
     const laps = 2.5;
     const totalSteps = Math.floor((laps * N + dist) / step);
     const FAST = skip ? 36 : 28;
     const DECEL = 15;
-    let ms = (fx && fx.fakeStop) ? 280 : 0;
+    let ms = alignMs + ((fx && fx.fakeStop) ? 280 : 0);
     for (let s = 1; s <= totalSteps; s++) {
       const remaining = totalSteps - s;
       if (s <= 6) ms += FAST + (7 - s) * 16;
