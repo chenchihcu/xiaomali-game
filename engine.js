@@ -10,7 +10,7 @@
   const SYMBOLS = [
     { id: 'apple',  name: '蘋果',  mult: 5,   icon: '🍎' },
     { id: 'orange', name: '柳橙',  mult: 10,  icon: '🍊' },
-    { id: 'mango',  name: '芒果',  mult: 10,  icon: '🥭' },
+    { id: 'coconut', name: '椰子',  mult: 10,  icon: '🥥' },
     { id: 'bell',   name: '鈴鐺',  mult: 20,  icon: '🔔' },
     { id: 'melon',  name: '西瓜',  mult: 20,  icon: '🍉' },
     { id: 'star',   name: '星星',  mult: 30,  icon: '⭐' },
@@ -34,14 +34,14 @@
     { s: 'bar',    w: 0.5 },
     { s: 'apple',  w: 5 },
     { s: 'melon',  small: true, pay: 3, w: 14 },
-    { s: 'mango',  w: 3 },
+    { s: 'coconut',  w: 3 },
     // right column (top → bottom)
     { s: 'melon',  w: 3 },
     { s: 'apple',  w: 5 },
     { s: 'once',   w: 4.175 },
     { s: 'orange', small: true, pay: 3, w: 14 },
     { s: 'star',   w: 2.4 },
-    { s: 'mango',  small: true, pay: 3, w: 14 },
+    { s: 'coconut',  small: true, pay: 3, w: 14 },
     // bottom row (right → left)
     { s: 'seven',  w: 1.95 },
     { s: 'apple',  w: 5 },
@@ -53,7 +53,7 @@
     { s: 'apple',  w: 5 },
     { s: 'star',   small: true, pay: 3, w: 8.4 },
     { s: 'once',   w: 4.175 },
-    { s: 'mango',  w: 3 },
+    { s: 'coconut',  w: 3 },
     { s: 'apple',  w: 5 },
   ];
   const N = TRACK.length; // 24
@@ -223,7 +223,7 @@
   const ROULETTE_N = 13;
   const ROULETTE_PAY = { number: 12, color: 2, evenOdd: 2, zero: 8 };
   /** 3×3 bingo cells → symbol id (once = wild filler cell). */
-  const BINGO_CELLS = ['apple', 'orange', 'mango', 'bell', 'melon', 'star', 'seven', 'bar', 'once'];
+  const BINGO_CELLS = ['apple', 'orange', 'coconut', 'bell', 'melon', 'star', 'seven', 'bar', 'once'];
   const BINGO_LINES = [
     [0, 1, 2], [3, 4, 5], [6, 7, 8],
     [0, 3, 6], [1, 4, 7], [2, 5, 8],
@@ -256,7 +256,7 @@
 
   /** Traditional Chinese labels for weight keys (settings UI). */
   const WEIGHT_LABELS = {
-    apple: '蘋果', orange: '柳橙', mango: '芒果', bell: '鈴鐺',
+    apple: '蘋果', orange: '柳橙', coconut: '椰子', bell: '鈴鐺',
     melon: '西瓜', star: '星星', seven: '77', bar: 'BAR',
     once: 'ONCE MORE', small: '小圖 ×3',
   };
@@ -284,7 +284,9 @@
   function normalizeSettings(raw) {
     const d = DEFAULT_SETTINGS;
     const r = raw && typeof raw === 'object' ? raw : {};
-    const w = r.weights && typeof r.weights === 'object' ? r.weights : {};
+    const w = r.weights && typeof r.weights === 'object' ? { ...r.weights } : {};
+    // legacy: mango → coconut (same index / mult; keep saved weight)
+    if (w.coconut == null && w.mango != null) w.coconut = w.mango;
     const m = r.modes && typeof r.modes === 'object' ? r.modes : {};
     return {
       preset: ['easy', 'normal', 'hard', 'custom'].includes(r.preset) ? r.preset : d.preset,
@@ -407,7 +409,7 @@
     // resolveRound zeros pay on `target` (already paid by the land step).
     const pick = Math.floor(rng() * 3);
     if (pick === 0) return { kind, name: '大三元', tiles: fullTiles(['seven', 'star', 'melon']) };
-    if (pick === 1) return { kind, name: '小三元', tiles: fullTiles(['orange', 'mango', 'bell']) };
+    if (pick === 1) return { kind, name: '小三元', tiles: fullTiles(['orange', 'coconut', 'bell']) };
     const apples = fullTiles(['apple']);
     return { kind, name: '大四喜', tiles: shuffled(apples, rng).slice(0, 4) };
   }

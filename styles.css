@@ -4170,3 +4170,57 @@ html.fit-2 .deck-func .btn-lab { font-size: max(10px, calc(var(--u) * 2.1)); }
 
 /* main row: no filter on buttons holding SVG + text (same blur cause) */
 .deck-main .btn:not(.btn-start) { filter: none; }
+
+
+/* ========== UI Phase-4: bright pay LEDs + cartoon melon (20261006c5) ========== */
+/* Restore clear LED digits / multipliers. Never use parent filter on .paycell
+   (rasterizes SVG seven-seg and blurs numbers). Selected stays slightly louder. */
+
+.paycell,
+.paycell:not(.is-bet),
+.paycell.is-bet,
+.paycell.hit {
+  opacity: 1;
+  filter: none;
+}
+
+.paycell:not(.is-bet) {
+  /* quiet chrome only — digits stay fully lit */
+  box-shadow: inset 0 0 0 calc(var(--u) * 0.2) #333;
+}
+
+.paycell.is-bet {
+  box-shadow:
+    inset 0 0 0 calc(var(--u) * 0.2) #f0c24a,
+    0 0 calc(var(--u) * 1.1) rgba(255, 200, 60, 0.4);
+}
+
+.paycell:not(.is-bet) .led,
+.paycell.is-bet .led,
+.paycell.hit .led {
+  opacity: 1;
+  visibility: visible;
+}
+
+.paycell:not(.is-bet) .mult,
+.paycell.is-bet .mult,
+.paycell.hit .mult {
+  opacity: 1;
+  filter: none;
+  text-shadow: 0 1px 0 rgba(0, 0, 0, 0.5);
+}
+
+/* LED segments: full bright on all paycells (stale still handled elsewhere) */
+.paycell .led .seg.on {
+  fill: var(--led-on);
+  filter: drop-shadow(0 0 1.5px rgba(255, 60, 40, 0.9));
+}
+.paycell.is-bet .led .seg.on {
+  fill: #ff3a28;
+  filter: drop-shadow(0 0 2px rgba(255, 70, 50, 1));
+}
+
+/* Mult chips stay vivid; is-bet can read a touch louder via cell frame above */
+.paycell .mult {
+  filter: none;
+}
