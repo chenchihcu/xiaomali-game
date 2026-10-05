@@ -55,6 +55,7 @@ Credit/win/sound/jp/lastBets/bingo: `xiaomali.v1`.
 Frame LED rails, side lamps, 假保留燈, FEVER/READY, coin cascade / horse dash flourishes.
 Classes on `#cabinet`: `fx-spin` / `fx-reach` / `fx-expect` / `fx-win` / `fx-fever`
 (+ brief `haptic-bump` / `haptic-bump-big` CSS bounce on hits).
+Special / ONCE MORE land → engine tags `step.trigger` on `slot` / cabinet stages; UI `cueStageEntry()` pulses that lamp then opens the stage; stage pays call `celebrateHit()` again.
 Win hits call `celebrateHit()` → tiered Web Audio fanfare (original synth, `Sound.on`
 gates mute/silent), BGM duck, screen flash (CSS only — **no Camera**), multi-light
 cascade, particle burst, FEVER splash, and public `navigator.vibrate` patterns.

@@ -674,20 +674,22 @@
       ? opts.bingoBoard.map(Boolean)
       : new Array(9).fill(false);
 
-    const pushSlotChain = () => {
+    const pushSlotChain = (trigger = null) => {
       if (!s.modes.slotBonus || slotOpens >= 3) return;
       slotOpens++;
       let spins = 0;
       do {
         const slot = resolveSlotBonus(bets, rng);
-        steps.push({ type: 'slot', ...slot });
+        const step = { type: 'slot', ...slot };
+        if (trigger && spins === 0) step.trigger = trigger;
+        steps.push(step);
         win += slot.gained;
         spins++;
         if (!slot.freeSpin || spins >= 3) break;
       } while (true);
     };
 
-    const tryPushCabinetStage = (force = false) => {
+    const tryPushCabinetStage = (force = false, trigger = null) => {
       if (stageOpens >= STAGE_ENTRY.maxPerRound) return false;
       const anyOn = STAGE_KEYS.some((k) => s.modes[k]);
       if (!anyOn) return false;
@@ -699,6 +701,7 @@
       const stage = resolveStage(kind, bets, totalBet, rng);
       if (!stage) return false;
       stageOpens++;
+      if (trigger) stage.trigger = trigger;
       steps.push(stage);
       win += stage.gained || 0;
       return true;
@@ -744,11 +747,12 @@
           }
         }
         // Special track hit: ONCE MORE can open 三輪 Bonus when chain ends or mid-chain
+        const onceTrig = { target, kind: 'once' };
         if (s.modes.slotBonus && rng() < SLOT_BONUS.chance * (s.bonusRate || 1)) {
-          pushSlotChain();
+          pushSlotChain(onceTrig);
         }
         // ONCE MORE also eligible for cabinet mini-stages (wheel / gacha / …)
-        tryPushCabinetStage(false);
+        tryPushCabinetStage(false, onceTrig);
         if (queue <= 0) break;
         continue;
       }
@@ -819,14 +823,13 @@
         win += superGain;
       }
 
-      // Special tile → 三輪 Bonus stage
-      if (s.modes.slotBonus && isSlotSpecial(TRACK[target]) && rng() < SLOT_BONUS.chance * (s.bonusRate || 1)) {
-        pushSlotChain();
-      }
-
-      // Special full tiles (77 / star / BAR) → cabinet mini-stages
+      // Special tile → 三輪 Bonus stage / cabinet mini-stages (tagged with trigger lamp)
       if (isSlotSpecial(TRACK[target])) {
-        tryPushCabinetStage(false);
+        const specialTrig = { target, kind: 'special', symbol: TRACK[target].s };
+        if (s.modes.slotBonus && rng() < SLOT_BONUS.chance * (s.bonusRate || 1)) {
+          pushSlotChain(specialTrig);
+        }
+        tryPushCabinetStage(false, specialTrig);
       }
 
       // FEVER stage after JP or big multiplier land
@@ -897,7 +900,7 @@
     LIGHT_FX, SUPER_RUN, SLOT_BONUS, FEVER_STAGE, BINGO_CELLS, BINGO_LINES, BINGO_LINE_MULT,
     STAGE_KEYS, STAGE_ENTRY, WHEEL_SEGS, GACHA_TIERS, SICBO_PAY, PACHINKO_POCKETS, BALL_DRAW, ROULETTE_N, ROULETTE_PAY,
     normalizeSettings, applyPreset, effectiveWeights, landingOdds, pickWeighted,
-    tilePay, rollOnceGrant, rollLightFx, resolveSlotBonus,
+    tilePay, rollOnceGrant, rollLightFx, isSlotSpecial, resolveSlotBonus,
     resolveLuckyWheel, resolveGacha, resolveSicbo, resolvePachinko, resolveBallDraw, resolveRoulette,
     pickStageKind, resolveStage, applyBingoMark, resolveRound, nextJpPot, simulate,
   };

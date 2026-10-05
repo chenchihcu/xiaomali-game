@@ -1996,7 +1996,36 @@
     closeStageOverlay();
   }
 
+  /** Bridge: special / ONCE MORE lamp → stage entry (pulse trigger + celebrate). */
+  async function cueStageEntry(step) {
+    const trig = step && step.trigger;
+    const ti = trig && Number.isInteger(trig.target) ? trig.target : -1;
+    const tile = ti >= 0 ? tileEls[ti] : null;
+    if (tile) {
+      tile.classList.add('win', 'lit2');
+      flourishCascade(ti, 2);
+    }
+    const why = trig && trig.kind === 'once'
+      ? 'ONCE MORE・進入舞台'
+      : trig && trig.kind === 'special'
+        ? '特殊燈・進入舞台'
+        : '進入舞台';
+    setMsg(why, 'hot');
+    Sound.lucky();
+    celebrateHit({
+      amount: 20,
+      mult: 12,
+      kind: 'win',
+      target: ti,
+      originEl: tile || $('center'),
+      splash: true,
+    });
+    hapticVibrate(2);
+    await sleep(520);
+  }
+
   async function playCabinetStage(step) {
+    await cueStageEntry(step);
     setMsg(`${(STAGE_META[step.type] || {}).title || '舞台'}！`, 'hot');
     FX.showFever('ready');
     flourishFeverSplash('ready');
@@ -2012,6 +2041,7 @@
   }
 
     async function playSlotBonus(step) {
+    if (step.trigger) await cueStageEntry(step);
     setMsg(step.freeSpin ? '三輪 Bonus・FREE' : '三輪 Bonus', 'hot');
     FX.flashFever('ready', 1200);
     Sound.slot();
@@ -2130,9 +2160,22 @@
         setMsg(`${prefix}${sym.name}${small} ${state.bets[step.si]}×${step.mult}=${step.gained}`, 'hot');
         await animateWin(state.win, state.win + step.gained);
       } else if (sym) {
-        setMsg(`${sym.name}${TRACK[step.target].small ? '小' : ''}・沒中`, 'bad');
-        Sound.lose();
-        if (!fromSuper) FX.idle();
+        const special = typeof E.isSlotSpecial === 'function'
+          ? E.isSlotSpecial(TRACK[step.target])
+          : (!TRACK[step.target].small && ['seven', 'star', 'bar'].includes(TRACK[step.target].s));
+        if (special) {
+          // Special full tiles can still open Bonus / stages even with 0 pay — don't "lose" cue.
+          tileEls[step.target].classList.add('win');
+          setMsg(`${sym.name}・特殊燈`, 'hot');
+          Sound.lucky();
+          hapticVibrate(2);
+          flourishCascade(step.target, 2);
+          flourishScreenFlash(1);
+        } else {
+          setMsg(`${sym.name}${TRACK[step.target].small ? '小' : ''}・沒中`, 'bad');
+          Sound.lose();
+          if (!fromSuper) FX.idle();
+        }
       }
     }
 
@@ -2151,6 +2194,17 @@
         hapticVibrate(1);
         flourishCascade(step.target, 1);
         flourishScreenFlash(1);
+        // Hint only — full celebrateHit runs in cueStageEntry when the stage actually opens
+        {
+          const opensStage = result.steps.some((st) =>
+            st.trigger && st.trigger.target === step.target
+            && (st.type === 'slot' || (E.STAGE_KEYS || []).includes(st.type)));
+          if (opensStage) {
+            setMsg('ONCE MORE・觸發舞台！', 'hot');
+            Sound.lucky();
+            await sleep(350);
+          }
+        }
         if (step.remaining <= 0) {
           setMsg(step.capped ? '再跑已達上限' : `${label}`, 'hot');
           await sleep(700);
