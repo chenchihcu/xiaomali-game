@@ -617,8 +617,8 @@ button {
   display: grid;
   grid-template-columns: max(calc(var(--u) * 9), 44px) 1fr 1fr max(calc(var(--u) * 9), 44px);
   align-items: center;
-  gap: calc(var(--u) * 1.4);
-  padding: calc(var(--u) * 1.2) calc(var(--u) * 1.6) calc(var(--u) * 1.4);
+  gap: calc(var(--u) * 1.1);
+  padding: calc(var(--u) * 0.85) calc(var(--u) * 1.4) calc(var(--u) * 1.0);
   border-radius: calc(var(--u) * 1.6);
   background:
     repeating-linear-gradient(0deg, rgba(255, 255, 255, 0.025) 0 1px, transparent 1px 3px),
@@ -639,10 +639,10 @@ button {
 .meter-plate {
   font-family: "Arial Black", Impact, sans-serif;
   font-weight: 900;
-  font-size: calc(var(--u) * 2.6);
-  line-height: 1.35;
+  font-size: calc(var(--u) * 2.2);
+  line-height: 1.3;
   letter-spacing: 0.12em;
-  padding: 0 calc(var(--u) * 3.2);
+  padding: 0 calc(var(--u) * 2.6);
   color: #fff;
   text-shadow: 0 1px 0 rgba(0, 0, 0, 0.6);
   background: linear-gradient(180deg, #ff9a3c 0%, #e55a00 55%, #a63a00 100%);
@@ -660,7 +660,7 @@ button {
 .led svg { width: calc(var(--u) * 4.2); height: calc(var(--u) * 7); display: block; overflow: visible; }
 .led .seg { fill: var(--led-off); transition: fill 40ms; }
 .led .seg.on { fill: var(--led-on); filter: drop-shadow(0 0 1.5px rgba(255, 60, 40, 0.9)); }
-.meter .led svg { width: calc(var(--u) * 3.7); height: calc(var(--u) * 6.2); }
+.meter .led svg { width: calc(var(--u) * 3.2); height: calc(var(--u) * 5.3); }
 
 .knob {
   width: calc(var(--u) * 9);
@@ -902,10 +902,15 @@ button {
 
 /* ---------- center machine window ---------- */
 .center {
-  position: relative;
-  grid-row: 2 / 7;
-  grid-column: 2 / 7;
-  margin: calc(var(--u) * 1.5);
+  /* Phase-1: compact Bonus/Mission window — leave outer lamps as hero */
+  position: absolute;
+  left: 50%;
+  top: 50%;
+  width: 56%;
+  height: 56%;
+  transform: translate(-50%, -50%);
+  margin: 0;
+  z-index: 2;
   border-radius: calc(var(--u) * 0.8);
   background:
     repeating-conic-gradient(from 0deg at 50% 42%, rgba(255, 255, 255, 0.055) 0 7deg, transparent 7deg 14deg),
@@ -918,9 +923,38 @@ button {
   flex-direction: column;
   align-items: center;
   justify-content: center;
-  gap: calc(var(--u) * 1.1);
-  padding: calc(var(--u) * 1.6);
+  gap: calc(var(--u) * 0.55);
+  padding: calc(var(--u) * 0.85);
   overflow: hidden;
+  filter: brightness(0.86);
+  transition: width 0.34s ease, height 0.34s ease, filter 0.28s ease, box-shadow 0.28s ease;
+}
+.cabinet.center-focus .center,
+.cabinet.stage-open .center,
+.cabinet.fx-win .center {
+  width: 72%;
+  height: 72%;
+  z-index: 5;
+  filter: brightness(1);
+  box-shadow:
+    inset 0 0 0 calc(var(--u) * 0.35) #000,
+    inset 0 0 0 calc(var(--u) * 0.7) #e0c040,
+    inset 0 0 calc(var(--u) * 3) rgba(0, 0, 0, 0.45),
+    0 0 calc(var(--u) * 2.4) rgba(80, 160, 255, 0.35);
+}
+.center .reels {
+  max-width: 100%;
+  padding: calc(var(--u) * 0.5);
+  gap: calc(var(--u) * 0.45);
+}
+.center .cab-toys {
+  transform: scale(0.88);
+  transform-origin: center bottom;
+}
+.cabinet.center-focus .center .cab-toys,
+.cabinet.stage-open .center .cab-toys,
+.cabinet.fx-win .center .cab-toys {
+  transform: none;
 }
 
 .jp-row {
@@ -1208,7 +1242,7 @@ button {
 }
 .deck-main {
   display: grid;
-  grid-template-columns: 1fr 1fr 1fr 1.7fr;
+  grid-template-columns: 1fr 1fr 1fr 2.35fr;
   gap: calc(var(--u) * 1.1);
 }
 
@@ -3316,4 +3350,193 @@ html.fit-2 .bl-sub { font-size: calc(var(--u) * 1.15); }
 @media (prefers-reduced-motion: reduce) {
   .mw-disc, .mini-wheel.is-spin .mw-disc, .mini-wheel.is-armed .mw-disc { animation: none !important; }
   .bonus-lamp.is-on .bl-dot { animation: none !important; }
+}
+
+
+/* ========== UI Phase-1: focus / chase / deck hierarchy (20261006c1) ========== */
+
+/* Brightness layers: static ~55% · interactive ~80% · event 100% */
+.deck-func {
+  opacity: 0.62;
+  filter: brightness(0.84) saturate(0.9);
+}
+.deck-func:focus-within,
+.deck-func:hover {
+  opacity: 0.88;
+  filter: brightness(0.95);
+}
+.deck-main .btn:not(.btn-start) {
+  filter: brightness(0.88) saturate(0.95);
+  opacity: 0.92;
+}
+.btn-start {
+  height: calc(var(--u) * 12);
+  font-size: calc(var(--u) * 4.8);
+  letter-spacing: 0.14em;
+  box-shadow:
+    0 calc(var(--u) * 0.55) calc(var(--u) * 1) rgba(0, 0, 0, 0.75),
+    0 0 calc(var(--u) * 3.2) rgba(80, 255, 140, 0.45);
+  z-index: 1;
+}
+.btn-start::before {
+  filter: brightness(1.08);
+}
+.deck-main .btn-start {
+  height: calc(var(--u) * 12.5);
+}
+
+/* JP / LINE: dim until hit */
+.mini-meter {
+  opacity: 0.55;
+  filter: brightness(0.88) saturate(0.85);
+}
+.mini-meter.is-hit,
+.mini-meter.is-live {
+  opacity: 1;
+  filter: none;
+}
+
+/* Chase: dim non-active lamps; trail brightness ~45% / ~15% */
+.board.is-chasing .tile:not(.lit):not(.trail1):not(.trail2):not(.trail3):not(.win):not(.sym-hit) {
+  filter: brightness(0.52);
+  opacity: 0.7;
+}
+.board.is-chasing .tile.trail1 {
+  filter: brightness(0.92);
+  opacity: 0.92;
+  background: linear-gradient(180deg, #fff8d0, #ffe080 70%, #e8c040);
+  box-shadow:
+    inset 0 0 0 calc(var(--u) * 0.22) rgba(0, 0, 0, 0.45),
+    0 0 calc(var(--u) * 1.8) rgba(255, 210, 40, 0.45);
+}
+.board.is-chasing .tile.trail1::after {
+  background: radial-gradient(circle at 35% 30%, #ffb098, #d42820 55%, #600);
+  box-shadow:
+    0 0 0 calc(var(--u) * 0.22) #1a0606,
+    0 0 0 calc(var(--u) * 0.42) #9a9aa2,
+    0 0 7px 2px rgba(255, 60, 30, 0.45);
+}
+.board.is-chasing .tile.trail2 {
+  filter: brightness(0.78);
+  opacity: 0.78;
+  box-shadow:
+    inset 0 0 0 calc(var(--u) * 0.22) rgba(0, 0, 0, 0.5),
+    0 0 calc(var(--u) * 1) rgba(255, 200, 40, 0.22);
+}
+.board.is-chasing .tile.trail2::after {
+  background: radial-gradient(circle at 35% 30%, #c07060, #801010 55%, #400);
+  opacity: 0.85;
+}
+.board.is-chasing .tile.lit {
+  filter: none;
+  opacity: 1;
+}
+.board.is-chasing .tile.lit::before {
+  inset: calc(var(--u) * -1.1);
+  background: radial-gradient(circle, rgba(255, 240, 150, 0.65) 0%, rgba(255, 180, 40, 0) 72%);
+  animation: litPulse 0.14s ease-out;
+}
+
+/* Bet → outer frame link */
+.tile.bet-framed {
+  box-shadow:
+    inset 0 0 0 calc(var(--u) * 0.32) #2a8cff,
+    inset 0 0 0 calc(var(--u) * 0.55) rgba(255, 255, 255, 0.35),
+    inset 0 calc(var(--u) * 0.7) calc(var(--u) * 1) rgba(255, 255, 255, 0.55),
+    0 0 calc(var(--u) * 1.4) rgba(60, 150, 255, 0.35);
+}
+.tile.bet-framed.lit,
+.tile.bet-framed.win,
+.tile.bet-framed.sym-hit {
+  box-shadow:
+    inset 0 0 0 calc(var(--u) * 0.22) #b88a00,
+    inset 0 0 calc(var(--u) * 2) rgba(255, 255, 255, 0.9),
+    0 0 calc(var(--u) * 2.6) calc(var(--u) * 0.5) rgba(255, 215, 40, 0.95);
+}
+.tile.sym-hit {
+  animation: winBlink 0.32s steps(2, jump-none) infinite;
+  z-index: 3;
+}
+.tile.sym-hit::after {
+  background: radial-gradient(circle at 30% 26%, #fff 0%, #ff8068 32%, #ff2010 58%, #8a0000 100%);
+  box-shadow:
+    inset 0 calc(var(--u) * -0.25) calc(var(--u) * 0.35) rgba(80, 0, 0, 0.35),
+    0 0 0 calc(var(--u) * 0.22) #1a0606,
+    0 0 0 calc(var(--u) * 0.42) #c0c0c8,
+    0 0 10px 4px rgba(255, 50, 30, 0.95);
+}
+
+/* Payout strip + bet keys: only active bets glow */
+.paycell {
+  opacity: 0.48;
+  filter: brightness(0.72);
+  transition: opacity 0.15s, filter 0.15s, box-shadow 0.15s;
+}
+.paycell.is-bet {
+  opacity: 1;
+  filter: none;
+  box-shadow:
+    inset 0 0 0 calc(var(--u) * 0.2) #f0c24a,
+    0 0 calc(var(--u) * 1.2) rgba(255, 200, 60, 0.35);
+}
+.paycell:not(.is-bet) .led {
+  opacity: 0.28;
+}
+.betkey {
+  opacity: 0.78;
+  filter: brightness(0.9);
+  transition: opacity 0.15s, filter 0.15s;
+}
+.betkey.is-bet {
+  opacity: 1;
+  filter: none;
+}
+.betkey.is-bet::before {
+  box-shadow:
+    inset 0 0 0 calc(var(--u) * 0.15) rgba(255, 255, 255, 0.85),
+    inset 0 calc(var(--u) * -0.5) calc(var(--u) * 0.7) rgba(90, 60, 20, 0.28),
+    0 calc(var(--u) * 0.6) 0 #8a826e,
+    0 0 calc(var(--u) * 1.6) rgba(255, 200, 60, 0.55);
+}
+.betkey .bbet {
+  position: absolute;
+  left: 50%;
+  bottom: calc(var(--u) * 0.35);
+  transform: translateX(-50%);
+  min-width: calc(var(--u) * 3.6);
+  padding: 0 calc(var(--u) * 0.45);
+  border-radius: calc(var(--u) * 0.35);
+  font-family: "Arial Black", Impact, sans-serif;
+  font-size: calc(var(--u) * 1.7);
+  font-weight: 900;
+  line-height: 1.25;
+  color: #fff8e0;
+  background: linear-gradient(180deg, #ff7a28, #b84400);
+  text-shadow: 0 1px 0 rgba(0, 0, 0, 0.45);
+  box-shadow: 0 1px 2px rgba(0, 0, 0, 0.45);
+  pointer-events: none;
+  z-index: 2;
+}
+.betkey .bbet[hidden] { display: none !important; }
+.betkey.is-bet .bicon { transform: translateY(calc(var(--u) * -0.75)); }
+
+/* Mission / bingo stay secondary vs outer track */
+.bingo-wrap:not(.is-plaque) {
+  opacity: 0.82;
+  filter: brightness(0.92);
+}
+.cabinet.center-focus .bingo-wrap:not(.is-plaque),
+.cabinet.fx-win .bingo-wrap:not(.is-plaque) {
+  opacity: 1;
+  filter: none;
+}
+
+html.fit-2 .btn-start,
+html.fit-2 .deck-main .btn-start {
+  height: max(48px, calc(var(--u) * 10.5));
+}
+html.fit-2 .betkey .bbet { font-size: calc(var(--u) * 1.45); }
+
+@media (prefers-reduced-motion: reduce) {
+  .center { transition: none; }
 }

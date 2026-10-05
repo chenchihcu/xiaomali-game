@@ -845,11 +845,49 @@
     b.type = 'button';
     b.className = 'betkey';
     b.setAttribute('aria-label', `押 ${s.name}（${s.mult} 倍）`);
-    b.innerHTML = `<span class="bicon">${iconHTML(s.id)}</span>`;
+    b.innerHTML = `<span class="bicon">${iconHTML(s.id)}</span><span class="bbet" hidden></span>`;
     betKeysRow.appendChild(b);
-    return { el: b, cell, led: makeLed(cell.querySelector('.led'), 2) };
+    return { el: b, cell, led: makeLed(cell.querySelector('.led'), 2), bbet: b.querySelector('.bbet') };
   });
   const setKeyHit = (k, on) => { k.el.classList.toggle('hit', on); k.cell.classList.toggle('hit', on); };
+
+  /** Sync bet → outer lamp frames + betkey / paycell highlight. */
+  function syncBetLink() {
+    tileEls.forEach((el, i) => {
+      const t = TRACK[i];
+      const si = t && t.s != null ? SYM_INDEX[t.s] : undefined;
+      const on = si != null && state.bets[si] > 0;
+      el.classList.toggle('bet-framed', !!on);
+    });
+    betKeys.forEach((k, i) => {
+      const amt = state.bets[i] | 0;
+      const on = amt > 0;
+      k.el.classList.toggle('is-bet', on);
+      k.cell.classList.toggle('is-bet', on);
+      if (k.bbet) {
+        if (on) {
+          k.bbet.hidden = false;
+          k.bbet.textContent = String(amt);
+        } else {
+          k.bbet.hidden = true;
+          k.bbet.textContent = '';
+        }
+      }
+    });
+  }
+
+  function setCenterFocus(on) {
+    cabinetEl?.classList.toggle('center-focus', !!on);
+  }
+
+  /** Light every outer tile matching symbol index (win readback). */
+  function lightSymTiles(si, cls = 'sym-hit') {
+    if (si == null || si < 0) return;
+    const id = SYMBOLS[si].id;
+    tileEls.forEach((el, i) => {
+      if (TRACK[i].s === id) el.classList.add(cls);
+    });
+  }
 
   const winLed = makeLed($('winLed'), 6);
   const creditLed = makeLed($('creditLed'), 6);
@@ -1060,12 +1098,14 @@
     onceBanner.classList.remove('pulse');
   }
 
-  function setLight(pos, trail = 0) {
+  function setLight(pos, trail = 0, trailDir = -1) {
     for (const el of tileEls) el.classList.remove('lit', 'trail1', 'trail2', 'trail3');
     tileEls[pos].classList.add('lit');
-    if (trail >= 1) tileEls[(pos - 1 + N) % N].classList.add('trail1');
-    if (trail >= 2) tileEls[(pos - 2 + N) % N].classList.add('trail2');
-    if (trail >= 3) tileEls[(pos - 3 + N) % N].classList.add('trail3');
+    const dir = (trailDir === 1 || trailDir === -1) ? trailDir : -1;
+    // trailDir -1 = forward chase tail behind; +1 = reverse chase
+    if (trail >= 1) tileEls[(pos + dir + N) % N].classList.add('trail1');
+    if (trail >= 2) tileEls[(pos + dir * 2 + N) % N].classList.add('trail2');
+    if (trail >= 3) tileEls[(pos + dir * 3 + N) % N].classList.add('trail3');
   }
 
   // --- 防呆: availability rules. Each returns a reason string (blocked) or null.
@@ -1247,7 +1287,10 @@
     const jpMini = $('jpMini');
     const jpMiniVal = $('jpMiniVal');
     if (jpMiniVal) jpMiniVal.textContent = String(Math.floor(state.jp));
-    if (jpMini) jpMini.classList.toggle('off', !settings.modes.jp);
+    if (jpMini) {
+      jpMini.classList.toggle('off', !settings.modes.jp);
+      jpMini.classList.toggle('is-live', !!settings.modes.jp && state.jp > 0);
+    }
     updateCabToys();
     renderBingo();
     winLed.set(state.win);
@@ -1256,6 +1299,7 @@
       k.led.set(state.bets[i] || 0, { pad: ' ' });
       k.cell.classList.toggle('stale', !state.betsPaid && state.bets[i] > 0);
     });
+    syncBetLink();
     const startWhy = why.start();
     setAvail(btn.start, startWhy);
     setAvail(btn.clear, why.clear());
@@ -1287,7 +1331,7 @@
   const sleep = (ms) => new Promise((r) => setTimeout(r, ms));
 
   function clearHighlights() {
-    tileEls.forEach((el) => el.classList.remove('win', 'lit2'));
+    tileEls.forEach((el) => el.classList.remove('win', 'lit2', 'sym-hit'));
     betKeys.forEach((k) => setKeyHit(k, false));
     $('lblSmall').classList.remove('on');
     $('lblBig').classList.remove('on');
@@ -1324,6 +1368,7 @@
     else state.win = 0;
     Sound.coin();
     clearHighlights();
+    if (state.win <= 0) setCenterFocus(false);
   }
 
   function betUnit() {
@@ -1466,44 +1511,49 @@
     }
     const laps = 2 + (randomFloat() < 0.5 ? 1 : 0);
     const totalSteps = Math.floor((laps * N + dist) / step);
-    const FAST = skip ? 36 : 28;
-    const DECEL = 15;
+    // Phase-1 chase: cruise ~70ms, decel 80→110→150→220→320→450
+    const CRUISE = skip ? 78 : 70;
+    const DECEL_MS = [80, 110, 150, 220, 320, 450];
+    const DECEL = DECEL_MS.length;
+    const boardEl = $('board');
+    boardEl?.classList.add('is-chasing');
     let expectOn = false;
     let faked = false;
+    try {
     for (let s = 1; s <= totalSteps; s++) {
       state.pos = rev
         ? (state.pos - step + N) % N
         : (state.pos + step) % N;
       const remaining = totalSteps - s;
       let delay;
-      if (s <= 6) delay = FAST + (7 - s) * 16;
-      else if (remaining >= DECEL) delay = FAST;
-      else delay = FAST + Math.pow(DECEL - remaining, 2) * 2;
+      if (remaining < DECEL) delay = DECEL_MS[DECEL - 1 - remaining];
+      else if (s <= 5) delay = 120 - (s - 1) * 10; // ease into cruise
+      else delay = CRUISE;
       if (expect && remaining < DECEL && !expectOn) {
         FX.expect();
         expectOn = true;
-      } else if (!expect && remaining < 6 && remaining >= 0 && !expectOn) {
+      } else if (!expect && remaining < DECEL && remaining >= 0 && !expectOn) {
         FX.reach();
         expectOn = true;
       }
       // Fake stop: freeze briefly mid-decel, then resume
-      if (fake && !faked && remaining === Math.floor(DECEL * 0.55)) {
+      if (fake && !faked && remaining === 3) {
         setLight(state.pos, 0);
         tileEls[state.pos].classList.add('win');
         await sleep(280);
         tileEls[state.pos].classList.remove('win');
         Sound.beep(330, 0.05, 'sawtooth', 0.04);
         faked = true;
-        delay = FAST;
+        delay = CRUISE;
       }
       const trailDir = rev ? 1 : -1;
-      for (const el of tileEls) el.classList.remove('lit', 'trail1', 'trail2', 'trail3');
-      tileEls[state.pos].classList.add('lit');
-      if (delay < 140) tileEls[(state.pos + trailDir + N) % N].classList.add('trail1');
-      if (delay < 90) tileEls[(state.pos + trailDir * 2 + N) % N].classList.add('trail2');
-      if (delay < 50) tileEls[(state.pos + trailDir * 3 + N) % N].classList.add('trail3');
+      // Always main lamp + 2-step comet tail (100% / ~45% / ~15%)
+      setLight(state.pos, 2, trailDir);
       Sound.tick();
       await sleep(delay);
+    }
+    } finally {
+      boardEl?.classList.remove('is-chasing');
     }
     // Snap exactly onto target (parity / rounding safety)
     state.pos = target;
@@ -1524,14 +1574,15 @@
     // runLight picks 2 or 3 laps; use 2.5 mean so reel sync stays close
     const laps = 2.5;
     const totalSteps = Math.floor((laps * N + dist) / step);
-    const FAST = skip ? 36 : 28;
-    const DECEL = 15;
+    const CRUISE = skip ? 78 : 70;
+    const DECEL_MS = [80, 110, 150, 220, 320, 450];
+    const DECEL = DECEL_MS.length;
     let ms = alignMs + ((fx && fx.fakeStop) ? 280 : 0);
     for (let s = 1; s <= totalSteps; s++) {
       const remaining = totalSteps - s;
-      if (s <= 6) ms += FAST + (7 - s) * 16;
-      else if (remaining >= DECEL) ms += FAST;
-      else ms += FAST + Math.pow(DECEL - remaining, 2) * 2;
+      if (remaining < DECEL) ms += DECEL_MS[DECEL - 1 - remaining];
+      else if (s <= 5) ms += 120 - (s - 1) * 10;
+      else ms += CRUISE;
     }
     return ms;
   }
@@ -1855,6 +1906,7 @@
     overlay.hidden = false;
     overlay.setAttribute('aria-hidden', 'false');
     cabinetEl?.classList.add('fx-expect', 'stage-open');
+    setCenterFocus(true);
     Sound.stageOpen();
     Music.duck(600, 0.25);
     return { overlay, body, result };
@@ -1869,6 +1921,7 @@
     const body = $('stageBody');
     if (body) body.innerHTML = '';
     cabinetEl?.classList.remove('fx-expect', 'stage-open');
+    setCenterFocus(false);
   }
 
   function setStageResult(el, gained, label) {
@@ -2370,6 +2423,7 @@
     state.busy = true;
     // Snapshot for mid-spin persist + exception rollback (see roundPersist / save).
     roundPersist = { win: state.win, bingo: state.bingo.slice(), jp: state.jp, bingoLineWins: state.bingoLineWins, holdCount };
+    setCenterFocus(false); // chase: outer lamps are the hero
     FX.spin();
     render();
     save();
@@ -2388,7 +2442,9 @@
       if (step.gained > 0 && sym) {
         roundWin += step.gained;
         tileEls[step.target].classList.add('win');
+        lightSymTiles(step.si, 'sym-hit');
         setKeyHit(betKeys[step.si], true);
+        setCenterFocus(true);
         celebrateHit({
           amount: step.gained,
           mult: step.mult || 0,
@@ -2398,7 +2454,8 @@
         });
         const small = TRACK[step.target].small ? '小' : '';
         const prefix = fromSuper ? '超跑・' : '';
-        setMsg(`${prefix}${sym.name}${small} ${state.bets[step.si]}×${step.mult}=${step.gained}`, 'hot');
+        const betAmt = state.bets[step.si] | 0;
+        setMsg(`${prefix}${sym.name}${small} ${betAmt} × ${step.mult} = +${step.gained}`, 'hot');
         await animateWin(state.win, state.win + step.gained);
       } else if (!sym && TRACK[step.target]?.s === 'once') {
         // Super / FEVER can still land on ONCE MORE (0 pay) — don't go silent.
@@ -2633,6 +2690,7 @@
           originEl: $('jpRow') || $('center'),
         });
         FX.holdsSet(4);
+        setCenterFocus(true);
         setMsg(`JP！+${step.amount}`, 'hot');
         roundWin += step.amount;
         await animateWin(state.win, state.win + step.amount);
@@ -2649,9 +2707,14 @@
       state.jp = E.nextJpPot(state.jp, total, result.jpWin, settings);
     }
 
-    if (roundWin > 0) setMsg(`本局 +${roundWin}・得分或比大小`, 'hot');
-    else if (!msgEl.textContent.includes('沒中') && !msgEl.textContent.includes('上限')) {
-      /* keep prior lose message */
+    if (roundWin > 0) {
+      setCenterFocus(true);
+      setMsg(`本局 +${roundWin}・得分或比大小`, 'hot');
+    } else {
+      setCenterFocus(false);
+      if (!msgEl.textContent.includes('沒中') && !msgEl.textContent.includes('上限')) {
+        /* keep prior lose message */
+      }
     }
 
     state.betsPaid = false;
@@ -2735,7 +2798,10 @@
       state.credit = Math.min(CREDIT_CAP, startCredit + take);
       state.win = amount - take;
       if (state.win > 0) toast('CREDIT 已滿・WIN 未收', 'warn');
-      else setMsg(`得分 +${take}`);
+      else {
+        setCenterFocus(false);
+        setMsg(`得分 +${take}`);
+      }
       // Only continue auto when WIN fully drained (cap leftovers stop in autoTick).
       if (state.auto && state.win <= 0) queueAuto();
     } finally {
@@ -3972,7 +4038,7 @@
   setTimeout(maybeFirstRunTip, 500);
 
   window.__xiaomali = {
-    build: '20261006b2',
+    build: '20261006c1',
     state, settings, TRACK, SYMBOLS, pickTarget, resetCredit, Music, Sound, E, fitCabinet,
     setSettings(s) {
       const v = validateSettings(s);
