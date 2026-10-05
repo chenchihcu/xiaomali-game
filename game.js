@@ -4038,7 +4038,7 @@
   setTimeout(maybeFirstRunTip, 500);
 
   window.__xiaomali = {
-    build: '20261006c6',
+    build: '20261006c7',
     state, settings, TRACK, SYMBOLS, pickTarget, resetCredit, Music, Sound, E, fitCabinet,
     setSettings(s) {
       const v = validateSettings(s);
