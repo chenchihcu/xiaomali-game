@@ -89,3 +89,7 @@ DevTools: mid-spin refresh → stake refunded, WIN/bingo/hold/LINE not partially
 - Bingo cells: fruit-reel SVG icons (same `iconHTML` as track).
 - Cabinet: mini wheel + BONUS lamp always visible.
 - Visual ~2×: denser textures, DPR hairlines, refined button SVGs.
+
+## 20261005c — bingo icons + cache bust
+- Confirmed Pages already had iconHTML bingo, save/settings, mini-wheel, fidelity; user still saw 蘋橙芒 from cached game.js.
+- Hardened buildBingo/renderBingo to rebuild any text-glyph cells; asset URLs `?v=20261005c`.

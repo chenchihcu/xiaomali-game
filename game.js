@@ -785,22 +785,34 @@
     return SVGS[symId] || '';
   }
 
-  // Bingo 3×3 — same fruit-reel art as track / reels (not text glyphs).
-  (function buildBingo() {
+  // Bingo 3×3 — same fruit-reel art as track / reels (never text glyphs 蘋/橙/芒).
+  function paintBingoCell(el, id) {
+    el.dataset.sym = id;
+    el.setAttribute('aria-label', WEIGHT_LABELS[id] || id);
+    el.innerHTML = `<span class="bingo-ic">${iconHTML(id)}</span>`;
+  }
+  function buildBingo(force = false) {
     const root = $('bingoBoard');
-    if (!root || root.childElementCount) return;
+    if (!root) return;
+    const cells = root.querySelectorAll('.bingo-cell');
+    const needsRebuild = force
+      || cells.length !== BINGO_CELLS.length
+      || [...cells].some((el, i) => !el.querySelector('.bingo-ic .ic-svg, .bingo-ic .ic-77, .bingo-ic .ic-bar, .bingo-ic .ic-once')
+        || el.dataset.sym !== BINGO_CELLS[i]
+        || /[蘋橙芒鈴西星]/.test(el.textContent || ''));
+    if (!needsRebuild && cells.length === BINGO_CELLS.length) return;
+    root.replaceChildren();
     BINGO_CELLS.forEach((id, i) => {
       const c = document.createElement('button');
       c.type = 'button';
       c.className = 'bingo-cell';
       c.dataset.b = String(i);
-      c.dataset.sym = id;
       c.disabled = true;
-      c.setAttribute('aria-label', WEIGHT_LABELS[id] || id);
-      c.innerHTML = `<span class="bingo-ic">${iconHTML(id)}</span>`;
+      paintBingoCell(c, id);
       root.appendChild(c);
     });
-  })();
+  }
+  buildBingo(true);
 
   const tileEls = TRACK.map((t, i) => {
     const el = document.createElement('div');
@@ -1543,10 +1555,13 @@
   function renderBingo() {
     const root = $('bingoBoard');
     if (!root) return;
+    buildBingo(false); // heal cached/old text-glyph cells → fruit icons
     const was = root.hidden;
     const bingoOn = !!settings.modes.bingo;
     root.hidden = !bingoOn;
     root.querySelectorAll('.bingo-cell').forEach((el, i) => {
+      const id = BINGO_CELLS[i];
+      if (id && (el.dataset.sym !== id || !el.querySelector('.bingo-ic'))) paintBingoCell(el, id);
       el.classList.toggle('on', !!state.bingo[i]);
       el.classList.toggle('flash', false);
     });
@@ -3913,6 +3928,7 @@
   setTimeout(maybeFirstRunTip, 500);
 
   window.__xiaomali = {
+    build: '20261005c',
     state, settings, TRACK, SYMBOLS, pickTarget, resetCredit, Music, Sound, E, fitCabinet,
     setSettings(s) {
       const v = validateSettings(s);

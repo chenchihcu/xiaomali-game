@@ -452,12 +452,15 @@ button {
   line-height: 1;
 }
 .bingo-cell .bingo-ic .ic-svg {
-  width: 88%;
-  height: 88%;
-  max-width: calc(var(--u) * 5.2);
-  max-height: calc(var(--u) * 5.2);
+  width: 92%;
+  height: 92%;
+  max-width: calc(var(--u) * 5.6);
+  max-height: calc(var(--u) * 5.6);
+  display: block;
   filter: drop-shadow(0 0.5px 0.5px rgba(0,0,0,0.45));
 }
+/* Never show leftover text glyphs if an old build painted Chinese shorts */
+.bingo-cell > span:not(.bingo-ic) { display: none !important; }
 .bingo-cell .bingo-ic .ic-77 {
   font-size: calc(var(--u) * 2.6);
   color: #e00000;
