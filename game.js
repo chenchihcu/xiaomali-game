@@ -404,8 +404,8 @@
     try {
       const d = JSON.parse(localStorage.getItem(STORAGE_KEY) || 'null');
       if (d && Number.isFinite(d.credit)) {
-        state.credit = Math.max(0, Math.floor(d.credit));
-        state.win = Math.max(0, Math.floor(d.win || 0));
+        state.credit = Math.min(CREDIT_CAP, Math.max(0, Math.floor(d.credit)));
+        state.win = Math.min(CREDIT_CAP, Math.max(0, Math.floor(d.win || 0)));
         state.pos = (d.pos | 0) % N;
         Sound.on = d.sound !== false;
         if (Number.isFinite(d.jp) && d.jp >= 0) state.jp = Math.min(JP.max, d.jp);
@@ -985,8 +985,12 @@
 
   function collectInstant() {
     if (state.win <= 0) return;
-    state.credit += state.win;
-    state.win = 0;
+    const room = Math.max(0, CREDIT_CAP - state.credit);
+    const take = Math.min(state.win, room);
+    state.credit += take;
+    state.win -= take;
+    if (state.win > 0) toast('CREDIT 已達上限・剩餘 WIN 未收入', 'warn');
+    else state.win = 0;
     Sound.coin();
     clearHighlights();
   }
@@ -1638,24 +1642,28 @@
     clearHighlights();
     render();
     const amount = state.win;
-    const steps = Math.min(40, amount);
+    const room = Math.max(0, CREDIT_CAP - state.credit);
+    const take = Math.min(amount, room);
+    const steps = Math.max(1, Math.min(40, take));
     const startCredit = state.credit;
     for (let k = 1; k <= steps; k++) {
-      const moved = Math.round((amount * k) / steps);
+      const moved = Math.round((take * k) / steps);
       state.win = amount - moved;
       state.credit = startCredit + moved;
       winLed.set(state.win);
       creditLed.set(state.credit);
       if (k % 2) Sound.coin();
-      await sleep(22);
+      await sleep(28);
     }
-    state.win = 0;
-    state.credit = startCredit + amount;
+    state.credit = Math.min(CREDIT_CAP, startCredit + take);
+    state.win = amount - take;
+    if (state.win > 0) toast('CREDIT 已達上限・剩餘 WIN 未收入', 'warn');
+    else setMsg(`得分 +${take}`);
     state.busy = false;
-    setMsg(`得分 ${amount}`);
     render();
     save();
-    if (state.auto) queueAuto();
+    // Only continue auto when WIN fully drained (cap leftovers stop in autoTick).
+    if (state.auto && state.win <= 0) queueAuto();
   }
 
   async function gamble(choice) {
@@ -1722,7 +1730,15 @@
   async function autoTick() {
     if (!state.auto || state.busy) return;
     if (state.win > 0) {
+      if (state.credit >= CREDIT_CAP) {
+        stopAuto('CREDIT 已達上限・自動已停', 'warn');
+        return;
+      }
       await collect();
+      // Cap may leave residual WIN; collect() queues auto only on full drain.
+      if (state.auto && state.win > 0 && state.credit >= CREDIT_CAP) {
+        stopAuto('CREDIT 已達上限・自動已停', 'warn');
+      }
       return;
     }
     const pattern = lastPattern();
@@ -1868,10 +1884,10 @@
     clearHighlights();
     // Transfer WIN → CREDIT, refund unpaid bets if any, then cash-out CREDIT to 0
     if (state.win > 0) {
-      state.credit += state.win;
+      state.credit = Math.min(CREDIT_CAP, state.credit + state.win);
       state.win = 0;
     }
-    if (state.betsPaid) state.credit += sum(state.bets);
+    if (state.betsPaid) state.credit = Math.min(CREDIT_CAP, state.credit + sum(state.bets));
     state.bets.fill(0);
     state.betsPaid = true;
     const cashed = state.credit;
@@ -2002,18 +2018,15 @@
   function settingsWarnings(s) {
     const w = [];
     const m = s.modes;
+    const usesBonusRate = BONUS_MODES.some((k) => m[k]) || m.slotBonus || m.fever;
     if (!m.once && (m.onceMulti || m.onceBig)) w.push('ONCE MORE 已關：連跑／大 ONCE MORE 不會觸發');
     if (m.once && s.weights.once <= 0) w.push('ONCE MORE 權重 0：不會停到再跑');
     if (m.once && (m.onceMulti || m.onceBig) && s.onceRate <= 0) w.push('連跑機率 0：只會單次再跑');
-    if (BONUS_MODES.some((k) => m[k]) && s.bonusRate <= 0) w.push('中彩機率 0：不會中彩');
-    if (!BONUS_MODES.some((k) => m[k]) && s.bonusRate > 0) w.push('中彩玩法全關：中彩機率無效');
+    if (usesBonusRate && s.bonusRate <= 0) w.push('中彩機率 0：中彩／三輪／FEVER 不會觸發');
+    if (!usesBonusRate && s.bonusRate > 0) w.push('中彩相關玩法全關：中彩機率無效');
     if (m.jp && s.weights.bar <= 0) w.push('BAR 權重 0：JP 無法觸發');
     if (m.jp && s.jpRate <= 0) w.push('JP 累積 0：彩池不會增加');
-    if (m.slotBonus && s.bonusRate <= 0) w.push('中彩機率 0：三輪 Bonus 較難觸發');
     if (m.superRun && s.onceRate <= 0) w.push('連跑機率 0：超跑較難觸發');
-    if (!(m.reverse || m.skip || m.fakeStop || m.doubleRun) && (m.superRun || m.slotBonus)) {
-      /* no-op — stages still work without light FX */
-    }
     if (s.betUnit * SYMBOLS.length > s.startCredit) w.push('單次押注 × 8 超過起始 CREDIT');
     return w;
   }
@@ -2047,7 +2060,7 @@
       el.closest('label')?.classList.toggle('dim', off);
     };
     dim('onceRate', !m.once || !(m.onceMulti || m.onceBig));
-    dim('bonusRate', !BONUS_MODES.some((k) => m[k]));
+    dim('bonusRate', !(BONUS_MODES.some((k) => m[k]) || m.slotBonus || m.fever));
     dim('jpRate', !m.jp);
     const wOnce = weightList.querySelector('input[data-weight="once"]');
     if (wOnce) { wOnce.disabled = !m.once; wOnce.closest('label')?.classList.toggle('dim', !m.once); }

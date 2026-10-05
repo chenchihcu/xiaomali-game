@@ -82,9 +82,9 @@
   // on a symbol tile. Base chance × settings.bonusRate（中彩機率; only enabled modes).
   // ---------------------------------------------------------------------------
   const BONUS = {
-    song:    { name: '送燈',     chance: 0.010 },  // 1–3 extra random lights
-    train:   { name: '開火車',   chance: 0.005 },  // 2–5 consecutive lights after the stop
-    sanyuan: { name: '三元四喜', chance: 0.0035 },  // 大三元 / 小三元 / 大四喜 sets
+    song:    { name: '送燈',     chance: 0.008 },  // 1–3 extra random lights
+    train:   { name: '開火車',   chance: 0.004 },  // 2–5 consecutive lights after the stop
+    sanyuan: { name: '三元四喜', chance: 0.0028 },  // 大三元 / 小三元 / 大四喜 sets
   };
   /** JP: landing on the big BAR tile with a BAR bet wins the progressive pot. */
   const JP = {
@@ -126,16 +126,16 @@
     reverse: 0.10,
     skip: 0.08,
     fakeStop: 0.12,
-    doubleRun: 0.03,
+    doubleRun: 0.02,
   };
-  const SUPER_RUN = { chance: 0.018, min: 3, max: 8 };
+  const SUPER_RUN = { chance: 0.011, min: 3, max: 8 };
   const SLOT_BONUS = {
-    chance: 0.028,
-    freeSpinChance: 0.16,
+    chance: 0.020,
+    freeSpinChance: 0.14,
     /** Full-size tiles that can open the 3-reel bonus stage. */
     special: ['seven', 'star', 'bar'],
   };
-  const FEVER_STAGE = { chance: 0.018, minRuns: 2, maxRuns: 3 };
+  const FEVER_STAGE = { chance: 0.012, minRuns: 2, maxRuns: 3 };
   /** 3×3 bingo cells → symbol id (once = wild filler cell). */
   const BINGO_CELLS = ['apple', 'orange', 'mango', 'bell', 'melon', 'star', 'seven', 'bar', 'once'];
   const BINGO_LINES = [
@@ -152,18 +152,19 @@
   const PRESETS = {
     easy: {
       label: '輕鬆',
-      weights: { ...ones(), small: 0.6, once: 1.3, star: 1.1, seven: 1.1, bar: 1.2 },
-      bonusRate: 1.8,
+      weights: { ...ones(), small: 0.95, once: 1.15, star: 1.05, seven: 1.05, bar: 1.05 },
+      bonusRate: 1.25,
     },
     normal: {
       label: '標準',
-      weights: { ...ones() },
+      // small>1 = more ×3 stops = house edge (stages add RTP on top)
+      weights: { ...ones(), small: 1.5 },
       bonusRate: 1,
     },
     hard: {
       label: '困難',
-      weights: { ...ones(), small: 1.7, once: 0.7, bar: 0.8 },
-      bonusRate: 0.5,
+      weights: { ...ones(), small: 1.85, once: 0.65, bar: 0.75, seven: 0.85, star: 0.9 },
+      bonusRate: 0.45,
     },
   };
 
@@ -377,7 +378,8 @@
       const si = SYM_INDEX[payId];
       const base = SYMBOLS[si].mult;
       mult = match === 3 ? Math.max(2, Math.floor(base / 10)) : 1;
-      const bet = bets[si] > 0 ? bets[si] : Math.max(1, Math.max.apply(null, bets.concat([0])));
+      // Pay only when that symbol was bet — no free ride on another symbol's stake.
+      const bet = bets[si] || 0;
       gained = bet * mult;
     }
     const freeSpin = match === 3 && rng() < SLOT_BONUS.freeSpinChance;
@@ -391,15 +393,19 @@
     const cell = BINGO_CELLS.indexOf(symId);
     if (cell < 0) return { board: next, cell: -1, lines: [], gained: 0 };
     next[cell] = true;
-    // once cell is a wild: if landing on once, mark empty cell at random? skip — once tile marks cell 8
+    // Detect ALL completed lines on the post-mark board, then clear once
+    // (sequential clear would drop shared-cell lines / columns / diagonals).
     const lines = [];
-    let gained = 0;
     for (const line of BINGO_LINES) {
-      if (line.every((i) => next[i])) {
-        lines.push(line.slice());
-        gained += Math.max(1, Math.floor(totalBet / 4)) * BINGO_LINE_MULT;
-        for (const i of line) next[i] = false;
-      }
+      if (line.every((i) => next[i])) lines.push(line.slice());
+    }
+    let gained = 0;
+    if (lines.length) {
+      const pay = Math.max(1, Math.floor(totalBet / 4)) * BINGO_LINE_MULT;
+      gained = pay * lines.length;
+      const clear = new Set();
+      for (const line of lines) for (const i of line) clear.add(i);
+      for (const i of clear) next[i] = false;
     }
     return { board: next, cell, lines, gained };
   }
@@ -610,18 +616,18 @@
   function simulate(settings, rounds = 20000, rng = Math.random, bets = SYMBOLS.map(() => 1)) {
     const s = settings || DEFAULT_SETTINGS;
     const total = bets.reduce((a, b) => a + b, 0);
-    const grow = JP.rate * (s.jpRate != null ? s.jpRate : 1);
     let paid = 0, won = 0, hits = 0, bonuses = 0, jps = 0, pot = JP.seed;
     let bingoBoard = new Array(9).fill(false);
     for (let n = 0; n < rounds; n++) {
-      pot = Math.min(JP.max, pot + total * grow);
+      // Match live play: resolve against current pot, then nextJpPot grows / resets.
       const r = resolveRound(bets, s, rng, s.modes.jp ? pot : 0, { bingoBoard });
       bingoBoard = r.bingoBoard || bingoBoard;
       paid += total;
       won += r.win;
       if (r.win > total) hits++;
       if (r.steps.some((st) => st.type === 'bonus' || st.type === 'slot' || st.type === 'fever' || st.type === 'super')) bonuses++;
-      if (r.jpWin > 0) { jps++; pot = JP.seed; }
+      if (r.jpWin > 0) jps++;
+      pot = nextJpPot(pot, total, r.jpWin, s);
     }
     return { rtp: won / paid, hitRate: hits / rounds, bonusRate: bonuses / rounds, jpRate: jps / rounds };
   }

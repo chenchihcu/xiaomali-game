@@ -21,7 +21,7 @@ Repo: https://github.com/chenchihcu/xiaomali-game
 ## Settings (localStorage `xiaomali.settings.v1`)
 - `preset`: `easy` \| `normal` \| `hard` \| `custom`
 - `weights`: per-symbol (+ `once`, `small`) 0–3
-- `bonusRate`: 中彩機率 — scales 送燈／開火車／三元四喜
+- `bonusRate`: 中彩機率 — scales 送燈／開火車／三元四喜 **and** 三輪 Bonus／FEVER entry
 - `onceRate`: scales 連跑／大 ONCE MORE grant chances
 - `jpRate`: scales JP pot growth (`JP.rate × jpRate`)
 - `startCredit`: 100–99999 (reset button)
@@ -100,6 +100,8 @@ node sim.js 50000          # RTP / hit / LUCKY / JP rates per preset
 - Touch targets ≥ 44px; bet keys `pointerdown` + hold-repeat.
 
 ## Changing odds
-1. Edit `engine.js` `TRACK[].w` / `PRESETS` / `BONUS.*.chance` / `JP`.
-2. Run `node sim.js` and aim ~reasonable entertainment RTP (normal ≈ 90–100% all-bet is fine).
-3. Settings UI exposes presets + 中彩／連跑／JP rates + weight sliders + volumes — prefer those for player-facing knobs.
+1. Edit `engine.js` `TRACK[].w` / `PRESETS` / `BONUS.*.chance` / stage chances (`SUPER_RUN`, `SLOT_BONUS`, `FEVER_STAGE`, `LIGHT_FX.doubleRun`) / `JP`.
+2. Run `node sim.js` and aim entertainment RTP: **normal ≈ 95–100%** all-bet, easy ~115–125%, hard ~75–85% (see `AUDIT.md`).
+3. `small` weight is the main house-edge lever (more ×3 stops → lower RTP). Stages stack on top of classic lights.
+4. Settings UI exposes presets + 中彩／連跑／JP rates + weight sliders + volumes — prefer those for player-facing knobs.
+5. Slot bonus pays only when the matched symbol was bet. Bingo detects all completed lines before clearing cells.
