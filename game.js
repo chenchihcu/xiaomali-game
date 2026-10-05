@@ -953,7 +953,7 @@
   const onceBanner = $('onceBanner');
   const onceBannerTag = $('onceBannerTag');
   const onceBannerCount = $('onceBannerCount');
-  const ONCE_VARIANT_LABEL = { single: 'ONCE MORE', multi: '連跑', big: '大 ONCE MORE' };
+  const ONCE_VARIANT_LABEL = { single: 'ONCE MORE', multi: '連跑', big: '大 ONCE' };
 
   function showOnceBanner(variant, remaining) {
     if (!onceBanner) return;
@@ -2029,19 +2029,22 @@
   }
 
   async function playCabinetStage(step) {
-    await cueStageEntry(step);
-    setMsg(`${(STAGE_META[step.type] || {}).title || '舞台'}！`, 'hot');
-    FX.showFever('ready');
-    flourishFeverSplash('ready');
-    hapticVibrate(2);
-    if (step.type === 'luckyWheel') await playLuckyWheel(step);
-    else if (step.type === 'gacha') await playGacha(step);
-    else if (step.type === 'sicbo') await playSicbo(step);
-    else if (step.type === 'pachinko') await playPachinko(step);
-    else if (step.type === 'ballDraw') await playBallDraw(step);
-    else if (step.type === 'roulette') await playRoulette(step);
-    else closeStageOverlay();
-    FX.hideFever();
+    try {
+      await cueStageEntry(step);
+      setMsg(`${(STAGE_META[step.type] || {}).title || '舞台'}！`, 'hot');
+      FX.showFever('ready');
+      flourishFeverSplash('ready');
+      hapticVibrate(2);
+      if (step.type === 'luckyWheel') await playLuckyWheel(step);
+      else if (step.type === 'gacha') await playGacha(step);
+      else if (step.type === 'sicbo') await playSicbo(step);
+      else if (step.type === 'pachinko') await playPachinko(step);
+      else if (step.type === 'ballDraw') await playBallDraw(step);
+      else if (step.type === 'roulette') await playRoulette(step);
+    } finally {
+      closeStageOverlay();
+      FX.hideFever();
+    }
   }
 
     async function playSlotBonus(step) {
@@ -2139,6 +2142,7 @@
     render();
     save();
 
+    try {
     const potBefore = settings.modes.jp ? state.jp : 0;
     const result = E.resolveRound(state.bets, settings, randomFloat, potBefore, { bingoBoard: state.bingo });
     if (Array.isArray(result.bingoBoard)) state.bingo = result.bingoBoard.map(Boolean);
@@ -2401,7 +2405,6 @@
     }
 
     state.betsPaid = false;
-    state.busy = false;
     if (roundWin > 0) {
       const endTier = winTierFrom(roundWin, 0);
       FX.win(endTier);
@@ -2424,9 +2427,15 @@
       // auto-off as soon as the next round can't be afforded
       stopAuto(`需 ${sum(state.lastPlayedBets)}・自動停`);
     }
-    render();
-    save();
     if (state.auto) queueAuto();
+    } finally {
+      hideOnceBanner();
+      closeStageOverlay();
+      FX.hideFever();
+      state.busy = false;
+      render();
+      save();
+    }
   }
 
   async function collect() {
@@ -2435,29 +2444,32 @@
     state.busy = true;
     clearHighlights();
     render();
-    const amount = state.win;
-    const room = Math.max(0, CREDIT_CAP - state.credit);
-    const take = Math.min(amount, room);
-    const steps = Math.max(1, Math.min(40, take));
-    const startCredit = state.credit;
-    for (let k = 1; k <= steps; k++) {
-      const moved = Math.round((take * k) / steps);
-      state.win = amount - moved;
-      state.credit = startCredit + moved;
-      winLed.set(state.win);
-      creditLed.set(state.credit);
-      if (k % 2) Sound.coin();
-      await sleep(28);
+    try {
+      const amount = state.win;
+      const room = Math.max(0, CREDIT_CAP - state.credit);
+      const take = Math.min(amount, room);
+      const steps = Math.max(1, Math.min(40, take));
+      const startCredit = state.credit;
+      for (let k = 1; k <= steps; k++) {
+        const moved = Math.round((take * k) / steps);
+        state.win = amount - moved;
+        state.credit = startCredit + moved;
+        winLed.set(state.win);
+        creditLed.set(state.credit);
+        if (k % 2) Sound.coin();
+        await sleep(28);
+      }
+      state.credit = Math.min(CREDIT_CAP, startCredit + take);
+      state.win = amount - take;
+      if (state.win > 0) toast('CREDIT 已滿・WIN 未收', 'warn');
+      else setMsg(`得分 +${take}`);
+      // Only continue auto when WIN fully drained (cap leftovers stop in autoTick).
+      if (state.auto && state.win <= 0) queueAuto();
+    } finally {
+      state.busy = false;
+      render();
+      save();
     }
-    state.credit = Math.min(CREDIT_CAP, startCredit + take);
-    state.win = amount - take;
-    if (state.win > 0) toast('CREDIT 已滿・WIN 未收', 'warn');
-    else setMsg(`得分 +${take}`);
-    state.busy = false;
-    render();
-    save();
-    // Only continue auto when WIN fully drained (cap leftovers stop in autoTick).
-    if (state.auto && state.win <= 0) queueAuto();
   }
 
   async function gamble(choice) {
@@ -2466,37 +2478,40 @@
     state.busy = true;
     clearHighlights();
     render();
-    setMsg(choice === 'small' ? '小…' : '大…');
-    const result = 1 + Math.floor(randomFloat() * 9);
-    for (let k = 0; k < 16; k++) {
-      diceLed.set(String(1 + Math.floor(randomFloat() * 9)));
-      $('lblSmall').classList.toggle('on', k % 2 === 0);
-      $('lblBig').classList.toggle('on', k % 2 === 1);
-      Sound.beep(600 + k * 40, 0.03, 'square', 0.04);
-      await sleep(40 + k * 9);
-    }
-    diceLed.set(String(result));
-    const isSmall = result <= 4;
-    const isBig = result >= 6;
-    $('lblSmall').classList.toggle('on', isSmall);
-    $('lblBig').classList.toggle('on', isBig);
+    try {
+      setMsg(choice === 'small' ? '小…' : '大…');
+      const result = 1 + Math.floor(randomFloat() * 9);
+      for (let k = 0; k < 16; k++) {
+        diceLed.set(String(1 + Math.floor(randomFloat() * 9)));
+        $('lblSmall').classList.toggle('on', k % 2 === 0);
+        $('lblBig').classList.toggle('on', k % 2 === 1);
+        Sound.beep(600 + k * 40, 0.03, 'square', 0.04);
+        await sleep(40 + k * 9);
+      }
+      diceLed.set(String(result));
+      const isSmall = result <= 4;
+      const isBig = result >= 6;
+      $('lblSmall').classList.toggle('on', isSmall);
+      $('lblBig').classList.toggle('on', isBig);
 
-    if (result === 5) {
-      setMsg('開 5・和', '');
-      Sound.beep(660, 0.15, 'triangle', 0.07);
-    } else if ((choice === 'small' && isSmall) || (choice === 'big' && isBig)) {
-      const before = state.win;
-      setMsg(`開 ${result}・中！×2`, 'hot');
-      Sound.win();
-      await animateWin(before, before * 2);
-    } else {
-      setMsg(`開 ${result}・錯`, 'bad');
-      Sound.lose();
-      state.win = 0;
+      if (result === 5) {
+        setMsg('開 5・和', '');
+        Sound.beep(660, 0.15, 'triangle', 0.07);
+      } else if ((choice === 'small' && isSmall) || (choice === 'big' && isBig)) {
+        const before = state.win;
+        setMsg(`開 ${result}・中！×2`, 'hot');
+        Sound.win();
+        await animateWin(before, before * 2);
+      } else {
+        setMsg(`開 ${result}・錯`, 'bad');
+        Sound.lose();
+        state.win = 0;
+      }
+    } finally {
+      state.busy = false;
+      render();
+      save();
     }
-    state.busy = false;
-    render();
-    save();
   }
 
   let autoTimer = null;
@@ -2822,7 +2837,7 @@
     if (!usesBonusRate && s.bonusRate > 0) w.push('中彩／舞台玩法全關：中彩機率無效');
     if (m.jp && s.weights.bar <= 0) w.push('BAR 權重 0：JP 無法觸發');
     if (m.jp && s.jpRate <= 0) w.push('JP 累積 0：彩池不會增加');
-    if (m.superRun && s.onceRate <= 0) w.push('連跑機率 0：超跑較難觸發');
+    if (m.superRun && s.onceRate <= 0) w.push('連跑機率 0：超跑／連跑／大 ONCE 難觸發');
     if (s.betUnit * SYMBOLS.length > s.startCredit) w.push('單次押注 × 8 超過起始 CREDIT');
     return w;
   }
@@ -2939,8 +2954,26 @@
     const tip = $('firstTip');
     if (!tip) return;
     tip.hidden = false;
-    $('firstTipOk')?.addEventListener('click', () => { markSeenHelp(); Sound.bet(); }, { once: true });
-    $('firstTipHelp')?.addEventListener('click', () => { openHelp(); Sound.bet(); }, { once: true });
+    const tipTap = (el, fn) => {
+      if (!el) return;
+      let armed = false;
+      el.addEventListener('pointerdown', (e) => {
+        if (e.button !== undefined && e.button !== 0) return;
+        armed = true;
+        try { el.setPointerCapture(e.pointerId); } catch (_) {}
+        e.preventDefault();
+        Sound.unlock();
+      });
+      el.addEventListener('pointerup', (e) => {
+        if (!armed) return;
+        armed = false;
+        fn();
+      });
+      el.addEventListener('pointercancel', () => { armed = false; });
+      el.addEventListener('click', (e) => { if (e.detail === 0) fn(); });
+    };
+    tipTap($('firstTipOk'), () => { markSeenHelp(); Sound.bet(); });
+    tipTap($('firstTipHelp'), () => { openHelp(); Sound.bet(); markSeenHelp(); });
   }
 
   presetRow.addEventListener('click', (e) => {
@@ -3365,8 +3398,8 @@
   window.addEventListener('resize', scheduleFit);
   window.addEventListener('orientationchange', scheduleFit);
   if (window.visualViewport) {
+    // resize only — scroll fires constantly with iOS chrome and shifts hitboxes mid-tap
     visualViewport.addEventListener('resize', scheduleFit);
-    visualViewport.addEventListener('scroll', scheduleFit);
   }
 
   document.addEventListener('gesturestart', (e) => e.preventDefault());

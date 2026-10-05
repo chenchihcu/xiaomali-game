@@ -22,7 +22,7 @@ Repo: https://github.com/chenchihcu/xiaomali-game
 - `preset`: `easy` \| `normal` \| `hard` \| `custom`
 - `weights`: per-symbol (+ `once`, `small`) 0–3
 - `bonusRate`: 中彩機率 — scales 送燈／開火車／三元四喜、三輪／FEVER、**and** wheel/gacha/sicbo/pachinko/draw/roulette entry
-- `onceRate`: scales 連跑／大 ONCE MORE grant chances
+- `onceRate`: scales 連跑／大 ONCE MORE grant chances **and** `superRun` entry
 - `jpRate`: scales JP pot growth (`JP.rate × jpRate`)
 - `startCredit`: 100–99999 (reset button)
 - `betUnit`: 1–10 credit per bet tap
@@ -39,9 +39,9 @@ Credit/win/sound/jp/lastBets/bingo: `xiaomali.v1`.
 | Mode | Trigger | Effect |
 |---|---|---|
 | `slotBonus` | Special full tiles (77/star/bar) or ONCE MORE | 3-reel bonus; possible free spin |
-| `fever` | After JP or land mult≥30 | 2–3 FEVER light runs |
+| `fever` | JP / mult≥20 / special lamp / solid hit (≥totalBet) | 2–3 FEVER light runs |
 | `bingo` | Paying land marks 3×3; line pays floor(bet/4) | Mission board under hold lamps |
-| `luckyWheel` | Special full tile / ONCE MORE | Overlay wheel → `floor(totalBet×mult/4)` |
+| `luckyWheel` | Special full tile / ONCE MORE | Overlay wheel → `floor(totalBet×mult/6)` |
 | `gacha` | Special / ONCE MORE | Capsule tier N–SSR; pays bet×payMult if symbol bet |
 | `sicbo` | Special / ONCE MORE | 3 dice big/small/triple overlay |
 | `pachinko` | Special / ONCE MORE | Peg path → pocket mult overlay |
@@ -80,6 +80,7 @@ Bingo marks and stage pays are real (fake credit); flourishes are not.
 - Stop = `effectiveWeights` (ONCE MORE weight 0 if `modes.once` off).
 - `resolveRound` steps (order): `once` / `land` (+ optional `double`) / `bingo` / `bonus` / `jp` / `super` / `slot` / `fever`.
   - Landing on ONCE MORE queues free light-runs (`single` 1 / `multi` 2–4 / `big` 3–5). Cap `MAX_ONCE_MORE_CHAIN`. UI countdown only — do not re-roll in `game.js`.
+  - Cabinet mini-stages share `STAGE_ENTRY` (special/ONCE); ≤1/round. Stage pay uses `floor(totalBet×mult/6)`.
   - `land.fx` / `once.fx` drive `runLight` (reverse/skip/fakeStop).
 - Classic bonus: `song` / `train` / `sanyuan`. JP: big BAR + BAR bet.
 - Stages: `slot` (reel ids + match/gained/freeSpin), `fever` (runs[]), `super` (stops[]), `bingo` (cell/lines/board).

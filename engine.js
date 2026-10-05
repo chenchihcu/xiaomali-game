@@ -64,8 +64,8 @@
    * When the light lands on ONCE MORE, roll how many free re-runs to queue.
    * Chances scale with settings.onceRate. Toggled via modes.onceMulti / onceBig.
    *   single → 1 (classic)
-   *   multi  → 2–5 sequential free stops that each pay if bet matches (連跑)
-   *   big    → 3–5 guaranteed (大 ONCE MORE)
+   *   multi  → 2–4 sequential free stops that each pay if bet matches (連跑)
+   *   big    → 3–5 free stops (大 ONCE MORE)
    */
   const ONCE_GRANT = {
     multiChance: 0.18,
@@ -82,9 +82,9 @@
   // on a symbol tile. Base chance × settings.bonusRate（中彩機率; only enabled modes).
   // ---------------------------------------------------------------------------
   const BONUS = {
-    song:    { name: '送燈',     chance: 0.008 },  // 1–3 extra random lights
-    train:   { name: '開火車',   chance: 0.004 },  // 2–5 consecutive lights after the stop
-    sanyuan: { name: '三元四喜', chance: 0.0028 },  // 大三元 / 小三元 / 大四喜 sets
+    song:    { name: '送燈',     chance: 0.018 },  // 1–3 extra random lights
+    train:   { name: '開火車',   chance: 0.012 },  // 2–5 consecutive lights after the stop
+    sanyuan: { name: '三元四喜', chance: 0.010 },  // 大三元 / 小三元 / 大四喜 sets
   };
   /** JP: landing on the big BAR tile with a BAR bet wins the progressive pot. */
   const JP = {
@@ -106,15 +106,15 @@
   ];
   const MODE_LABELS = {
     once: 'ONCE MORE',
-    onceMulti: '連跑',
-    onceBig: '大 ONCE MORE',
+    onceMulti: '連跑（2–4）',
+    onceBig: '大 ONCE MORE（3–5）',
     song: '送燈',
     train: '開火車',
     sanyuan: '三元四喜',
     jp: 'JP 彩金',
-    slotBonus: '三輪 Bonus',
-    fever: 'FEVER',
-    bingo: '賓果',
+    slotBonus: '三輪拉霸',
+    fever: 'FEVER 連跑',
+    bingo: '賓果 3×3',
     luckyWheel: '幸運轉輪',
     gacha: '轉蛋',
     sicbo: '骰寶',
@@ -123,33 +123,33 @@
     roulette: '電子輪盤',
     reverse: '倒跑',
     skip: '跳格',
-    doubleRun: '雙燈',
+    doubleRun: '雙燈同停',
     fakeStop: '假停',
-    superRun: '超跑',
+    superRun: '超跑連停',
   };
-  /** One-line Traditional Chinese hints for settings mode toggles. */
+  /** One-line Traditional Chinese hints for settings mode toggles (must match engine). */
   const MODE_HINTS = {
-    once: '免費再跑',
-    onceMulti: '再跑 2–4 次',
-    onceBig: '再跑 ≥3 次',
-    song: '中彩多點燈',
-    train: '連燈前進',
-    sanyuan: '大／小三元或四喜',
-    jp: '大 BAR＋押 BAR',
-    slotBonus: '特殊燈→三轉盤',
-    fever: '大獎連跑舞台',
-    bingo: '上方 3×3 任務',
-    luckyWheel: '特殊燈→轉輪',
-    gacha: '抽稀有度倍率',
-    sicbo: '大小／豹子',
-    pachinko: '彈珠落袋',
-    ballDraw: '對號抽球',
-    roulette: '0–12 電子輪',
-    reverse: '跑燈反向',
-    skip: '跳格前進',
-    doubleRun: '同時兩燈',
-    fakeStop: '假停再跑',
-    superRun: '連停 3–8 格',
+    once: '停 ONCE MORE→免費再跑',
+    onceMulti: 'ONCE 有機率再跑 2–4 次',
+    onceBig: 'ONCE 有機率再跑 3–5 次',
+    song: '停後隨機加亮 1–3 燈',
+    train: '停後順向連亮 2–5 格',
+    sanyuan: '點亮大／小三元或大四喜',
+    jp: '大 BAR＋有押 BAR→吃彩池',
+    slotBonus: '特殊燈／ONCE→三輪拉霸',
+    fever: 'JP／高倍／特殊／大贏→連跑',
+    bingo: '有中標格；連線 floor(押/4)',
+    luckyWheel: '特殊燈／ONCE→幸運轉輪',
+    gacha: '抽 N–SSR；該圖有押才賠',
+    sicbo: '三骰；大／小／豹子給分',
+    pachinko: '彈珠落袋×倍率給分',
+    ballDraw: '抽 1–3 球；有押才中',
+    roulette: '0–12；色／單雙／號給分',
+    reverse: '跑燈改逆時針',
+    skip: '跑燈一次跳 2 格',
+    doubleRun: '同局再停一盞獨立燈',
+    fakeStop: '減速時假停再繼續',
+    superRun: '有中／特殊→連停 3–8 格',
   };
 
   /** Probabilities for optional light FX / stage entries (× bonusRate / onceRate where noted). */
@@ -157,44 +157,51 @@
     reverse: 0.10,
     skip: 0.08,
     fakeStop: 0.12,
-    doubleRun: 0.02,
+    doubleRun: 0.028,
   };
-  const SUPER_RUN = { chance: 0.011, min: 3, max: 8 };
+  const SUPER_RUN = { chance: 0.014, min: 3, max: 8 };
   const SLOT_BONUS = {
-    chance: 0.020,
+    // Rolled on special full tiles + ONCE MORE; keep ≥~1%/round when enabled.
+    chance: 0.12,
     freeSpinChance: 0.14,
     /** Full-size tiles that can open the 3-reel bonus stage. */
     special: ['seven', 'star', 'bar'],
   };
-  const FEVER_STAGE = { chance: 0.012, minRuns: 2, maxRuns: 3 };
+  const FEVER_STAGE = {
+    // Broad entry (JP / high mult / special / solid hit) so FEVER is not near-zero.
+    chance: 0.07,
+    minRuns: 2,
+    maxRuns: 3,
+    minMult: 20,
+  };
 
   /** Extra cabinet stages opened from special track hits (toggleable). Chances × bonusRate. */
   const STAGE_KEYS = ['luckyWheel', 'gacha', 'sicbo', 'pachinko', 'ballDraw', 'roulette'];
   const STAGE_ENTRY = {
     /** Shared roll chance when a special full tile (77/star/BAR) or ONCE MORE lands. */
-    chance: 0.018,
+    chance: 0.30,
     /** At most one of these mini-stages per round (keeps RTP in check). */
     maxPerRound: 1,
   };
   /** Lucky Wheel segments: relative weights + payout as floor(totalBet * mult / 4). */
   const WHEEL_SEGS = [
-    { label: '×0',  mult: 0,  w: 10, tone: 'miss' },
-    { label: '×1',  mult: 1,  w: 18, tone: 'low' },
-    { label: '×2',  mult: 2,  w: 16, tone: 'low' },
+    { label: '×0',  mult: 0,  w: 12, tone: 'miss' },
+    { label: '×1',  mult: 1,  w: 20, tone: 'low' },
+    { label: '×2',  mult: 2,  w: 18, tone: 'low' },
     { label: '×3',  mult: 3,  w: 14, tone: 'mid' },
     { label: '×5',  mult: 5,  w: 12, tone: 'mid' },
     { label: '×8',  mult: 8,  w: 8,  tone: 'high' },
     { label: '×10', mult: 10, w: 6,  tone: 'high' },
-    { label: '×15', mult: 15, w: 3,  tone: 'mega' },
-    { label: '×20', mult: 20, w: 2,  tone: 'mega' },
-    { label: 'JP!', mult: 30, w: 1,  tone: 'jp' },
+    { label: '×15', mult: 15, w: 2,  tone: 'mega' },
+    { label: '×20', mult: 20, w: 1,  tone: 'mega' },
+    { label: 'JP!', mult: 25, w: 1,  tone: 'jp' },
   ];
   /** Gacha rarity table (weights). Pay = betOnSymbol × payMult. */
   const GACHA_TIERS = [
-    { id: 'N',  name: 'N',  w: 48, payMult: 1,  glow: 'n' },
+    { id: 'N',  name: 'N',  w: 50, payMult: 1,  glow: 'n' },
     { id: 'R',  name: 'R',  w: 28, payMult: 2,  glow: 'r' },
-    { id: 'SR', name: 'SR', w: 16, payMult: 5,  glow: 'sr' },
-    { id: 'SSR',name: 'SSR',w: 8,  payMult: 12, glow: 'ssr' },
+    { id: 'SR', name: 'SR', w: 15, payMult: 4,  glow: 'sr' },
+    { id: 'SSR',name: 'SSR',w: 7,  payMult: 9,  glow: 'ssr' },
   ];
   /** Sic Bo big/small/triple payouts vs totalBet (entertainment). */
   const SICBO_PAY = { small: 1, big: 1, triple: 8, point: 0 };
@@ -231,19 +238,19 @@
   const PRESETS = {
     easy: {
       label: '輕鬆',
-      weights: { ...ones(), small: 0.95, once: 1.15, star: 1.05, seven: 1.05, bar: 1.05 },
-      bonusRate: 1.25,
+      weights: { ...ones(), small: 1.35, once: 1.08, star: 1.02, seven: 1.02, bar: 1.02 },
+      bonusRate: 1.1,
     },
     normal: {
       label: '標準',
       // small>1 = more ×3 stops = house edge (stages add RTP on top)
-      weights: { ...ones(), small: 1.5 },
+      weights: { ...ones(), small: 2.45 },
       bonusRate: 1,
     },
     hard: {
       label: '困難',
-      weights: { ...ones(), small: 1.85, once: 0.65, bar: 0.75, seven: 0.85, star: 0.9 },
-      bonusRate: 0.45,
+      weights: { ...ones(), small: 2.55, once: 0.7, bar: 0.72, seven: 0.82, star: 0.88 },
+      bonusRate: 0.5,
     },
   };
 
@@ -473,7 +480,8 @@
 
   function stagePayFromTotal(totalBet, mult) {
     if (!mult || totalBet <= 0) return 0;
-    return Math.max(0, Math.floor(totalBet * mult / 4));
+    // /6 keeps cabinet stages flashy but RTP-stable when all modes are on
+    return Math.max(0, Math.floor(totalBet * mult / 6));
   }
 
   /** Resolve Lucky Wheel: spin to a weighted segment. */
@@ -858,12 +866,17 @@
         tryPushCabinetStage(false, specialTrig);
       }
 
-      // FEVER stage after JP or big multiplier land
+      // FEVER: JP, high mult, special lamp, or solid hit — not near-zero when toggled on
       if (
         s.modes.fever
         && !feverDone
-        && (jpWin > 0 || p.mult >= 30)
-        && rng() < FEVER_STAGE.chance * (s.bonusRate || 1) * (jpWin > 0 ? 2 : 1)
+        && (
+          jpWin > 0
+          || p.mult >= (FEVER_STAGE.minMult || 20)
+          || isSlotSpecial(TRACK[target])
+          || (p.gained > 0 && p.gained >= Math.max(8, totalBet))
+        )
+        && rng() < FEVER_STAGE.chance * (s.bonusRate || 1) * (jpWin > 0 ? 1.6 : 1)
       ) {
         feverDone = true;
         const n = FEVER_STAGE.minRuns + Math.floor(rng() * (FEVER_STAGE.maxRuns - FEVER_STAGE.minRuns + 1));
