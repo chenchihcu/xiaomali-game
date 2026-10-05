@@ -78,8 +78,9 @@ Bingo marks and stage pays are real (fake credit); flourishes are not.
 ## Viewport / iPhone 16 Pro Max
 - Target CSS: **430×932** portrait, `viewport-fit=cover`, safe-area insets for notch / home indicator.
 - `html, body` are `overflow: hidden` + `body { position: fixed; inset: 0 }` (no page scroll).
-- `fitCabinet()` (game.js) measures cabinet height, applies `fit-1` / `fit-2` density, then sets `--W` so the machine clears `--pad-t` / `--pad-b`. Re-runs on `resize` / `orientationchange` / `visualViewport`.
-- Touch targets ≥ 44px (knobs, chips, buttons, bet keys). Settings/help sheets scroll inside the dialog only.
+- `fitCabinet()` (game.js) resolves `--pad-t` / `--pad-b` / `--safe-*` via a probe element (because `getPropertyValue` returns unevaluated `max()`/`env()` strings), measures cabinet height at `--Wmax`, applies `fit-1` / `fit-2` density (topper/deck/board compaction), then shrinks `--W` with iterative nudge so the machine clears the safe content box. Re-runs on `resize` / `orientationchange` / `visualViewport` / bingo visibility.
+- Enriched `.topper` (wings + HOLD + bingo/mission) is height-budgeted; fit levels shrink min-height / wing art / captions before width shrink.
+- Touch targets ≥ 44px (knobs, chips, buttons, bet keys `min-width/min-height`). Fit-2 also tightens horizontal deck/cabinet pads so 8 bet keys stay ≥44px on short Safari heights. Settings/help sheets scroll inside the dialog only.
 - FX: win sparkles, 3-step lamp trails, reel bounce, FEVER splash/ring — all original CSS/SVG, no IP.
 
 ## How to test
@@ -87,7 +88,7 @@ Bingo marks and stage pays are real (fake credit); flourishes are not.
 python3 -m http.server 8000
 node sim.js 50000          # RTP / hit / LUCKY / JP rates per preset
 ```
-- DevTools device: **iPhone 16 Pro Max** portrait (430×932); also try shorter heights (~746 Safari chrome, ~700).
+- DevTools device: **iPhone 16 Pro Max** portrait (430×932); also try Safari chrome (~746), ~746+safe, ~700, ~804 svh-ish. Confirm no clip into safe-area and no page scroll.
 - Console: `__xiaomali.state`, `.settings`, `.Music`, `.setSettings(...)`, `.pickTarget()`.
 - iOS/WebKit: tap once to unlock; `Sound.unlock` awaits `resume` + silent buffer before BGM/SFX. Hardware mute still silences Web Audio. Tab-visible resumes suspended AudioContext.
 

@@ -20,7 +20,7 @@
      height ÷ width) is measured at runtime by fitCabinet() in game.js; the
      fallback covers first paint. --Wmax / --Hav are also read by the fitter. */
   --gutter: 4px;
-  --fit-ratio: 1.95;
+  --fit-ratio: 2.05;
   --pad-t: max(var(--safe-t), var(--gutter));
   --pad-b: max(var(--safe-b), var(--gutter));
   --Wmax: min(calc(100vw - 2 * var(--gutter) - var(--safe-l) - var(--safe-r)), 480px);
@@ -82,8 +82,8 @@ button {
   position: relative;
   display: flex;
   flex-direction: column;
-  gap: calc(var(--u) * 1.4);
-  padding: calc(var(--u) * 2.6) calc(var(--u) * 2.6) calc(var(--u) * 1.2);
+  gap: calc(var(--u) * 1.15);
+  padding: calc(var(--u) * 2.3) calc(var(--u) * 2.4) calc(var(--u) * 1.0);
   border-radius: calc(var(--u) * 2.4);
   background:
     repeating-linear-gradient(92deg, rgba(0, 0, 0, 0.10) 0 calc(var(--u) * 0.25), transparent calc(var(--u) * 0.25) calc(var(--u) * 1.3)),
@@ -1227,6 +1227,7 @@ button {
 .betkey {
   position: relative;
   isolation: isolate;
+  min-width: 44px;
   min-height: 44px;
   height: calc(var(--u) * 11);
   padding: 0 0 calc(var(--u) * 0.6);
@@ -1502,11 +1503,11 @@ html, body {
 .topper {
   position: relative;
   display: grid;
-  grid-template-columns: minmax(0, 1.15fr) minmax(0, 1.55fr) minmax(0, 1.15fr);
+  grid-template-columns: minmax(0, 1.1fr) minmax(0, 1.6fr) minmax(0, 1.1fr);
   align-items: stretch;
-  gap: calc(var(--u) * 0.55);
-  min-height: calc(var(--u) * 17);
-  padding: calc(var(--u) * 0.7) calc(var(--u) * 0.85);
+  gap: calc(var(--u) * 0.45);
+  min-height: calc(var(--u) * 14);
+  padding: calc(var(--u) * 0.5) calc(var(--u) * 0.7);
   border-radius: calc(var(--u) * 1.3);
   background:
     /* painted lattice over wood — no flat empty wood */
@@ -1584,11 +1585,11 @@ html, body {
 .wing-art {
   position: absolute;
   left: 50%;
-  top: 46%;
+  top: 44%;
   transform: translate(-50%, -54%);
   display: block;
-  width: min(86%, calc(var(--u) * 14));
-  height: min(72%, calc(var(--u) * 14));
+  width: min(82%, calc(var(--u) * 12));
+  height: min(66%, calc(var(--u) * 12));
   background-repeat: no-repeat;
   background-position: center;
   background-size: contain;
@@ -1617,8 +1618,8 @@ html, body {
   position: absolute;
   left: calc(var(--u) * 0.35);
   right: calc(var(--u) * 0.35);
-  bottom: calc(var(--u) * 0.3);
-  height: calc(var(--u) * 7.2);
+  bottom: calc(var(--u) * 0.25);
+  height: calc(var(--u) * 6.0);
   border-radius: calc(var(--u) * 0.7);
   background: linear-gradient(180deg, rgba(0, 0, 0, 0.15), rgba(0, 0, 0, 0.55));
   box-shadow: inset 0 0 0 1px rgba(240, 194, 74, 0.22);
@@ -1737,8 +1738,8 @@ html, body {
   flex-direction: column;
   align-items: center;
   justify-content: center;
-  gap: calc(var(--u) * 0.65);
-  padding: calc(var(--u) * 0.55) calc(var(--u) * 0.7);
+  gap: calc(var(--u) * 0.4);
+  padding: calc(var(--u) * 0.4) calc(var(--u) * 0.55);
   border-radius: calc(var(--u) * 1);
   background:
     var(--tx-noise-light),
@@ -1753,14 +1754,17 @@ html, body {
 }
 .top-core .bingo-board {
   width: 100%;
-  max-width: calc(var(--u) * 34);
-  gap: calc(var(--u) * 0.45);
-  padding: calc(var(--u) * 0.55);
+  max-width: calc(var(--u) * 32);
+  gap: calc(var(--u) * 0.35);
+  padding: calc(var(--u) * 0.4);
 }
-.top-core .bingo-cell { aspect-ratio: 2.6 / 1; font-size: calc(var(--u) * 1.9); }
-.top-core .hold-plate { font-size: calc(var(--u) * 1.35); min-width: calc(var(--u) * 5); }
-.top-core .hold-lamp { width: calc(var(--u) * 3.1); height: calc(var(--u) * 3.1); }
-.top-core .hold-strip { gap: calc(var(--u) * 1.2); padding: calc(var(--u) * 0.3) calc(var(--u) * 0.65); }
+.top-core .bingo-cell { aspect-ratio: 2.8 / 1; font-size: calc(var(--u) * 1.7); }
+.top-core .hold-plate { font-size: calc(var(--u) * 1.25); min-width: calc(var(--u) * 4.5); }
+.top-core .hold-lamp { width: calc(var(--u) * 2.8); height: calc(var(--u) * 2.8); }
+.top-core .hold-strip { gap: calc(var(--u) * 1.0); padding: calc(var(--u) * 0.22) calc(var(--u) * 0.55); }
+.top-core .mission-bar { padding: calc(var(--u) * 0.25) calc(var(--u) * 0.55); }
+.top-core .mission-track { height: calc(var(--u) * 1.25); }
+.top-core .bingo-wrap { gap: calc(var(--u) * 0.3); }
 
 .plaque-sub {
   display: none;
@@ -2019,30 +2023,43 @@ html, body {
 }
 
 /* ---------- fit levels (set by fitCabinet on short viewports) ---------- */
-html.fit-1 .cabinet { gap: calc(var(--u) * 1); padding-top: calc(var(--u) * 2.3); padding-bottom: calc(var(--u) * 1); }
-html.fit-1 .board { aspect-ratio: 1 / 0.88; }
-html.fit-1 .glass { gap: calc(var(--u) * 0.7); padding: calc(var(--u) * 1.1); }
-html.fit-1 .deck { gap: calc(var(--u) * 1); padding-top: calc(var(--u) * 1.1); padding-bottom: calc(var(--u) * 1.3); }
-html.fit-1 .deck-bets, html.fit-1 .deck-main { padding-top: calc(var(--u) * 0.7); padding-bottom: calc(var(--u) * 0.8); }
-html.fit-1 .marquee { padding-top: calc(var(--u) * 0.9); padding-bottom: calc(var(--u) * 1); }
-html.fit-1 .center { margin: calc(var(--u) * 1.1); gap: calc(var(--u) * 0.8); padding: calc(var(--u) * 1.1); }
+html.fit-1 .cabinet { gap: calc(var(--u) * 0.85); padding-top: calc(var(--u) * 2.0); padding-bottom: calc(var(--u) * 0.85); }
+html.fit-1 .board { aspect-ratio: 1 / 0.86; }
+html.fit-1 .glass { gap: calc(var(--u) * 0.55); padding: calc(var(--u) * 0.95); }
+html.fit-1 .deck { gap: calc(var(--u) * 0.85); padding-top: calc(var(--u) * 0.95); padding-bottom: calc(var(--u) * 1.1); }
+html.fit-1 .deck-bets, html.fit-1 .deck-main { padding-top: calc(var(--u) * 0.6); padding-bottom: calc(var(--u) * 0.7); }
+html.fit-1 .marquee { padding-top: calc(var(--u) * 0.75); padding-bottom: calc(var(--u) * 0.85); }
+html.fit-1 .center { margin: calc(var(--u) * 0.95); gap: calc(var(--u) * 0.65); padding: calc(var(--u) * 0.95); }
+html.fit-1 .topper { min-height: calc(var(--u) * 12); gap: calc(var(--u) * 0.35); padding: calc(var(--u) * 0.4) calc(var(--u) * 0.55); }
+html.fit-1 .wing-art { width: min(80%, calc(var(--u) * 10.5)); height: min(62%, calc(var(--u) * 10.5)); }
+html.fit-1 .wing-caption { display: none; }
+html.fit-1 .hold-plate { font-size: calc(var(--u) * 1.1); }
+html.fit-1 .top-core .bingo-cell { aspect-ratio: 3 / 1; font-size: calc(var(--u) * 1.55); }
+html.fit-1 .note { font-size: calc(var(--u) * 1.55); padding: calc(var(--u) * 0.15) 0; }
 
-html.fit-2 .board { aspect-ratio: 1 / 0.8; }
-html.fit-2 .reel-mask, html.fit-2 .reel-cell { height: calc(var(--u) * 12.5); }
-html.fit-2 .reel-cell { font-size: calc(var(--u) * 8.2); }
-html.fit-2 .ds-label { width: calc(var(--u) * 6.8); height: calc(var(--u) * 6.8); }
-html.fit-2 .dice svg { width: calc(var(--u) * 3.8); height: calc(var(--u) * 6.2); }
-html.fit-2 .btn, html.fit-2 .deck-main .btn, html.fit-2 .btn-start, html.fit-2 .betkey { height: calc(var(--u) * 9.4); }
-html.fit-2 .pgroup { gap: calc(var(--u) * 0.4); padding-bottom: calc(var(--u) * 0.7); }
-html.fit-2 .topper { padding: calc(var(--u) * 0.45) calc(var(--u) * 0.65); min-height: calc(var(--u) * 13.5); gap: calc(var(--u) * 0.4); }
-html.fit-2 .wing-art { width: min(90%, calc(var(--u) * 11)); height: min(70%, calc(var(--u) * 11)); }
+html.fit-2 .cabinet { gap: calc(var(--u) * 0.65); padding-top: calc(var(--u) * 1.7); padding-bottom: calc(var(--u) * 0.7); }
+html.fit-2 .board { aspect-ratio: 1 / 0.78; }
+html.fit-2 .reel-mask, html.fit-2 .reel-cell { height: calc(var(--u) * 11.5); }
+html.fit-2 .reel-cell { font-size: calc(var(--u) * 7.6); }
+html.fit-2 .ds-label { width: calc(var(--u) * 6.2); height: calc(var(--u) * 6.2); }
+html.fit-2 .dice svg { width: calc(var(--u) * 3.5); height: calc(var(--u) * 5.6); }
+html.fit-2 .btn, html.fit-2 .deck-main .btn, html.fit-2 .btn-start, html.fit-2 .betkey { height: calc(var(--u) * 9.2); }
+html.fit-2 .pgroup { gap: calc(var(--u) * 0.35); padding-bottom: calc(var(--u) * 0.55); }
+html.fit-2 .topper { padding: calc(var(--u) * 0.3) calc(var(--u) * 0.45); min-height: calc(var(--u) * 10.5); gap: calc(var(--u) * 0.3); }
+html.fit-2 .wing-art { width: min(78%, calc(var(--u) * 9)); height: min(58%, calc(var(--u) * 9)); }
 html.fit-2 .wing-caption { display: none; }
 html.fit-2 .hold-plate { display: none; }
-html.fit-2 .bingo-cell { aspect-ratio: 3.2 / 1; }
-html.fit-2 .mission-lab { font-size: calc(var(--u) * 1.15); }
-html.fit-1 .topper { min-height: calc(var(--u) * 15); gap: calc(var(--u) * 0.45); }
-html.fit-1 .wing-art { width: min(88%, calc(var(--u) * 12)); height: min(70%, calc(var(--u) * 12)); }
-html.fit-1 .hold-plate { font-size: calc(var(--u) * 1.2); }
+html.fit-2 .bingo-cell, html.fit-2 .top-core .bingo-cell { aspect-ratio: 3.4 / 1; font-size: calc(var(--u) * 1.4); }
+html.fit-2 .mission-lab { font-size: calc(var(--u) * 1.05); }
+html.fit-2 .wing-panel::before { height: calc(var(--u) * 5.2); }
+html.fit-2 .note { font-size: calc(var(--u) * 1.4); }
+html.fit-2 .cabinet { padding-left: calc(var(--u) * 1.85); padding-right: calc(var(--u) * 1.85); }
+html.fit-2 .deck { padding-left: calc(var(--u) * 0.75); padding-right: calc(var(--u) * 0.75); gap: calc(var(--u) * 0.7); }
+html.fit-2 .deck-bets { gap: calc(var(--u) * 0.22); padding-left: calc(var(--u) * 0.15); padding-right: calc(var(--u) * 0.15); }
+html.fit-2 .deck-main { gap: calc(var(--u) * 0.7); }
+html.fit-2 .deck-func { gap: calc(var(--u) * 0.55); }
+html.fit-1 .deck { padding-left: calc(var(--u) * 1.2); padding-right: calc(var(--u) * 1.2); }
+html.fit-1 .deck-bets { gap: calc(var(--u) * 0.35); }
 
 /* dialogs never exceed the safe viewport */
 .sheet { max-height: calc(100dvh - var(--pad-t) - var(--pad-b) - 24px); max-width: calc(100vw - 24px); overscroll-behavior: contain; }

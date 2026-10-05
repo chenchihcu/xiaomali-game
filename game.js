@@ -2387,21 +2387,31 @@
   });
   window.addEventListener('pagehide', save);
   // Fit the cabinet exactly into the safe viewport (iPhone 16 Pro Max first).
-  // Measures natural height @ current --W, then shrinks --W / applies fit-*
-  // density classes until the machine clears the bottom safe area.
+  // Resolves --pad-* / --safe-* via a probe (getPropertyValue returns unevaluated
+  // max()/env() strings). Measures natural height @ Wmax, applies fit-* density,
+  // then shrinks --W until the machine clears pad-t / pad-b with no clip/scroll.
+  function readCssPx(prop) {
+    const el = document.createElement('div');
+    el.setAttribute('data-fit-probe', '1');
+    el.style.cssText = 'position:absolute;visibility:hidden;pointer-events:none;'
+      + 'height:var(' + prop + ');width:0;margin:0;padding:0;border:0;';
+    document.documentElement.appendChild(el);
+    const h = el.getBoundingClientRect().height;
+    el.remove();
+    return h || 0;
+  }
   function fitCabinet() {
     const root = document.documentElement;
     const cab = cabinetEl || $('cabinet');
     if (!cab) return;
-    const cs = getComputedStyle(root);
-    const padT = parseFloat(cs.getPropertyValue('--pad-t')) || 0;
-    const padB = parseFloat(cs.getPropertyValue('--pad-b')) || 0;
+    const padT = readCssPx('--pad-t');
+    const padB = readCssPx('--pad-b');
+    const safeL = readCssPx('--safe-l');
+    const safeR = readCssPx('--safe-r');
+    const gutter = readCssPx('--gutter') || 4;
     const vv = window.visualViewport;
     const vh = (vv && vv.height) ? vv.height : (window.innerHeight || root.clientHeight);
     const vw = (vv && vv.width) ? vv.width : (window.innerWidth || root.clientWidth);
-    const safeL = parseFloat(cs.getPropertyValue('--safe-l')) || 0;
-    const safeR = parseFloat(cs.getPropertyValue('--safe-r')) || 0;
-    const gutter = parseFloat(cs.getPropertyValue('--gutter')) || 4;
     const Wmax = Math.min(vw - 2 * gutter - safeL - safeR, 480);
     const Hav = Math.max(240, vh - padT - padB);
 
@@ -2412,25 +2422,31 @@
     root.style.setProperty('--fit-ratio', '1.0'); // force width = Wmax for measure
     root.style.setProperty('--W', Wmax + 'px');
 
-    // Force layout, then decide density based on overflow.
+    // Force layout, then decide density based on overflow vs safe content box.
     void cab.offsetHeight;
     let h = cab.getBoundingClientRect().height;
     let level = 0;
-    if (h > Hav * 1.02) { root.classList.add('fit-1'); level = 1; void cab.offsetHeight; h = cab.getBoundingClientRect().height; }
-    if (h > Hav * 1.02) { root.classList.add('fit-2'); level = 2; void cab.offsetHeight; h = cab.getBoundingClientRect().height; }
+    if (h > Hav * 1.005) { root.classList.add('fit-1'); level = 1; void cab.offsetHeight; h = cab.getBoundingClientRect().height; }
+    if (h > Hav * 1.005) { root.classList.add('fit-2'); level = 2; void cab.offsetHeight; h = cab.getBoundingClientRect().height; }
 
-    const ratio = Math.max(1.35, (h / Math.max(1, Wmax)) * 1.012);
-    const W = Math.max(280, Math.min(Wmax, Hav / ratio));
+    const ratio = Math.max(1.25, (h / Math.max(1, Wmax)) * 1.01);
+    // Keep width high enough that 8 bet keys can stay ≥44px after deck/cabinet pads
+    // (≈ W/100 * ~12.3 chrome + 8*44). Floor softens on extremely short viewports.
+    const Wtouch = Math.min(Wmax, 402);
+    let W = Math.max(280, Math.min(Wmax, Hav / ratio));
+    if (W < Wtouch && Hav >= 680) W = Math.min(Wmax, Wtouch);
     root.style.setProperty('--fit-ratio', ratio.toFixed(4));
     root.style.setProperty('--W', W + 'px');
     root.dataset.fit = String(level);
 
-    // Re-check: if still overflowing after width shrink (subpixel / bingo), nudge again.
-    void cab.offsetHeight;
-    h = cab.getBoundingClientRect().height;
-    if (h > Hav + 1) {
-      const W2 = Math.max(260, W * (Hav / h) * 0.995);
-      root.style.setProperty('--W', W2 + 'px');
+    // Iterative nudge for residual overflow (bingo topper / subpixel / density).
+    for (let i = 0; i < 4; i++) {
+      void cab.offsetHeight;
+      h = cab.getBoundingClientRect().height;
+      if (h <= Hav + 0.5) break;
+      const floor = (Hav >= 680) ? 360 : 250;
+      W = Math.max(floor, W * (Hav / h) * 0.992);
+      root.style.setProperty('--W', W + 'px');
     }
   }
   let _fitRaf = 0;
