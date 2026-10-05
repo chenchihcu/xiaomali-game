@@ -139,12 +139,12 @@
     slotBonus: '特殊燈／ONCE→三輪拉霸',
     fever: 'JP／高倍／特殊／大贏→連跑',
     bingo: '有中標格；連線 floor(押/4)',
-    luckyWheel: '特殊燈／ONCE→幸運轉輪',
-    gacha: '抽 N–SSR；該圖有押才賠',
-    sicbo: '三骰；大／小／豹子給分',
-    pachinko: '彈珠落袋×倍率給分',
-    ballDraw: '抽 1–3 球；有押才中',
-    roulette: '0–12；色／單雙／號給分',
+    luckyWheel: '特殊燈／ONCE→轉輪；floor(押×倍/6)',
+    gacha: '特殊燈／ONCE→轉蛋；該圖有押才賠',
+    sicbo: '特殊燈／ONCE→三骰；大／小／豹給分',
+    pachinko: '特殊燈／ONCE→彈珠；落袋×倍給分',
+    ballDraw: '特殊燈／ONCE→抽1–3球；有押才中',
+    roulette: '特殊燈／ONCE→0–12；色／單雙／號給分',
     reverse: '跑燈改逆時針',
     skip: '跑燈一次跳 2 格',
     doubleRun: '同局再停一盞獨立燈',
@@ -183,7 +183,7 @@
     /** At most one of these mini-stages per round (keeps RTP in check). */
     maxPerRound: 1,
   };
-  /** Lucky Wheel segments: relative weights + payout as floor(totalBet * mult / 4). */
+  /** Lucky Wheel segments: relative weights + payout as floor(totalBet * mult / 6) (min 1 if mult>0). */
   const WHEEL_SEGS = [
     { label: '×0',  mult: 0,  w: 12, tone: 'miss' },
     { label: '×1',  mult: 1,  w: 20, tone: 'low' },
@@ -205,7 +205,7 @@
   ];
   /** Sic Bo big/small/triple payouts vs totalBet (entertainment). */
   const SICBO_PAY = { small: 1, big: 1, triple: 8, point: 0 };
-  /** Pachinko pockets left→right: multipliers for floor(totalBet * m / 4). */
+  /** Pachinko pockets left→right: multipliers for floor(totalBet * m / 6) (min 1 if mult>0). */
   const PACHINKO_POCKETS = [
     { label: '×1', mult: 1, w: 14 },
     { label: '×2', mult: 2, w: 18 },
@@ -219,7 +219,7 @@
   ];
   /** Ball-draw cage: draw count + match pay as bet × mult. */
   const BALL_DRAW = { minBalls: 1, maxBalls: 3, matchMult: 2, tripleBonus: 5 };
-  /** Compact electronic roulette 0–12 (0 green). Pay floor(totalBet * mult / 4). */
+  /** Compact electronic roulette 0–12 (0 green). Pay floor(totalBet * mult / 6) (min 1 if mult>0). */
   const ROULETTE_N = 13;
   const ROULETTE_PAY = { number: 12, color: 2, evenOdd: 2, zero: 8 };
   /** 3×3 bingo cells → symbol id (once = wild filler cell). */
@@ -229,7 +229,7 @@
     [0, 3, 6], [1, 4, 7], [2, 5, 8],
     [0, 4, 8], [2, 4, 6],
   ];
-  const BINGO_LINE_MULT = 1; // × ceil(totalBet/2) when a line completes
+  const BINGO_LINE_MULT = 1; // × floor(totalBet/4) (min 1) per completed line
 
   const ones = () => Object.fromEntries(WEIGHT_KEYS.map((k) => [k, 1]));
   /** Difficulty presets: per-symbol weight multipliers + bonus frequency. */
@@ -480,8 +480,10 @@
 
   function stagePayFromTotal(totalBet, mult) {
     if (!mult || totalBet <= 0) return 0;
-    // /6 keeps cabinet stages flashy but RTP-stable when all modes are on
-    return Math.max(0, Math.floor(totalBet * mult / 6));
+    // /6 keeps cabinet stages flashy but RTP-stable when all modes are on.
+    // Floor can be 0 on tiny totalBet (e.g. 單押1) — still pay at least 1 so
+    // entertainment stages match 「進場就有給分」labels (wheel ×0 stays 0).
+    return Math.max(1, Math.floor(totalBet * mult / 6));
   }
 
   /** Resolve Lucky Wheel: spin to a weighted segment. */
@@ -688,6 +690,7 @@
    *   { type: 'bonus' | 'jp' } — existing LUCKY / JP
    *
    * `bingoBoard` (bool[9]) is the board AFTER this round (pass previous via opts.bingoBoard).
+   * `forceStage` (stage kind string) skips the entry-rate roll once (still ≤ maxPerRound).
    */
   function resolveRound(bets, settings, rng, jpPot = 0, opts = {}) {
     const s = settings || DEFAULT_SETTINGS;
@@ -705,6 +708,10 @@
     let bingoBoard = Array.isArray(opts.bingoBoard) && opts.bingoBoard.length === 9
       ? opts.bingoBoard.map(Boolean)
       : new Array(9).fill(false);
+    // Debug / audit: force one cabinet stage (skips STAGE_ENTRY rate; still ≤ maxPerRound).
+    let forcedKind = (typeof opts.forceStage === 'string' && STAGE_KEYS.includes(opts.forceStage))
+      ? opts.forceStage
+      : null;
 
     const pushSlotChain = (trigger = null) => {
       if (!s.modes.slotBonus || slotOpens >= 3) return;
@@ -724,17 +731,19 @@
     const tryPushCabinetStage = (force = false, trigger = null) => {
       if (stageOpens >= STAGE_ENTRY.maxPerRound) return false;
       const anyOn = STAGE_KEYS.some((k) => s.modes[k]);
-      if (!anyOn) return false;
-      // force=true: guaranteed entry (still capped by maxPerRound). Otherwise roll.
-      if (!force) {
+      // forcedKind may open even if that toggle is off (audit / __xiaomali debug).
+      if (!anyOn && !forcedKind) return false;
+      // force=true or pending forcedKind: skip rate roll (still capped by maxPerRound).
+      if (!force && !forcedKind) {
         const rate = STAGE_ENTRY.chance * (s.bonusRate || 1);
         if (rng() >= rate) return false;
       }
-      const kind = pickStageKind(s, rng);
+      const kind = forcedKind || pickStageKind(s, rng);
       if (!kind) return false;
       const stage = resolveStage(kind, bets, totalBet, rng);
       if (!stage) return false;
       stageOpens++;
+      forcedKind = null; // consume one-shot force
       if (trigger) stage.trigger = trigger;
       steps.push(stage);
       win += stage.gained || 0;
@@ -899,6 +908,8 @@
       if (queue > 0) continue;
       break;
     }
+    // If forceStage was set but no special/ONCE land opened it, still fire once.
+    if (forcedKind) tryPushCabinetStage(true, null);
     return { steps, win: win + jpWin, jpWin, bingoBoard };
   }
 

@@ -1,62 +1,62 @@
-# Audit — 第二輪（觸控／Overlay／舞台／音效／Fit／數學＋全開機率）（2026-10-05）
+# Audit — 第三輪（按鍵／押注／舞台／給分／soft-lock）（2026-10-05）
 
-Scope: `/workspace/xiaomali` after `e136cf0`.
-Method: code review + `node sim.js` + all-modes trigger census + label/hint cross-check vs engine.
+Scope: `/workspace/xiaomali` after `a334d3d`.
+Method: code review + `node --check` + `node sim.js` + all-modes census + `forceStage` probe + label/hint cross-check.
 
 ## Issues found → fixed
 
 | # | Area | Issue | Fix |
 |---|---|---|---|
-| 1 | Busy / overlay | `start` / `collect` / `gamble` / cabinet stages lacked `try/finally` — a thrown await left `busy` stuck & stage overlay open | `try/finally` clears `busy`, `closeStageOverlay()`, `hideOnceBanner`, `FX.hideFever` |
-| 2 | Tip / touch | `#firstTip` buttons used `click` only (same iOS lag as pre-audit deck) | Pointer capture + `pointerup` path (keyboard `detail===0`) |
-| 3 | Fit | `visualViewport` `scroll` called `fitCabinet` constantly → hitboxes jumped mid-tap on iOS chrome | Listen to `resize` only |
-| 4 | Rates | All modes ON: stages/slot/fever were near-zero (≈0.02–0.2%/round) | Raised `STAGE_ENTRY`/`SLOT_BONUS`/`FEVER`/`BONUS`/`SUPER_RUN`/`doubleRun`; broadened FEVER entry; stage pay `/4`→`/6`; gacha/wheel leaner; `small` house-edge 2.45 |
-| 5 | Copy | Mode toggle labels/hints mismatched engine (FEVER「大獎」、三輪「特殊燈 only」、連跑次數、賓果給分、onceRate 未提超跑等) | `MODE_LABELS` / `MODE_HINTS` + help/settings hints aligned to actual triggers & pays |
+| 1 | Buttons / bets | 局後 `betsPaid=false` 時點任一水果會經 `freshBets()` **清掉整排押注**（只留當下那顆）— 像按鍵壞掉／誤觸全滅 | 移除 `freshBets`；未付預覽改為只加該格（與加倍相同邏輯），`開始` 再扣 `sum(bets)` |
+| 2 | Stages wiring | `opts.forceStage` 寫在稽核說明但 **resolveRound 從未讀取**（實際命中≈隨機） | 接上 `forcedKind`：跳過 `STAGE_ENTRY` 機率、仍受 `maxPerRound`；若整局無特殊／ONCE 也會在結尾強制開一次 |
+| 3 | Math / labels | 舞台 `floor(押×倍/6)` 在 **單押／低總押** 常為 0，與「進場給分」文案不符（輪盤色／骰寶小大尤明顯） | `stagePayFromTotal`：`mult>0` 時至少給 1（`×0` 轉輪仍為 0） |
+| 4 | Copy | `MODE_HINTS`／註解仍寫 `/4` 或未提特殊燈／ONCE 入口；賓果註解誤寫 `ceil(押/2)` | 提示與註解改對齊 `/6`、特殊燈／ONCE、賓果 `floor(押/4)`；玩法說明補舞台公式 |
+| 5 | Soft-lock | `start()` 若在轉輪／舞台 await 中拋錯，可能留下 `.spinning` 轉輪＋busy 已清 | `finally` 額外清 reel `spinning`/`landed`、overlay、FEVER、once banner |
+| 6 | UI | 自動鍵 SVG 中心圓點易被看成字母「b」 | 改為循環箭頭＋時鐘指針圖示 |
 
-## All-modes-ON trigger census (`node`, 70k rounds, normal)
+## All-modes-ON trigger census (`node`, 40k rounds, normal)
 
 | Mode | Round rate | Notes |
 |---|---|---|
-| once | ~3.7% | base ONCE MORE stops |
+| once | ~4.0% | base ONCE MORE stops |
 | song / train / sanyuan | ~1.9% / 1.2% / 1.0% | LUCKY after land |
-| slotBonus | ~0.7% | special / ONCE |
+| slotBonus | ~0.8% | special / ONCE |
 | fever | ~0.9% | JP / mult≥20 / special / solid hit |
-| superRun | ~1.4% | paying/special, × onceRate |
-| jp | ~0.2% | rare by design (progressive) |
+| superRun | ~1.5% | paying/special × onceRate |
+| jp | ~0.2% | rare by design |
 | doubleRun | ~3.0% | land FX |
-| reverse / skip / fakeStop | ~10% / 8% / 12% of light FX rolls | already meaningful |
-| cabinet stages (sum) | ~1.8% | ≤1/round; each kind ~0.3% when all six on |
-| bingo | marks on paying lands; line clears ~0.3% | progression, not a rare drop |
+| cabinet stages (sum) | ~1.8% | ≤1/round；各約 0.3% |
+| forceStage | **100/100** | 修後保證進場 |
 
-## RTP (`node sim.js 100000`)
+## RTP (`node sim.js 80000`)
 
 | Preset | 全押 RTP |
 |---|---|
-| 輕鬆 | ≈127% |
-| **標準** | **≈100%** |
-| 困難 | ≈82% |
-| 標準無彩蛋 | ≈79% (higher `small` house edge; intentional tradeoff for all-on balance) |
+| 輕鬆 | ≈126% |
+| **標準** | **≈101%** |
+| 困難 | ≈83% |
+| 標準無彩蛋 | ≈79% |
 
 ## Verified OK
 
-- Force stage entry still skips rate roll (capped by `maxPerRound`)
-- Deck `bindTap` / 開分 commit-on-up / fruit hold-repeat unchanged
-- First-tip sits over glass, not deck
-- Labels/hints printed from `MODE_LABELS`/`MODE_HINTS` match engine code paths
+- `bindTap`／開分 commit-on-up／水果 hold-repeat／`visualViewport` resize-only
+- `start` / `collect` / `gamble` / cabinet stages 皆有 `try/finally` 清 `busy`
+- 全開玩法時各模式仍有可感觸發率（同上表）
+- `MODE_LABELS` / `MODE_HINTS` 與引擎路徑一致（舞台＝特殊燈／ONCE；FEVER 入口；賓果連線公式）
 
 ## Remaining risks (watch)
 
-1. Apple single-bet RTP still low vs mid fruits.
-2. Sic Bo / roulette entertainment tickets usually pay once entered (edge = entry rate).
-3. 標準無彩蛋 RTP dipped with higher `small` — raise fruit weights or lower `small` if classic-only players complain.
-4. Individual cabinet kinds share one entry slot (~0.3% each when all six on); turn some off to concentrate rate.
-5. No crypto RNG audit beyond `crypto.getRandomValues` float.
+1. 蘋果單押 RTP 仍偏低（≈65%，小圖×3 權重堆疊）— 未為保全押≈100% 強行拉高。
+2. 骰寶／輪盤進場後娛樂給分（edge 主要在進場率）；低總押現為至少 1。
+3. 六種櫃舞台共用一個進場名額（全開時各約 0.3%）。
+4. 無 crypto RNG 深度稽核（僅 `crypto.getRandomValues` float）。
 
 ## How to re-check
 
 ```bash
 node --check engine.js && node --check game.js
 node sim.js 120000
+node -e "const E=require('./engine.js'); let n=0; for(let i=0;i<50;i++){const r=E.resolveRound([1,1,1,1,1,1,1,1],E.DEFAULT_SETTINGS,Math.random,200,{forceStage:'roulette'}); if(r.steps.some(s=>s.type==='roulette'))n++;} console.log(n+'/50');"
 ```
 
-DevTools iPhone 16 Pro Max: tip dismiss via touch; mid-round exception must not leave greyed deck; Settings → 玩法開關 hints match one spin of each mode.
+DevTools iPhone 16 Pro Max：局後點單一水果應保留其他押注；中途例外不得留下灰掉操作台或空轉輪。

@@ -2902,3 +2902,9 @@ html.fit-2 .btn-start .btn-lab { font-size: calc(var(--u) * 2.6); }
 @media (prefers-reduced-motion: reduce) {
   .first-tip { transition: none; }
 }
+
+/* Round in progress: deck stays tappable (why.* toasts) but avoid text-select / callout. */
+body.is-busy {
+  -webkit-user-select: none;
+  user-select: none;
+}

@@ -80,7 +80,7 @@ Bingo marks and stage pays are real (fake credit); flourishes are not.
 - Stop = `effectiveWeights` (ONCE MORE weight 0 if `modes.once` off).
 - `resolveRound` steps (order): `once` / `land` (+ optional `double`) / `bingo` / `bonus` / `jp` / `super` / `slot` / `fever`.
   - Landing on ONCE MORE queues free light-runs (`single` 1 / `multi` 2–4 / `big` 3–5). Cap `MAX_ONCE_MORE_CHAIN`. UI countdown only — do not re-roll in `game.js`.
-  - Cabinet mini-stages share `STAGE_ENTRY` (special/ONCE); ≤1/round. Stage pay uses `floor(totalBet×mult/6)`.
+  - Cabinet mini-stages share `STAGE_ENTRY` (special/ONCE); ≤1/round. Stage pay uses `max(1, floor(totalBet×mult/6))` when mult>0. `opts.forceStage` skips the rate roll once.
   - `land.fx` / `once.fx` drive `runLight` (reverse/skip/fakeStop).
 - Classic bonus: `song` / `train` / `sanyuan`. JP: big BAR + BAR bet.
 - Stages: `slot` (reel ids + match/gained/freeSpin), `fever` (runs[]), `super` (stops[]), `bingo` (cell/lines/board).
@@ -112,7 +112,7 @@ node sim.js 50000          # RTP / hit / LUCKY / JP rates per preset
 - UI copy: Traditional Chinese. Code/comments: English.
 - No copyrighted characters/logos/music samples — Emoji + CSS/SVG + procedural audio only.
 - Keep 娛樂用／虛擬分數 disclaimer (footer, dialogs, README).
-- Touch targets ≥ 44px; bet keys `pointerdown` + hold-repeat.
+- Touch targets ≥ 44px; bet keys `pointerdown` + hold-repeat. Post-round unpaid preview keeps the whole pattern when bumping one fruit (no wipe).
 
 ## Changing odds
 1. Edit `engine.js` `TRACK[].w` / `PRESETS` / `BONUS.*.chance` / stage chances (`SUPER_RUN`, `SLOT_BONUS`, `FEVER_STAGE`, `LIGHT_FX.doubleRun`) / `JP`.

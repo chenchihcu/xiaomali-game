@@ -1005,8 +1005,13 @@
     },
     bet(i) {
       if (state.busy) return BUSY_MSG;
-      if (avail() < 1) return NO_CREDIT;
-      if (state.betsPaid && state.bets[i] >= MAX_BET_PER_SYMBOL) return `${SYMBOLS[i].name} 已達上限 ${MAX_BET_PER_SYMBOL}`;
+      if (state.bets[i] >= MAX_BET_PER_SYMBOL) return `${SYMBOLS[i].name} 已達上限 ${MAX_BET_PER_SYMBOL}`;
+      // Paid: need credit in hand. Unpaid preview: need enough for current pattern + 1.
+      if (state.betsPaid) {
+        if (avail() < 1) return NO_CREDIT;
+      } else if (avail() < sum(state.bets) + 1) {
+        return `需 ${sum(state.bets) + 1}・請開分`;
+      }
       return null;
     },
     dbl() {
@@ -1156,24 +1161,22 @@
     clearHighlights();
   }
 
-  function freshBets() {
-    if (!state.betsPaid) {
-      state.bets.fill(0);
-      state.betsPaid = true;
-    }
-  }
-
   function betUnit() {
     return Math.max(1, Math.min(10, Math.floor(settings.betUnit || 1)));
   }
 
+  /**
+   * Add bet to symbol i.
+   * - Paid (betsPaid): deduct CREDIT as you tap.
+   * - Unpaid preview (post-round / 續玩): keep the whole pattern and only
+   *   bump amounts — 開始 charges sum(bets). Never wipe siblings (old freshBets bug).
+   */
   function bet(i) {
     const reason = why.bet(i);
     if (reason) { deny(reason); render(); return false; }
     if (state.auto) stopAuto();
     collectInstant();
     clearHighlights();
-    freshBets();
     const unit = betUnit();
     if (state.bets[i] >= MAX_BET_PER_SYMBOL) {
       setMsg(`${SYMBOLS[i].name} 上限 ${MAX_BET_PER_SYMBOL}`, 'bad');
@@ -1181,6 +1184,25 @@
       return false;
     }
     const room = MAX_BET_PER_SYMBOL - state.bets[i];
+    if (!state.betsPaid) {
+      const add = Math.min(unit, room);
+      if (add < 1) {
+        deny(`${SYMBOLS[i].name} 已達上限`);
+        render();
+        return false;
+      }
+      if (avail() < sum(state.bets) + add) {
+        deny(`需 ${sum(state.bets) + add}・請開分`);
+        render();
+        return false;
+      }
+      state.bets[i] += add;
+      Sound.bet();
+      setMsg(`已押 ${sum(state.bets)}`);
+      render();
+      save();
+      return true;
+    }
     const add = Math.min(unit, room, state.credit);
     if (add < 1) {
       deny(NO_CREDIT);
@@ -1204,23 +1226,35 @@
     if (reason) { deny(reason); render(); return; }
     collectInstant();
     clearHighlights();
-    freshBets();
     const unit = betUnit();
     let added = 0;
-    for (let i = 0; i < SYMBOLS.length; i++) {
-      if (state.credit < 1) break;
-      if (state.bets[i] >= MAX_BET_PER_SYMBOL) continue;
-      const room = MAX_BET_PER_SYMBOL - state.bets[i];
-      const add = Math.min(unit, room, state.credit);
-      if (add < 1) break;
-      state.bets[i] += add;
-      state.credit -= add;
-      added += add;
+    if (!state.betsPaid) {
+      // Unpaid preview: bump each symbol without wiping / without charging yet.
+      for (let i = 0; i < SYMBOLS.length; i++) {
+        if (state.bets[i] >= MAX_BET_PER_SYMBOL) continue;
+        const room = MAX_BET_PER_SYMBOL - state.bets[i];
+        const add = Math.min(unit, room);
+        if (add < 1) continue;
+        if (avail() < sum(state.bets) + add) break;
+        state.bets[i] += add;
+        added += add;
+      }
+    } else {
+      for (let i = 0; i < SYMBOLS.length; i++) {
+        if (state.credit < 1) break;
+        if (state.bets[i] >= MAX_BET_PER_SYMBOL) continue;
+        const room = MAX_BET_PER_SYMBOL - state.bets[i];
+        const add = Math.min(unit, room, state.credit);
+        if (add < 1) break;
+        state.bets[i] += add;
+        state.credit -= add;
+        added += add;
+      }
     }
     if (added) {
       Sound.seq([784, 988, 1175], 0.05, 'triangle', 0.07);
       setMsg(`全押 ${sum(state.bets)}`);
-      if (state.credit === 0 && added < unit * SYMBOLS.length) toast('CREDIT 不足', 'warn');
+      if (state.betsPaid && state.credit === 0 && added < unit * SYMBOLS.length) toast('CREDIT 不足', 'warn');
     } else deny('無法加注');
     render();
     save();
@@ -2047,7 +2081,7 @@
     }
   }
 
-    async function playSlotBonus(step) {
+  async function playSlotBonus(step) {
     if (step.trigger) await cueStageEntry(step);
     setMsg(step.freeSpin ? '三輪 Bonus・FREE' : '三輪 Bonus', 'hot');
     FX.flashFever('ready', 1200);
@@ -2432,6 +2466,10 @@
       hideOnceBanner();
       closeStageOverlay();
       FX.hideFever();
+      // Soft-lock guards: never leave reels/deck stuck if a stage/light await threw.
+      try {
+        reelStrips.forEach((r) => r.parent.classList.remove('landed', 'spinning'));
+      } catch (_) { /* boot race */ }
       state.busy = false;
       render();
       save();
