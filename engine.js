@@ -389,14 +389,26 @@
     if (kind === 'train') {
       const n = 2 + Math.floor(rng() * 4); // 2–5 cars after the stop tile
       const tiles = [];
-      for (let k = 1; k <= n; k++) tiles.push((target + k) % N);
-      return { kind, name: `開火車 ${n + 1} 連燈`, tiles };
+      for (let k = 1; k <= n; k++) {
+        const i = (target + k) % N;
+        // ONCE MORE is not a paying lamp — skip so 開火車 never "wins" a blank OM.
+        if (TRACK[i].s === 'once') continue;
+        tiles.push(i);
+      }
+      if (!tiles.length) {
+        for (let k = 1; k <= N && tiles.length < 2; k++) {
+          const i = (target + k) % N;
+          if (TRACK[i].s !== 'once') tiles.push(i);
+        }
+      }
+      return { kind, name: `開火車 ${tiles.length + 1} 連燈`, tiles };
     }
-    // sanyuan family
+    // sanyuan family — include the land tile in the set for full 3/4 lamps;
+    // resolveRound zeros pay on `target` (already paid by the land step).
     const pick = Math.floor(rng() * 3);
-    if (pick === 0) return { kind, name: '大三元', tiles: fullTiles(['seven', 'star', 'melon']).filter((i) => i !== target) };
-    if (pick === 1) return { kind, name: '小三元', tiles: fullTiles(['orange', 'mango', 'bell']).filter((i) => i !== target) };
-    const apples = fullTiles(['apple']).filter((i) => i !== target);
+    if (pick === 0) return { kind, name: '大三元', tiles: fullTiles(['seven', 'star', 'melon']) };
+    if (pick === 1) return { kind, name: '小三元', tiles: fullTiles(['orange', 'mango', 'bell']) };
+    const apples = fullTiles(['apple']);
     return { kind, name: '大四喜', tiles: shuffled(apples, rng).slice(0, 4) };
   }
 
@@ -831,7 +843,12 @@
 
       const bonus = rollBonus(target, s, rng);
       if (bonus) {
-        const tiles = bonus.tiles.map((i) => ({ i, ...tilePay(i, bets) }));
+        // Land tile may appear in 三元／四喜 sets for full lamp display — do not double-pay it.
+        const tiles = bonus.tiles.map((i) => {
+          const p = tilePay(i, bets);
+          if (i === target) return { i, si: p.si, mult: p.mult, gained: 0 };
+          return { i, ...p };
+        });
         const gained = tiles.reduce((a, t) => a + t.gained, 0);
         steps.push({ type: 'bonus', kind: bonus.kind, name: bonus.name, target, tiles, gained });
         win += gained;

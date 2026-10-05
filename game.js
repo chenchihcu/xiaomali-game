@@ -573,6 +573,10 @@
         } else if (sum(state.bets) > 0) {
           state.lastPlayedBets = state.bets.slice();
         }
+        if (Number.isFinite(d.holdCount)) {
+          // Applied after FX/holds exist — boot calls FX.holdsSet below if needed.
+          state._pendingHold = Math.max(0, Math.min(4, d.holdCount | 0));
+        }
       }
     } catch { /* ignore */ }
   }
@@ -596,6 +600,7 @@
         lastPlayedBets: state.lastPlayedBets,
         jp,
         bingo,
+        holdCount,
       }));
     } catch { /* */ }
   }
@@ -1024,11 +1029,15 @@
     bet(i) {
       if (state.busy) return BUSY_MSG;
       if (state.bets[i] >= MAX_BET_PER_SYMBOL) return `${SYMBOLS[i].name} 已達上限 ${MAX_BET_PER_SYMBOL}`;
-      // Paid: need credit in hand. Unpaid preview: need enough for current pattern + 1.
+      // Paid: need credit in hand. Unpaid preview: need current pattern + next unit (betUnit).
+      const unit = betUnit();
+      const room = MAX_BET_PER_SYMBOL - state.bets[i];
+      const add = Math.min(unit, room);
+      if (add < 1) return `${SYMBOLS[i].name} 已達上限 ${MAX_BET_PER_SYMBOL}`;
       if (state.betsPaid) {
         if (avail() < 1) return NO_CREDIT;
-      } else if (avail() < sum(state.bets) + 1) {
-        return `需 ${sum(state.bets) + 1}・請開分`;
+      } else if (avail() < sum(state.bets) + add) {
+        return `需 ${sum(state.bets) + add}・請開分`;
       }
       return null;
     },
@@ -2160,14 +2169,22 @@
   }
 
   async function animateWin(from, to) {
-    const steps = Math.min(30, Math.max(1, to - from));
+    const capped = Math.min(CREDIT_CAP, Math.max(0, Math.floor(to)));
+    const start = Math.min(CREDIT_CAP, Math.max(0, Math.floor(from)));
+    if (capped <= start) {
+      state.win = capped;
+      winLed.set(state.win);
+      return;
+    }
+    const steps = Math.min(30, Math.max(1, capped - start));
     for (let k = 1; k <= steps; k++) {
-      state.win = Math.round(from + ((to - from) * k) / steps);
+      state.win = Math.round(start + ((capped - start) * k) / steps);
       winLed.set(state.win);
       if (k % 2) Sound.coin();
       await sleep(25);
     }
-    state.win = to;
+    state.win = capped;
+    if (to > CREDIT_CAP) toast('WIN 已達上限', 'warn');
   }
 
   async function start() {
@@ -2222,6 +2239,12 @@
         const prefix = fromSuper ? '超跑・' : '';
         setMsg(`${prefix}${sym.name}${small} ${state.bets[step.si]}×${step.mult}=${step.gained}`, 'hot');
         await animateWin(state.win, state.win + step.gained);
+      } else if (!sym && TRACK[step.target]?.s === 'once') {
+        // Super / FEVER can still land on ONCE MORE (0 pay) — don't go silent.
+        tileEls[step.target].classList.add('win');
+        setMsg((fromSuper ? '超跑・' : '') + 'ONCE MORE', 'hot');
+        Sound.once();
+        hapticVibrate(1);
       } else if (sym) {
         const special = typeof E.isSlotSpecial === 'function'
           ? E.isSlotSpecial(TRACK[step.target])
@@ -3490,6 +3513,10 @@
   // ---------------------------------------------------------------------------
   loadSettings();
   load();
+  if (Number.isFinite(state._pendingHold)) {
+    FX.holdsSet(state._pendingHold);
+    delete state._pendingHold;
+  }
   diceLed.set('-');
   setLight(state.pos);
   if (!state.betsPaid && sum(state.bets) > 0) setMsg('按開始續玩');
