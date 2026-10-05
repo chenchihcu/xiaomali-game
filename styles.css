@@ -254,29 +254,6 @@ button {
   padding: calc(var(--u) * 1) calc(var(--u) * 1.4);
   overflow: hidden;
 }
-.marquee {
-  display: flex;
-  align-items: center;
-  gap: calc(var(--u) * 1.5);
-}
-.m-title {
-  font-size: calc(var(--u) * 8.4);
-  font-weight: 900;
-  letter-spacing: 0.08em;
-  background: linear-gradient(180deg, #ffffff 0%, #ffe066 40%, #ff7b00 100%);
-  -webkit-background-clip: text;
-  background-clip: text;
-  color: transparent;
-  filter: drop-shadow(0 3px 0 #8a0f3d);
-}
-.m-star {
-  color: #ff6ad5;
-  font-size: calc(var(--u) * 4.6);
-  animation: twinkle 1.2s ease-in-out infinite alternate;
-}
-.m-star:last-child { animation-delay: 0.6s; }
-@keyframes twinkle { from { opacity: 0.35; transform: scale(0.85); } to { opacity: 1; transform: scale(1.1); } }
-
 .led-row {
   display: flex;
   align-items: center;
@@ -458,7 +435,7 @@ button {
 .keys { font-size: 11px; color: rgba(255, 255, 255, 0.5); margin: 12px 0 0; text-align: center; }
 
 @media (prefers-reduced-motion: reduce) {
-  .m-star, .msg.hot { animation: none; }
+  .msg.hot { animation: none; }
 }
 
 /* ---------- compact score + JP + 3 reels in center ---------- */
@@ -488,9 +465,6 @@ button {
   width: calc(var(--u) * 3.2);
   height: calc(var(--u) * 5.4);
 }
-
-.center .marquee { margin-bottom: calc(var(--u) * -0.4); }
-.center .m-title { font-size: calc(var(--u) * 5.6); }
 
 .jp-row {
   display: flex;
