@@ -2530,6 +2530,8 @@
         flourishScreenFlash(endTier);
       }
       FX.holdsSet(Math.min(4, holdCount + 1));
+      // Stop hold-lamp flash so it doesn't stick until the next spin.
+      setTimeout(() => { try { FX.holdsFlash(false); } catch (_) {} }, 1600);
     } else {
       FX.idle();
       if (holdCount > 0 && randomFloat() < 0.35) FX.holdsSet(holdCount - 1);

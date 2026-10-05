@@ -840,6 +840,18 @@
           win += bm.gained;
         }
       }
+      // 雙燈 second pay also marks bingo (same 「有中標格」 rule as primary)
+      if (s.modes.bingo && landStep.double && landStep.double.gained > 0) {
+        const dSym = TRACK[landStep.double.target].s;
+        if (dSym && dSym !== 'once') {
+          const bm2 = applyBingoMark(bingoBoard, dSym, totalBet, rng);
+          bingoBoard = bm2.board;
+          if (bm2.cell >= 0) {
+            steps.push({ type: 'bingo', cell: bm2.cell, lines: bm2.lines, gained: bm2.gained, board: bingoBoard.slice() });
+            win += bm2.gained;
+          }
+        }
+      }
 
       const bonus = rollBonus(target, s, rng);
       if (bonus) {
