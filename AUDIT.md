@@ -1,52 +1,77 @@
-# Audit — 第五輪（局中存檔／FX／假保留／文案）（2026-10-05）
+# Audit — 十輪連續全面稽核（2026-10-05）
 
-Scope: `/workspace/xiaomali` after `1d32ab8`.
-Method: code review + `node --check` + `node sim.js` + forceStage / win-sum / bingo consistency probes + mid-spin persist walkthrough.
+Scope: `/workspace/xiaomali` from `039f674` → `725e80c`.
+Method: code review + `node --check` + `node sim.js` + forceStage / win-sum / bingo / train / 雙燈 probes each pass.
 
-## Issues found → fixed
+## Pass summary (newest first)
 
-| # | Area | Issue | Fix |
-|---|---|---|---|
-| 1 | Persistence | 局中 `visibilitychange`／`pagehide` 呼叫 `save()` 時：押金會折回 CREDIT，但**局中已動畫的 WIN／賓果進度／JP 也一併寫入** → 重新整理＝白嫖局中獎金 | `roundPersist` 凍結局開始時的 `win`／`bingo`／`jp`；`save()` 忙碌中只寫凍結值；例外路徑回滾後再存 |
-| 2 | Soft-lock / FX | 第四輪在 `start()` `finally` 加了 `FX.clear()`，會**立刻清掉**局末剛設的 `FX.win()` 脈衝 | 成功結束只移除 `fx-spin`／`reach`／`expect`／`fever`；失敗才 `FX.idle()` |
-| 3 | Cabinet FX | `FX.holdsSpin()` 經 `holdsSet(n)` **覆寫**持久 `holdCount` → 每轉一次假保留進度被隨機 1–3 蓋掉，局末 ±1 無意義 | `holdsSpin` 改純顯示；`FX.win` 先還原持久 hold 再閃 |
+| Pass | SHA | Fixes |
+|---|---|---|
+| **10** | `725e80c` | Mid-spin/exception **freeze `holdCount`** (JP’s `holdsSet(4)` no longer sticks after refresh/abort); JP hint「僅開啟時累積」; AGENTS notes |
+| **9** | `1cdfbdc` | LINE title→累計賓果連線; `estimateLightMs` +40ms skip-align; `applyBingoMark` `_rng` |
+| **8** | `24cfbff` | **LINE meter** was always ~0 (board clears on hit) → lifetime `bingoLineWins` + persist + roundPersist freeze |
+| **7** | `a41f549` | Mini-stage **`cabinet.stage-open`** disables deck taps; bingo hint/help cover 雙燈 marks |
+| **6** | `7798c57` | **`animGen`** aborts orphan `spinReels` / 三輪 RAF after round `finally` (exception soft-lock) |
+| **5** | `8fbb9b6` | **`nextJpPot` only while `modes.jp`**; 洗分/重設 clear hold lamps |
+| **4** | `d62556a` | **雙燈 paying second lamp marks bingo**; hold flash timeout 1.6s |
+| **3** | `5a06852` | Block settings/help while busy/confirm; reel estimate ~2.5 laps; 比大小 at WIN cap toast |
+| **2** | `e16912c` | ONCE banner shows「結束」; **resize skips `idleReels` while busy**; dialog lock in `why.*`; 全押 unpaid afford=`betUnit` |
+| **1** | `900bd8b` | **開火車 skips ONCE MORE**; 三元/四喜 full set lamps (land pay 0); `why.bet` uses betUnit; WIN/`animateWin` cap; holdCount persist; Super/FEVER ONCE cue |
 
-## Copy
+## Issues found → fixed (by area)
 
-- 玩法說明補上：倒跑／跳格／假停、雙燈、超跑（連跑機率加乘），對齊開關與引擎。
+| Area | Issue | Pass |
+|---|---|---|
+| Engine / train | 開火車 lit ONCE MORE (0-pay blank) | 1 |
+| Engine / sanyuan | 大三元 could show 2 lamps when land∈set | 1 |
+| Engine / bingo | 雙燈 second pay never marked bingo | 4 |
+| Engine / JP | Pot grew while JP mode off | 5 |
+| UI / bet | `why.bet` unpaid checked +1 not +betUnit | 1 |
+| UI / all | `why.all` unpaid ignored betUnit affordability | 2 |
+| UI / once banner | `remaining≤0` hid banner so「結束」never showed | 2 |
+| UI / resize | `scheduleFit`→`idleReels` reset reels mid-spin | 2 |
+| UI / dialogs | Deck actions during confirm/settings (fallback / race) | 2–3 |
+| UI / settings | Could open settings mid-round | 3 |
+| UI / stages | Deck z-index above glass → taps through stage | 7 |
+| UI / LINE | Meter always 0 after line clear | 8–9 |
+| UI / FX | Hold flash stuck after wins; JP hold leaked on abort/refresh | 4, 10 |
+| UI / reels | Orphan RAF after thrown await | 6 |
+| Math / WIN | `animateWin` / 比大小 uncapped vs CREDIT_CAP | 1, 3 |
+| Persist | holdCount / bingoLineWins not saved; mid-spin hold freeze | 1, 8, 10 |
 
-## All-modes-ON trigger census (re-checked)
+## All-modes-ON trigger census (re-checked after pass 10)
 
 | Mode | Notes |
 |---|---|
-| forceStage | **6/6 kinds × 40/40** |
-| sicbo / roulette min-1 | **0** zero-pay on 全押1／單押1（mult>0） |
-| once / song / train / sanyuan / stages | ~3%+0.6%+0.4% once variants; song/train/sanyuan ~1–2%; stages ~0.3% each; super ~1.4%; double ~2.8% |
-| win vs steps | **0** mismatches / 3000 |
-| bingo step.board | **0** mismatches / 5000 |
+| forceStage | **6/6 × 30/30** |
+| train ONCE tiles | **0** |
+| 大三元 short (<3 tiles) | **0** |
+| stage mult>0 zero-pay | **0** |
+| win vs steps | **0** mismatches / 4000 |
+| 雙燈→bingo both | **330/330** samples |
 
 ## RTP (`node sim.js 8000`)
 
 | Preset | 全押 RTP |
 |---|---|
-| 輕鬆 | ≈128% |
-| **標準** | **≈100–103%** |
-| 困難 | ≈84% |
-| 標準無彩蛋 | ≈79% |
+| 輕鬆 | ≈125% |
+| **標準** | **≈100–104%** |
+| 困難 | ≈82% |
+| 標準無彩蛋 | ≈77–78% |
 
 ## Verified OK
 
-- `bindTap`／開分 commit-on-up／水果 hold-repeat／`visualViewport` resize-only
-- 局後未付預覽加押不整排清空；`forceStage`；舞台 min-1（×0 除外）
-- `onceRate` 在僅開超跑時仍可調；賓果逐步 `step.board`
-- `MODE_LABELS`／`MODE_HINTS`／玩法說明與引擎一致
+- `bindTap` / 開分 commit-on-up / fruit hold-repeat / `visualViewport` resize-only
+- Mid-spin `save()` refunds stake + freezes win/bingo/jp/hold/lineWins
+- `forceStage`; stage min-1 (×0除外); `onceRate` live with superRun
+- `MODE_LABELS` / `MODE_HINTS` / 玩法 copy aligned (雙燈 bingo, JP accumulate, stages)
 
 ## Remaining risks (watch)
 
-1. 蘋果單押 RTP 仍偏低（≈60–70%，小圖×3 權重堆疊）— 未為保全押≈100% 強行拉高。
-2. 六種櫃舞台共用一個進場名額（全開時各約 0.3%）。
-3. 比大小動畫中途重新整理仍可「取消」未開出的一局（WIN 未改）— 可接受；與局中白嫖不同。
-4. 極矮視窗 fit-2 後 bet key 寬度仍依賴 `--W` 下限。
+1. 蘋果單押 RTP still soft (≈60–70% on some runs) — house edge via ×3 weights; not forced up.
+2. Six cabinet stages share one entry slot (~0.3% each when all on).
+3. 比大小 mid-refresh can cancel an unrevealed gamble (WIN unchanged) — acceptable.
+4. Stage overlay RAF on detached nodes after abort is harmless but not cancelled per-frame.
 
 ## How to re-check
 
@@ -56,4 +81,4 @@ node sim.js 120000
 node -e "const E=require('./engine.js'); let n=0; for(let i=0;i<50;i++){const r=E.resolveRound([1,1,1,1,1,1,1,1],E.DEFAULT_SETTINGS,Math.random,200,{forceStage:'roulette'}); if(r.steps.some(s=>s.type==='roulette'))n++;} console.log(n+'/50');"
 ```
 
-DevTools：旋轉中途強制重新整理 → CREDIT 應退回當局押金且 **WIN 不應含局中獎金**；局末中獎時櫃體 `fx-win` 應短暫保留；假保留燈應跨局累積而非每轉重設。
+DevTools: mid-spin refresh → stake refunded, WIN/bingo/hold/LINE not partially kept; open a mini-stage → deck not tappable; 雙燈 pay → two bingo flashes when symbols differ.
