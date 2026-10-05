@@ -44,7 +44,7 @@ node sim.js 50000          # RTP / hit / LUCKY / JP rates per preset
 ```
 - DevTools device: iPhone 14/15/16 Pro Max portrait.
 - Console: `__xiaomali.state`, `.settings`, `.Music`, `.setSettings(...)`, `.pickTarget()`.
-- iOS: tap once before audio; hardware mute silences Web Audio.
+- iOS/WebKit: tap once to unlock; `Sound.unlock` awaits `resume` + silent buffer before BGM/SFX. Hardware mute still silences Web Audio. Tab-visible resumes suspended AudioContext.
 
 ## Conventions
 - Build-free: no bundler, framework, CDN, or external fonts.

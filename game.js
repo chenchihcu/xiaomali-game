@@ -112,30 +112,79 @@
   const Sound = {
     ctx: null,
     on: true,
+    _resume: null,
     unlock() {
+      // Must run inside a user gesture. Await resume BEFORE starting BGM/SFX:
+      // WebKit & post-background tabs stay "suspended" briefly; nodes created then
+      // are often silent. Also play a 1-sample buffer (iOS unlock quirk).
       if (!this.ctx) {
         const AC = window.AudioContext || window.webkitAudioContext;
-        if (!AC) return;
-        try { this.ctx = new AC(); } catch { return; }
+        if (!AC) return Promise.resolve(null);
+        try { this.ctx = new AC(); } catch { return Promise.resolve(null); }
       }
-      if (this.ctx.state === 'suspended') this.ctx.resume();
-      Music.update();
+      const ctx = this.ctx;
+      const tap = () => {
+        try {
+          const n = Math.max(1, Math.floor((ctx.sampleRate || 22050) * 0.01));
+          const buf = ctx.createBuffer(1, n, ctx.sampleRate || 22050);
+          const src = ctx.createBufferSource();
+          src.buffer = buf;
+          src.connect(ctx.destination);
+          src.start(0);
+        } catch { /* ignore */ }
+      };
+      tap();
+      const after = () => { Music.update(); return ctx; };
+      if (ctx.state === 'suspended' || ctx.state === 'interrupted') {
+        this._resume = Promise.resolve(ctx.resume()).then(after).catch(after);
+        return this._resume;
+      }
+      return Promise.resolve(after());
+    },
+    /** Run `fn` only when Sound is on and AudioContext is running. */
+    whenReady(fn) {
+      if (!this.on) return;
+      const go = () => {
+        if (!this.on || !this.ctx || this.ctx.state === 'closed') return;
+        if (this.ctx.state === 'running') { fn(); return; }
+        this.unlock().then(() => {
+          if (this.on && this.ctx && this.ctx.state === 'running') fn();
+        });
+      };
+      if (!this.ctx) this.unlock().then(go);
+      else go();
     },
     beep(freq, dur = 0.05, type = 'square', vol = 0.04, when = 0) {
-      if (!this.on || !this.ctx) return;
-      const t = this.ctx.currentTime + when;
-      const o = this.ctx.createOscillator();
-      const g = this.ctx.createGain();
-      o.type = type;
-      o.frequency.setValueAtTime(freq, t);
-      g.gain.setValueAtTime(vol, t);
-      g.gain.exponentialRampToValueAtTime(0.0001, t + dur);
-      o.connect(g).connect(this.ctx.destination);
-      o.start(t);
-      o.stop(t + dur + 0.02);
+      this.whenReady(() => {
+        const ctx = this.ctx;
+        const t = ctx.currentTime + when;
+        const o = ctx.createOscillator();
+        const g = ctx.createGain();
+        o.type = type;
+        o.frequency.setValueAtTime(freq, t);
+        g.gain.setValueAtTime(Math.max(vol, 0.0001), t);
+        g.gain.exponentialRampToValueAtTime(0.0001, t + Math.max(dur, 0.01));
+        o.connect(g).connect(ctx.destination);
+        o.start(t);
+        o.stop(t + dur + 0.02);
+      });
     },
     seq(notes, step = 0.09, type = 'square', vol = 0.05) {
-      notes.forEach((f, i) => f && this.beep(f, step * 0.9, type, vol, i * step));
+      this.whenReady(() => {
+        notes.forEach((f, i) => {
+          if (!f) return;
+          const t = this.ctx.currentTime + i * step;
+          const o = this.ctx.createOscillator();
+          const g = this.ctx.createGain();
+          o.type = type;
+          o.frequency.setValueAtTime(f, t);
+          g.gain.setValueAtTime(Math.max(vol, 0.0001), t);
+          g.gain.exponentialRampToValueAtTime(0.0001, t + step * 0.9);
+          o.connect(g).connect(this.ctx.destination);
+          o.start(t);
+          o.stop(t + step * 0.9 + 0.02);
+        });
+      });
     },
     tick()  { this.beep(1320, 0.025, 'square', 0.03); },
     bet()   { this.beep(880, 0.04, 'triangle', 0.08); },
@@ -198,7 +247,8 @@
       this.update();
     },
     update() {
-      const want = Sound.on && Sound.ctx && this.track !== 'off' && !document.hidden;
+      const want = Sound.on && Sound.ctx && Sound.ctx.state === 'running'
+        && this.track !== 'off' && !document.hidden;
       if (want) this.start(); else this.stop();
     },
     start() {
@@ -769,6 +819,7 @@
 
   async function start() {
     if (state.busy) return;
+    Sound.unlock();
     if (state.win > 0) collectInstant();
     clearHighlights();
     const total = sum(state.bets);
@@ -1345,9 +1396,10 @@
 
   btn.sound.addEventListener('click', () => {
     Sound.on = !Sound.on;
-    Sound.unlock();
-    Music.update();
-    if (Sound.on) Sound.bet();
+    Sound.unlock().then(() => {
+      Music.update();
+      if (Sound.on) Sound.bet();
+    });
     render();
     save();
   });
@@ -1375,8 +1427,13 @@
   });
 
   document.addEventListener('visibilitychange', () => {
-    if (document.hidden) save();
-    Music.update();
+    if (document.hidden) {
+      save();
+      Music.update();
+    } else {
+      // Tab/app resume often leaves AudioContext suspended — re-unlock then BGM.
+      Sound.unlock();
+    }
   });
   window.addEventListener('pagehide', save);
   window.addEventListener('resize', () => {
