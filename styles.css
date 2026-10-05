@@ -2908,3 +2908,11 @@ body.is-busy {
   -webkit-user-select: none;
   user-select: none;
 }
+
+
+/* Mini-stage open: deck is under the glass overlay in paint order (deck z-index
+   was raised for flourish taps). Disable deck hits so players don't hammer
+   BUSY toasts through the dimmed cabinet. */
+.cabinet.stage-open > .deck {
+  pointer-events: none;
+}

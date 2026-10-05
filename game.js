@@ -1750,7 +1750,7 @@
     body.dataset.kind = kind;
     overlay.hidden = false;
     overlay.setAttribute('aria-hidden', 'false');
-    cabinetEl?.classList.add('fx-expect');
+    cabinetEl?.classList.add('fx-expect', 'stage-open');
     Sound.stageOpen();
     Music.duck(600, 0.25);
     return { overlay, body, result };
@@ -1763,7 +1763,7 @@
     overlay.setAttribute('aria-hidden', 'true');
     const body = $('stageBody');
     if (body) body.innerHTML = '';
-    cabinetEl?.classList.remove('fx-expect');
+    cabinetEl?.classList.remove('fx-expect', 'stage-open');
   }
 
   function setStageResult(el, gained, label) {

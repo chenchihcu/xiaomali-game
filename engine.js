@@ -138,7 +138,7 @@
     jp: '大 BAR＋有押 BAR→吃彩池',
     slotBonus: '特殊燈／ONCE→三輪拉霸',
     fever: 'JP／高倍／特殊／大贏→連跑',
-    bingo: '有中標格；連線 max(1,floor(押/4))',
+    bingo: '有中／雙燈標格；連線 max(1,floor(押/4))',
     luckyWheel: '特殊燈／ONCE→轉輪；max(1,floor(押×倍/6))（×0除外）',
     gacha: '特殊燈／ONCE→轉蛋；該圖有押才賠',
     sicbo: '特殊燈／ONCE→三骰；大／小／豹給分（至少1）',
