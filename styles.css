@@ -4224,3 +4224,12 @@ html.fit-2 .deck-func .btn-lab { font-size: max(10px, calc(var(--u) * 2.1)); }
 .paycell .mult {
   filter: none;
 }
+
+/* ========== Icons pass: realistic apple/orange, crisp symbols (20261006c6) ========== */
+.ic-svg {
+  shape-rendering: geometricPrecision;
+}
+.ic-77, .ic-bar, .ic-once {
+  -webkit-font-smoothing: antialiased;
+  text-rendering: geometricPrecision;
+}
