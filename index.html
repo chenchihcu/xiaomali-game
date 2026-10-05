@@ -64,12 +64,21 @@
       <section class="betpanel" id="betpanel" aria-label="押注區"></section>
 
       <section class="controls" aria-label="操作">
-        <button class="btn btn-purple" id="btnSmall" type="button">小<small>1–4</small></button>
-        <button class="btn btn-orange" id="btnCollect" type="button">得分</button>
-        <button class="btn btn-purple" id="btnBig" type="button">大<small>6–9</small></button>
-        <button class="btn btn-blue" id="btnClear" type="button">清除</button>
-        <button class="btn btn-yellow" id="btnAll" type="button">全押</button>
-        <button class="btn btn-green" id="btnStart" type="button">開始</button>
+        <div class="controls-extra" role="group" aria-label="機台功能">
+          <button class="btn btn-arcade btn-teal btn-sm" id="btnOpen" type="button">開分<small>+100</small></button>
+          <button class="btn btn-arcade btn-slate btn-sm" id="btnWash" type="button">洗分</button>
+          <button class="btn btn-arcade btn-pink btn-sm" id="btnDouble" type="button">加倍</button>
+          <button class="btn btn-arcade btn-cyan btn-sm" id="btnRebet" type="button">續押</button>
+          <button class="btn btn-arcade btn-red btn-sm" id="btnAuto" type="button">自動</button>
+        </div>
+        <div class="controls-main" role="group" aria-label="主要操作">
+          <button class="btn btn-arcade btn-purple" id="btnSmall" type="button">小<small>1–4</small></button>
+          <button class="btn btn-arcade btn-orange" id="btnCollect" type="button">得分</button>
+          <button class="btn btn-arcade btn-purple" id="btnBig" type="button">大<small>6–9</small></button>
+          <button class="btn btn-arcade btn-blue" id="btnClear" type="button">清除</button>
+          <button class="btn btn-arcade btn-yellow" id="btnAll" type="button">全押</button>
+          <button class="btn btn-arcade btn-green" id="btnStart" type="button">開始</button>
+        </div>
       </section>
     </main>
 
@@ -106,9 +115,9 @@
       </section>
 
       <div class="sheet-actions triple">
-        <button class="btn btn-blue" value="help" id="btnOpenHelp" type="submit">玩法</button>
-        <button class="btn btn-yellow" value="reset" id="btnReset" type="submit">重設 1000</button>
-        <button class="btn btn-green" value="close" type="submit">完成</button>
+        <button class="btn btn-arcade btn-blue" value="help" id="btnOpenHelp" type="submit">玩法</button>
+        <button class="btn btn-arcade btn-yellow" value="reset" id="btnReset" type="submit">重設 1000</button>
+        <button class="btn btn-arcade btn-green" value="close" type="submit">完成</button>
       </div>
       <p class="disclaimer">娛樂用・虛擬分數・非賭博</p>
     </form>
@@ -118,20 +127,21 @@
     <form method="dialog">
       <h2>玩法</h2>
       <ol>
-        <li>點水果押 1 分（按住連押）；「全押」每種各 1。</li>
-        <li>「開始」→ 外圈跑燈＋中央轉盤。</li>
+        <li>點水果押 1 分（按住連押）；「全押」每種各 1。「加倍」「續押」可快速調注。</li>
+        <li>「開始」→ 外圈跑燈＋中央轉盤。「自動」會連續續押再開局。</li>
         <li>停在有押的圖案：押注 × 倍率（小圖 ×3、BAR50 ×50）。</li>
         <li><b>ONCE MORE</b> 免費再跑；可連跑／大 ONCE MORE（設定開關）。</li>
         <li>中彩：送燈、開火車、三元四喜；JP＝停大 BAR 且押 BAR。</li>
         <li>WIN 可「得分」或比大小（1–4 小、6–9 大；5 和）。</li>
+        <li>「開分」虛擬加分（點 +100／按住 +500）；「洗分」WIN→CREDIT 後清零。</li>
         <li>⚙️ 調難度／玩法／音樂。分數存本機。</li>
       </ol>
       <table class="paytable" id="paytable"></table>
       <p class="disclaimer">娛樂用・虛擬分數・非賭博</p>
       <div class="sheet-actions">
-        <button class="btn btn-green" value="close" type="submit">關閉</button>
+        <button class="btn btn-arcade btn-green" value="close" type="submit">關閉</button>
       </div>
-      <p class="keys">鍵：1–8 押、A 全押、C 清、空白開始、S 得分、←小 →大</p>
+      <p class="keys">鍵：1–8 押、A 全押、C 清、空白開始、S 得分、←小 →大、D 加倍、R 續押、T 自動、O 開分、W 洗分</p>
     </form>
   </dialog>
 

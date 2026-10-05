@@ -33,6 +33,8 @@ Credit/win/sound/jp/lastBets: `xiaomali.v1`.
 - Bonus: `song` / `train` / `sanyuan`. JP: big BAR + BAR bet.
 - Big/small: 1–4 / 6–9 / 5 push. Center reels are cosmetic; outer track pays.
 - Prefer short Traditional Chinese UI copy on portrait.
+- Controls: skeuomorphic `.btn.btn-arcade` (metal rim / plastic face / pressed). Extra row: 開分／洗分／加倍／續押／自動.
+- Track / bet icons: CSS/SVG glossy fruit (unique gradient ids in `iconHTML`), not emoji.
 
 ## How to test
 ```bash

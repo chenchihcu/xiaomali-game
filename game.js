@@ -7,7 +7,8 @@
  *   3. Sound (Web Audio beeps) + Music (procedural BGM loops)
  *   4. Game state + settings + persistence
  *   5. DOM build + render (+ center 3-reel panel)
- *   6. Actions (bet / clear / all / start / collect / big-small)
+ *   6. Actions (bet / clear / all / start / collect / big-small /
+ *               open / wash / double / rebet / auto)
  *   7. Settings UI
  *   8. Input wiring
  */
@@ -298,8 +299,10 @@
     win: 0,
     bets: new Array(SYMBOLS.length).fill(0),
     betsPaid: true,
+    lastPlayedBets: new Array(SYMBOLS.length).fill(0),
     pos: 0,
     busy: false,
+    auto: false,
     jp: JP.seed,
   };
 
@@ -332,6 +335,11 @@
           state.bets = d.lastBets.map((n) => Math.min(MAX_BET_PER_SYMBOL, Math.max(0, n | 0)));
           state.betsPaid = false;
         }
+        if (Array.isArray(d.lastPlayedBets) && d.lastPlayedBets.length === SYMBOLS.length) {
+          state.lastPlayedBets = d.lastPlayedBets.map((n) => Math.min(MAX_BET_PER_SYMBOL, Math.max(0, n | 0)));
+        } else if (sum(state.bets) > 0) {
+          state.lastPlayedBets = state.bets.slice();
+        }
       }
     } catch { /* ignore */ }
   }
@@ -345,6 +353,7 @@
         pos: state.pos,
         sound: Sound.on,
         lastBets: state.bets,
+        lastPlayedBets: state.lastPlayedBets,
         jp: state.jp,
       }));
     } catch { /* */ }
@@ -362,16 +371,28 @@
   const btn = {
     start: $('btnStart'), clear: $('btnClear'), all: $('btnAll'),
     collect: $('btnCollect'), small: $('btnSmall'), big: $('btnBig'),
+    open: $('btnOpen'), wash: $('btnWash'), dbl: $('btnDouble'),
+    rebet: $('btnRebet'), auto: $('btnAuto'),
     sound: $('btnSound'), settings: $('btnSettings'), reset: $('btnReset'),
     openHelp: $('btnOpenHelp'),
   };
 
+  /** Glossy CSS/SVG fruit icons (no flat emoji). Unique gradient ids per instance. */
+  let _icUid = 0;
   function iconHTML(symId) {
     if (symId === 'once') return '<span class="ic-once">ONCE<br>MORE</span>';
     if (symId === 'seven') return '<span class="ic-77">77</span>';
     if (symId === 'bar') return '<span class="ic-bar"><i>BAR</i><i>BAR</i><i>BAR</i></span>';
-    const s = SYMBOLS[SYM_INDEX[symId]];
-    return s ? `<span>${s.icon}</span>` : '';
+    const u = 'i' + (++_icUid);
+    const SVGS = {
+      apple: `<svg class="ic-svg" viewBox="0 0 64 64" aria-hidden="true"><defs><radialGradient id="${u}a" cx="35%" cy="30%"><stop offset="0%" stop-color="#ff8a8a"/><stop offset="45%" stop-color="#e01818"/><stop offset="100%" stop-color="#7a0000"/></radialGradient></defs><ellipse cx="32" cy="36" rx="20" ry="22" fill="url(#${u}a)" stroke="#4a0000" stroke-width="1.5"/><path d="M32 14c0 0 2-8 10-10" stroke="#3a6a18" stroke-width="3" fill="none" stroke-linecap="round"/><ellipse cx="38" cy="8" rx="7" ry="3.5" fill="#4caf30" stroke="#2a6a18" stroke-width="1" transform="rotate(25 38 8)"/><ellipse cx="24" cy="26" rx="7" ry="4" fill="#fff" opacity=".45" transform="rotate(-30 24 26)"/></svg>`,
+      orange: `<svg class="ic-svg" viewBox="0 0 64 64" aria-hidden="true"><defs><radialGradient id="${u}o" cx="32%" cy="28%"><stop offset="0%" stop-color="#ffe0a0"/><stop offset="40%" stop-color="#ff9a1a"/><stop offset="100%" stop-color="#c45a00"/></radialGradient></defs><circle cx="32" cy="34" r="22" fill="url(#${u}o)" stroke="#8a3a00" stroke-width="1.5"/><circle cx="32" cy="34" r="22" fill="none" stroke="#ffcc66" stroke-width="0.6" stroke-dasharray="2 3" opacity=".45"/><path d="M32 12v6M28 14h8" stroke="#2a6a18" stroke-width="2.5" stroke-linecap="round"/><ellipse cx="24" cy="26" rx="8" ry="4.5" fill="#fff" opacity=".45" transform="rotate(-35 24 26)"/></svg>`,
+      mango: `<svg class="ic-svg" viewBox="0 0 64 64" aria-hidden="true"><defs><radialGradient id="${u}m" cx="35%" cy="30%"><stop offset="0%" stop-color="#ffe9a0"/><stop offset="40%" stop-color="#ffc020"/><stop offset="100%" stop-color="#d07800"/></radialGradient></defs><path d="M22 48c-8-10-6-26 6-34 10-7 22-4 26 8 4 12-2 28-14 34-8 4-14 2-18-8z" fill="url(#${u}m)" stroke="#8a5000" stroke-width="1.5"/><path d="M40 14c4-6 10-8 14-6" stroke="#3a7a20" stroke-width="2.5" fill="none" stroke-linecap="round"/><ellipse cx="30" cy="28" rx="7" ry="3.5" fill="#fff" opacity=".4" transform="rotate(-40 30 28)"/></svg>`,
+      bell: `<svg class="ic-svg" viewBox="0 0 64 64" aria-hidden="true"><defs><linearGradient id="${u}b" x1="0" y1="0" x2="0" y2="1"><stop offset="0%" stop-color="#ffe566"/><stop offset="45%" stop-color="#f0c000"/><stop offset="100%" stop-color="#a87800"/></linearGradient></defs><path d="M32 8c-2 0-4 2-4 5v2c-10 3-16 12-16 24h40c0-12-6-21-16-24v-2c0-3-2-5-4-5z" fill="url(#${u}b)" stroke="#6a4a00" stroke-width="1.4"/><ellipse cx="32" cy="40" rx="22" ry="5" fill="#c9a000" stroke="#6a4a00" stroke-width="1"/><circle cx="32" cy="48" r="4" fill="#8a6000" stroke="#4a3000" stroke-width="1"/><ellipse cx="24" cy="22" rx="6" ry="3" fill="#fff" opacity=".5" transform="rotate(-25 24 22)"/></svg>`,
+      melon: `<svg class="ic-svg" viewBox="0 0 64 64" aria-hidden="true"><defs><radialGradient id="${u}w" cx="40%" cy="35%"><stop offset="0%" stop-color="#ff8a9a"/><stop offset="55%" stop-color="#e01840"/><stop offset="100%" stop-color="#7a0020"/></radialGradient></defs><path d="M10 40c0-16 12-28 28-28 4 0 8 1 12 3-2 18-14 32-30 36-6-2-10-6-10-11z" fill="url(#${u}w)" stroke="#5a0018" stroke-width="1.4"/><path d="M50 15c6 4 10 12 10 22 0 8-4 14-10 18" fill="#3cb84a" stroke="#1a6a20" stroke-width="1.3"/><path d="M50 15c-1 8-1 18 0 28" fill="none" stroke="#2a8a30" stroke-width="2"/><circle cx="22" cy="30" r="1.6" fill="#3a1800"/><circle cx="30" cy="38" r="1.4" fill="#3a1800"/><circle cx="26" cy="46" r="1.3" fill="#3a1800"/><circle cx="34" cy="28" r="1.2" fill="#3a1800"/><ellipse cx="22" cy="24" rx="6" ry="3" fill="#fff" opacity=".35" transform="rotate(-30 22 24)"/></svg>`,
+      star: `<svg class="ic-svg" viewBox="0 0 64 64" aria-hidden="true"><defs><radialGradient id="${u}s" cx="40%" cy="30%"><stop offset="0%" stop-color="#fff6a8"/><stop offset="40%" stop-color="#ffd200"/><stop offset="100%" stop-color="#c48800"/></radialGradient></defs><path d="M32 6l6.5 18.5H58l-15 11.5 5.5 19L32 43l-16.5 12 5.5-19L6 24.5h19.5z" fill="url(#${u}s)" stroke="#8a5a00" stroke-width="1.5" stroke-linejoin="round"/><path d="M32 14l3.5 10H46" fill="none" stroke="#fff" stroke-width="2" opacity=".45" stroke-linecap="round"/></svg>`,
+    };
+    return SVGS[symId] || '';
   }
 
   const tileEls = TRACK.map((t, i) => {
@@ -562,15 +583,25 @@
     });
     const idle = !state.busy;
     const hasWin = state.win > 0;
+    const hasBets = sum(state.bets) > 0;
+    const hasLast = sum(state.lastPlayedBets) > 0 || hasBets;
     btn.start.disabled = !idle;
     btn.clear.disabled = !idle;
     btn.all.disabled = !idle;
     btn.collect.disabled = !idle || !hasWin;
     btn.small.disabled = !idle || !hasWin;
     btn.big.disabled = !idle || !hasWin;
-    betKeys.forEach((k) => (k.el.disabled = !idle));
-    btn.collect.classList.toggle('flash', idle && hasWin);
-    btn.start.classList.toggle('flash', idle && !hasWin && sum(state.bets) > 0);
+    btn.open.disabled = !idle;
+    btn.wash.disabled = !idle;
+    btn.dbl.disabled = !idle || !hasBets;
+    btn.rebet.disabled = !idle || !hasLast;
+    btn.auto.disabled = false; // can always toggle off
+    betKeys.forEach((k) => (k.el.disabled = !idle || state.auto));
+    btn.collect.classList.toggle('flash', idle && hasWin && !state.auto);
+    btn.start.classList.toggle('flash', idle && !hasWin && hasBets && !state.auto);
+    btn.auto.classList.toggle('on', state.auto);
+    btn.auto.classList.toggle('flash', state.auto);
+    btn.auto.textContent = state.auto ? '自動中' : '自動';
     btn.sound.textContent = Sound.on ? '🔊' : '🔇';
   }
 
@@ -620,6 +651,7 @@
 
   function bet(i) {
     if (state.busy) return false;
+    if (state.auto) stopAuto();
     collectInstant();
     clearHighlights();
     freshBets();
@@ -743,6 +775,7 @@
       state.credit -= total;
       state.betsPaid = true;
     }
+    state.lastPlayedBets = state.bets.slice();
     state.busy = true;
     render();
     save();
@@ -848,10 +881,12 @@
     state.betsPaid = false;
     state.busy = false;
     if (state.credit === 0 && state.win === 0) {
-      setMsg('分數用完・⚙️ 重設', 'bad');
+      setMsg('分數用完・開分或⚙️重設', 'bad');
+      stopAuto('分數不足');
     }
     render();
     save();
+    if (state.auto) queueAuto();
   }
 
   async function collect() {
@@ -877,6 +912,7 @@
     setMsg(`得分 ${amount}`);
     render();
     save();
+    if (state.auto) queueAuto();
   }
 
   async function gamble(choice) {
@@ -917,8 +953,186 @@
     save();
   }
 
+  function stopAuto(reason) {
+    if (!state.auto) return;
+    state.auto = false;
+    if (reason) setMsg(reason, 'bad');
+    render();
+  }
+
+  function queueAuto() {
+    if (!state.auto) return;
+    setTimeout(() => { if (state.auto) autoTick(); }, 420);
+  }
+
+  async function autoTick() {
+    if (!state.auto || state.busy) return;
+    if (state.win > 0) {
+      await collect();
+      return;
+    }
+    const pattern = sum(state.lastPlayedBets) > 0 ? state.lastPlayedBets : state.bets;
+    const need = sum(pattern);
+    if (need <= 0) {
+      stopAuto('無押注可自動');
+      return;
+    }
+    // Ensure bets match last pattern and are ready to start
+    if (!state.betsPaid || sum(state.bets) === 0) {
+      if (!applyBetPattern(pattern, { quiet: true })) {
+        stopAuto('分數不足・已停自動');
+        return;
+      }
+    } else if (state.credit < 0) {
+      stopAuto('分數不足・已停自動');
+      return;
+    }
+    await start();
+  }
+
+  function toggleAuto() {
+    if (state.auto) {
+      stopAuto('已停自動');
+      setMsg('已停自動');
+      render();
+      return;
+    }
+    if (state.busy) return;
+    const pattern = sum(state.lastPlayedBets) > 0 ? state.lastPlayedBets : state.bets;
+    if (sum(pattern) <= 0) {
+      setMsg('請先押注再自動', 'bad');
+      Sound.error();
+      render();
+      return;
+    }
+    state.auto = true;
+    Sound.seq([880, 1175], 0.06, 'square', 0.05);
+    setMsg('自動中…', 'hot');
+    render();
+    queueAuto();
+  }
+
+  /** Apply a bet pattern as paid bets (refunds current paid bets first). */
+  function applyBetPattern(pattern, { quiet = false } = {}) {
+    if (state.busy) return false;
+    collectInstant();
+    clearHighlights();
+    if (state.betsPaid) state.credit += sum(state.bets);
+    state.bets.fill(0);
+    state.betsPaid = true;
+    const need = sum(pattern);
+    if (need <= 0) {
+      if (!quiet) { setMsg('無上一局押注', 'bad'); Sound.error(); }
+      render();
+      return false;
+    }
+    if (state.credit < need) {
+      if (!quiet) { setMsg(`分數不足（需 ${need}）`, 'bad'); Sound.error(); }
+      render();
+      return false;
+    }
+    for (let i = 0; i < SYMBOLS.length; i++) {
+      const n = Math.min(MAX_BET_PER_SYMBOL, Math.max(0, pattern[i] | 0));
+      state.bets[i] = n;
+    }
+    state.credit -= sum(state.bets);
+    state.betsPaid = true;
+    if (!quiet) {
+      Sound.seq([700, 900, 1100], 0.05, 'triangle', 0.06);
+      setMsg(`續押 ${sum(state.bets)}`);
+    }
+    render();
+    save();
+    return true;
+  }
+
+  function rebet() {
+    if (state.busy) return;
+    const pattern = sum(state.lastPlayedBets) > 0 ? state.lastPlayedBets : state.bets;
+    applyBetPattern(pattern);
+  }
+
+  function doubleBets() {
+    if (state.busy) return;
+    collectInstant();
+    clearHighlights();
+    if (sum(state.bets) <= 0) {
+      setMsg('請先押注', 'bad');
+      Sound.error();
+      render();
+      return;
+    }
+    let added = 0;
+    // Unpaid (stale preview): double display amounts only; charge on 開始
+    if (!state.betsPaid) {
+      for (let i = 0; i < SYMBOLS.length; i++) {
+        if (state.bets[i] <= 0) continue;
+        const room = MAX_BET_PER_SYMBOL - state.bets[i];
+        const add = Math.min(state.bets[i], room);
+        if (add <= 0) continue;
+        state.bets[i] += add;
+        added += add;
+      }
+    } else {
+      for (let i = 0; i < SYMBOLS.length; i++) {
+        if (state.bets[i] <= 0) continue;
+        const room = MAX_BET_PER_SYMBOL - state.bets[i];
+        const add = Math.min(state.bets[i], room, state.credit);
+        if (add <= 0) continue;
+        state.bets[i] += add;
+        state.credit -= add;
+        added += add;
+      }
+    }
+    if (added > 0) {
+      Sound.seq([660, 880, 1100], 0.05, 'square', 0.055);
+      setMsg(`加倍・押 ${sum(state.bets)}`);
+    } else {
+      Sound.error();
+      setMsg(state.betsPaid && state.credit < 1 ? '分數不足' : '已達上限', 'bad');
+    }
+    render();
+    save();
+  }
+
+  const OPEN_CREDIT_TAP = 100;
+  const OPEN_CREDIT_HOLD = 500;
+  const CREDIT_CAP = 999999;
+
+  function openCredit(amount) {
+    if (state.busy) return;
+    const add = Math.max(0, amount | 0);
+    if (!add) return;
+    state.credit = Math.min(CREDIT_CAP, state.credit + add);
+    Sound.coin();
+    setMsg(`開分 +${add}`);
+    render();
+    save();
+  }
+
+  function washCredit() {
+    if (state.busy) return;
+    clearHighlights();
+    // Transfer WIN → CREDIT, refund unpaid bets if any, then cash-out CREDIT to 0
+    if (state.win > 0) {
+      state.credit += state.win;
+      state.win = 0;
+    }
+    if (state.betsPaid) state.credit += sum(state.bets);
+    state.bets.fill(0);
+    state.betsPaid = true;
+    const cashed = state.credit;
+    state.credit = 0;
+    stopAuto();
+    Sound.seq([520, 400, 300], 0.07, 'triangle', 0.06);
+    setMsg(cashed > 0 ? `洗分 ${cashed}` : '已洗分');
+    render();
+    save();
+  }
+
   function resetCredit() {
     if (state.busy) return;
+    stopAuto();
     state.credit = START_CREDIT;
     state.win = 0;
     state.bets.fill(0);
@@ -1078,12 +1292,44 @@
     k.el.addEventListener('click', (e) => { if (e.detail === 0) bet(i); });
   });
 
-  btn.start.addEventListener('click', start);
-  btn.clear.addEventListener('click', clearBets);
-  btn.all.addEventListener('click', betAll);
+  btn.start.addEventListener('click', () => { if (state.auto) stopAuto(); start(); });
+  btn.clear.addEventListener('click', () => { stopAuto(); clearBets(); });
+  btn.all.addEventListener('click', () => { stopAuto(); betAll(); });
   btn.collect.addEventListener('click', collect);
-  btn.small.addEventListener('click', () => gamble('small'));
-  btn.big.addEventListener('click', () => gamble('big'));
+  btn.small.addEventListener('click', () => { stopAuto(); gamble('small'); });
+  btn.big.addEventListener('click', () => { stopAuto(); gamble('big'); });
+  btn.rebet.addEventListener('click', () => { stopAuto(); rebet(); });
+  btn.dbl.addEventListener('click', () => { stopAuto(); doubleBets(); });
+  btn.auto.addEventListener('click', toggleAuto);
+  btn.wash.addEventListener('click', washCredit);
+
+  // 開分: tap +100, hold +500
+  (() => {
+    let holdTimer = null;
+    let held = false;
+    const clear = () => { clearTimeout(holdTimer); holdTimer = null; };
+    btn.open.addEventListener('pointerdown', (e) => {
+      if (e.button !== undefined && e.button !== 0) return;
+      e.preventDefault();
+      held = false;
+      stopAuto();
+      holdTimer = setTimeout(() => {
+        held = true;
+        openCredit(OPEN_CREDIT_HOLD);
+      }, 420);
+    });
+    const up = () => {
+      if (holdTimer) {
+        clear();
+        if (!held) openCredit(OPEN_CREDIT_TAP);
+      }
+      held = false;
+    };
+    ['pointerup', 'pointerleave', 'pointercancel', 'lostpointercapture'].forEach((ev) =>
+      btn.open.addEventListener(ev, up));
+    btn.open.addEventListener('contextmenu', (e) => e.preventDefault());
+  })();
+
   btn.sound.addEventListener('click', () => {
     Sound.on = !Sound.on;
     Sound.unlock();
@@ -1097,14 +1343,19 @@
   window.addEventListener('keydown', (e) => {
     if (settingsDlg.open || helpDlg.open || e.metaKey || e.ctrlKey || e.altKey) return;
     const k = e.key;
-    if (k >= '1' && k <= '8') { bet(Number(k) - 1); e.preventDefault(); return; }
+    if (k >= '1' && k <= '8') { stopAuto(); bet(Number(k) - 1); e.preventDefault(); return; }
     switch (k.toLowerCase()) {
-      case ' ': case 'enter': start(); break;
-      case 'a': betAll(); break;
-      case 'c': case 'backspace': clearBets(); break;
+      case ' ': case 'enter': if (state.auto) stopAuto(); start(); break;
+      case 'a': stopAuto(); betAll(); break;
+      case 'c': case 'backspace': stopAuto(); clearBets(); break;
       case 's': collect(); break;
-      case 'arrowleft': case 'q': gamble('small'); break;
-      case 'arrowright': case 'e': gamble('big'); break;
+      case 'arrowleft': case 'q': stopAuto(); gamble('small'); break;
+      case 'arrowright': case 'e': stopAuto(); gamble('big'); break;
+      case 'd': stopAuto(); doubleBets(); break;
+      case 'r': stopAuto(); rebet(); break;
+      case 't': toggleAuto(); break;
+      case 'o': stopAuto(); openCredit(OPEN_CREDIT_TAP); break;
+      case 'w': washCredit(); break;
       default: return;
     }
     e.preventDefault();
