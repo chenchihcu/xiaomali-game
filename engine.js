@@ -98,7 +98,11 @@
   // ---------------------------------------------------------------------------
   // Settings + presets
   // ---------------------------------------------------------------------------
-  const MODE_KEYS = ['once', 'onceMulti', 'onceBig', 'song', 'train', 'sanyuan', 'jp'];
+  const MODE_KEYS = [
+    'once', 'onceMulti', 'onceBig', 'song', 'train', 'sanyuan', 'jp',
+    'slotBonus', 'fever', 'bingo',
+    'reverse', 'skip', 'doubleRun', 'fakeStop', 'superRun',
+  ];
   const MODE_LABELS = {
     once: 'ONCE MORE',
     onceMulti: '連跑（再跑 2–4 次）',
@@ -107,7 +111,39 @@
     train: '開火車',
     sanyuan: '三元四喜',
     jp: 'JP 彩金',
+    slotBonus: '三輪 Bonus',
+    fever: 'FEVER 舞台',
+    bingo: '賓果任務',
+    reverse: '倒跑',
+    skip: '跳格',
+    doubleRun: '雙燈',
+    fakeStop: '假停',
+    superRun: '超跑（連停 3–8）',
   };
+
+  /** Probabilities for optional light FX / stage entries (× bonusRate / onceRate where noted). */
+  const LIGHT_FX = {
+    reverse: 0.10,
+    skip: 0.08,
+    fakeStop: 0.12,
+    doubleRun: 0.03,
+  };
+  const SUPER_RUN = { chance: 0.018, min: 3, max: 8 };
+  const SLOT_BONUS = {
+    chance: 0.028,
+    freeSpinChance: 0.16,
+    /** Full-size tiles that can open the 3-reel bonus stage. */
+    special: ['seven', 'star', 'bar'],
+  };
+  const FEVER_STAGE = { chance: 0.018, minRuns: 2, maxRuns: 3 };
+  /** 3×3 bingo cells → symbol id (once = wild filler cell). */
+  const BINGO_CELLS = ['apple', 'orange', 'mango', 'bell', 'melon', 'star', 'seven', 'bar', 'once'];
+  const BINGO_LINES = [
+    [0, 1, 2], [3, 4, 5], [6, 7, 8],
+    [0, 3, 6], [1, 4, 7], [2, 5, 8],
+    [0, 4, 8], [2, 4, 6],
+  ];
+  const BINGO_LINE_MULT = 1; // × ceil(totalBet/2) when a line completes
 
   const ones = () => Object.fromEntries(WEIGHT_KEYS.map((k) => [k, 1]));
   /** Difficulty presets: per-symbol weight multipliers + bonus frequency. */
@@ -148,7 +184,11 @@
     betUnit: 1,
     sfxVol: 1,
     bgmVol: 1,
-    modes: { once: true, onceMulti: true, onceBig: true, song: true, train: true, sanyuan: true, jp: true },
+    modes: {
+      once: true, onceMulti: true, onceBig: true, song: true, train: true, sanyuan: true, jp: true,
+      slotBonus: true, fever: true, bingo: true,
+      reverse: true, skip: true, doubleRun: true, fakeStop: true, superRun: true,
+    },
   };
 
   const clamp = (v, lo, hi, d) => (Number.isFinite(+v) ? Math.min(hi, Math.max(lo, +v)) : d);
@@ -287,40 +327,135 @@
     return { grant: 1, variant: 'single' };
   }
 
+  /** Pick optional light FX for one light-run (animation hints for game.js). */
+  function rollLightFx(settings, rng) {
+    const m = settings.modes;
+    const fx = { reverse: false, skip: false, fakeStop: false };
+    if (m.reverse && rng() < LIGHT_FX.reverse) fx.reverse = true;
+    if (m.skip && rng() < LIGHT_FX.skip) fx.skip = true;
+    if (m.fakeStop && rng() < LIGHT_FX.fakeStop) fx.fakeStop = true;
+    return fx;
+  }
+
+  /** Second stop for 雙燈 (avoids ONCE MORE / same tile). */
+  function pickDoubleTarget(primary, weights, rng) {
+    const alt = weights.map((w, i) => (i === primary || TRACK[i].s === 'once' ? 0 : w));
+    if (alt.reduce((a, b) => a + b, 0) <= 0) return (primary + 1 + Math.floor(rng() * (N - 1))) % N;
+    return pickWeighted(alt, rng);
+  }
+
+  function isSlotSpecial(tile) {
+    return tile && !tile.small && SLOT_BONUS.special.includes(tile.s);
+  }
+
   /**
-   * Resolve one full round (ONCE MORE / 連跑 / 大 ONCE MORE + bonus + JP) without UI.
-   * Returns { steps, win, jpWin }. Steps (in order) drive the animation:
-   *   { type: 'once', target, grant, remaining, variant, capped? }
-   *     grant = newly queued free runs; remaining = queue size after this hit;
-   *     variant = 'single' | 'multi' | 'big'
-   *   { type: 'land', target, si, mult, gained, runsLeft }
-   *     runsLeft = free runs still queued AFTER this land (連跑 continues if > 0)
-   *   { type: 'bonus', kind, name, target, tiles: [{ i, si, mult, gained }], gained }
-   *   { type: 'jp', amount }
-   *
-   * Free-run model: landing on ONCE MORE queues N free light-runs. Each free run
-   * may pay on a symbol stop; if it hits ONCE MORE again, more runs are queued
-   * (capped by MAX_ONCE_MORE_CHAIN). 連跑 = several sequential paying stops.
+   * Resolve a Pachislot-style 3-reel bonus. Pays from bets on matched symbols.
+   * Returns { reels, match, mult, gained, freeSpin }.
    */
-  function resolveRound(bets, settings, rng, jpPot = 0) {
+  function resolveSlotBonus(bets, rng) {
+    const ids = SYMBOLS.map((s) => s.id);
+    const reels = [ids[Math.floor(rng() * ids.length)], ids[Math.floor(rng() * ids.length)], ids[Math.floor(rng() * ids.length)]];
+    // gentle nudge toward matches for entertainment feel
+    if (rng() < 0.28) {
+      reels[1] = reels[0];
+      if (rng() < 0.45) reels[2] = reels[0];
+    } else if (rng() < 0.2) {
+      reels[2] = reels[1];
+    }
+    let match = 0;
+    let payId = null;
+    if (reels[0] === reels[1] && reels[1] === reels[2]) {
+      match = 3;
+      payId = reels[0];
+    } else if (reels[0] === reels[1] || reels[1] === reels[2] || reels[0] === reels[2]) {
+      match = 2;
+      payId = reels[0] === reels[1] ? reels[0] : (reels[1] === reels[2] ? reels[1] : reels[0]);
+    }
+    let mult = 0;
+    let gained = 0;
+    if (payId) {
+      const si = SYM_INDEX[payId];
+      const base = SYMBOLS[si].mult;
+      mult = match === 3 ? Math.max(2, Math.floor(base / 10)) : 1;
+      const bet = bets[si] > 0 ? bets[si] : Math.max(1, Math.max.apply(null, bets.concat([0])));
+      gained = bet * mult;
+    }
+    const freeSpin = match === 3 && rng() < SLOT_BONUS.freeSpinChance;
+    return { reels, match, mult, gained, freeSpin, payId };
+  }
+
+  /** Mark bingo cell for a landed symbol; return completed lines (clears those cells). */
+  function applyBingoMark(board, symId, totalBet, rng) {
+    if (!board || board.length !== 9) board = new Array(9).fill(false);
+    const next = board.slice();
+    const cell = BINGO_CELLS.indexOf(symId);
+    if (cell < 0) return { board: next, cell: -1, lines: [], gained: 0 };
+    next[cell] = true;
+    // once cell is a wild: if landing on once, mark empty cell at random? skip — once tile marks cell 8
+    const lines = [];
+    let gained = 0;
+    for (const line of BINGO_LINES) {
+      if (line.every((i) => next[i])) {
+        lines.push(line.slice());
+        gained += Math.max(1, Math.floor(totalBet / 4)) * BINGO_LINE_MULT;
+        for (const i of line) next[i] = false;
+      }
+    }
+    return { board: next, cell, lines, gained };
+  }
+
+  /**
+   * Resolve one full round without UI.
+   * Returns { steps, win, jpWin, bingoBoard }.
+   * Extra step types (all optional / mode-gated):
+   *   land/once also carry `fx: { reverse, skip, fakeStop }`
+   *   land may carry `double: { target, ...tilePay }` (雙燈)
+   *   { type: 'super', stops:[{target,...pay}], gained } 超跑 3–8
+   *   { type: 'slot', reels, match, mult, gained, freeSpin }
+   *   { type: 'fever', runs:[{target,...pay}], gained }
+   *   { type: 'bingo', cell, lines, gained, board }
+   *   { type: 'bonus' | 'jp' } — existing LUCKY / JP
+   *
+   * `bingoBoard` (bool[9]) is the board AFTER this round (pass previous via opts.bingoBoard).
+   */
+  function resolveRound(bets, settings, rng, jpPot = 0, opts = {}) {
     const s = settings || DEFAULT_SETTINGS;
     const weights = effectiveWeights(s);
     const steps = [];
     let win = 0;
     let jpWin = 0;
-    let queue = 0;      // pending free light-runs
-    let freesDone = 0;  // completed free symbol-stops
+    let queue = 0;
+    let freesDone = 0;
     let paidDone = false;
+    let feverDone = false;
+    let slotOpens = 0;
+    const totalBet = bets.reduce((a, b) => a + b, 0);
+    let bingoBoard = Array.isArray(opts.bingoBoard) && opts.bingoBoard.length === 9
+      ? opts.bingoBoard.map(Boolean)
+      : new Array(9).fill(false);
+
+    const pushSlotChain = () => {
+      if (!s.modes.slotBonus || slotOpens >= 3) return;
+      slotOpens++;
+      let spins = 0;
+      do {
+        const slot = resolveSlotBonus(bets, rng);
+        steps.push({ type: 'slot', ...slot });
+        win += slot.gained;
+        spins++;
+        if (!slot.freeSpin || spins >= 3) break;
+      } while (true);
+    };
 
     for (;;) {
+      const fx = rollLightFx(s, rng);
       const target = pickWeighted(weights, rng);
 
       if (TRACK[target].s === 'once') {
         if (!s.modes.once) {
-          // Weight should be 0; treat as empty stop.
           if (paidDone && queue > 0) { queue--; freesDone++; }
           paidDone = true;
-          steps.push({ type: 'land', target, si: -1, mult: 0, gained: 0, runsLeft: queue });
+          steps.push({ type: 'land', target, si: -1, mult: 0, gained: 0, runsLeft: queue, fx });
           if (queue > 0) continue;
           break;
         }
@@ -339,13 +474,26 @@
           remaining: queue,
           variant,
           capped: grant < rolled.grant,
+          fx,
         });
         paidDone = true;
-        if (queue <= 0) break; // cap with nothing left to run
-        continue; // ONCE MORE itself does not consume a queued free run
+        // Bingo wild cell: occasional ONCE MORE mark
+        if (s.modes.bingo && rng() < 0.35) {
+          const bm = applyBingoMark(bingoBoard, 'once', totalBet, rng);
+          bingoBoard = bm.board;
+          if (bm.cell >= 0) {
+            steps.push({ type: 'bingo', cell: bm.cell, lines: bm.lines, gained: bm.gained, board: bingoBoard.slice() });
+            win += bm.gained;
+          }
+        }
+        // Special track hit: ONCE MORE can open 三輪 Bonus when chain ends or mid-chain
+        if (s.modes.slotBonus && rng() < SLOT_BONUS.chance * (s.bonusRate || 1)) {
+          pushSlotChain();
+        }
+        if (queue <= 0) break;
+        continue;
       }
 
-      // Symbol land — consume one free run if this stop is from the queue
       if (paidDone && queue > 0) {
         queue--;
         freesDone++;
@@ -353,8 +501,27 @@
       paidDone = true;
 
       const p = tilePay(target, bets);
-      steps.push({ type: 'land', target, ...p, runsLeft: queue });
+      const landStep = { type: 'land', target, ...p, runsLeft: queue, fx };
+
+      // 雙燈: second independent stop that also pays
+      if (s.modes.doubleRun && rng() < LIGHT_FX.doubleRun) {
+        const t2 = pickDoubleTarget(target, weights, rng);
+        const p2 = tilePay(t2, bets);
+        landStep.double = { target: t2, ...p2 };
+        win += p2.gained;
+      }
+      steps.push(landStep);
       win += p.gained;
+
+      // Bingo mark only when the land paid (mission progress, not free fills)
+      if (s.modes.bingo && p.gained > 0 && TRACK[target].s !== 'once') {
+        const bm = applyBingoMark(bingoBoard, TRACK[target].s, totalBet, rng);
+        bingoBoard = bm.board;
+        if (bm.cell >= 0) {
+          steps.push({ type: 'bingo', cell: bm.cell, lines: bm.lines, gained: bm.gained, board: bingoBoard.slice() });
+          win += bm.gained;
+        }
+      }
 
       const bonus = rollBonus(target, s, rng);
       if (bonus) {
@@ -363,16 +530,70 @@
         steps.push({ type: 'bonus', kind: bonus.kind, name: bonus.name, target, tiles, gained });
         win += gained;
       }
-      // JP only on the first (paid) big-BAR land of the round — keep simple: any land
+
       if (s.modes.jp && target === BIG_BAR_TILE && bets[SYM_INDEX.bar] > 0 && jpPot > 0 && jpWin === 0) {
         jpWin = Math.floor(jpPot * Math.min(1, bets[SYM_INDEX.bar] / JP.fullBet));
         if (jpWin > 0) steps.push({ type: 'jp', amount: jpWin });
       }
 
-      if (queue > 0) continue; // 連跑：還有免費跑燈
+      // 超跑: 3–8 chained extra stops (special / paying lands)
+      if (
+        s.modes.superRun
+        && queue === 0
+        && (p.gained > 0 || isSlotSpecial(TRACK[target]))
+        && rng() < SUPER_RUN.chance * (s.onceRate != null ? s.onceRate : 1)
+      ) {
+        const n = SUPER_RUN.min + Math.floor(rng() * (SUPER_RUN.max - SUPER_RUN.min + 1));
+        const stops = [];
+        let superGain = 0;
+        for (let k = 0; k < n; k++) {
+          const ti = pickWeighted(weights, rng);
+          if (TRACK[ti].s === 'once') {
+            stops.push({ target: ti, si: -1, mult: 0, gained: 0 });
+            continue;
+          }
+          const tp = tilePay(ti, bets);
+          stops.push({ target: ti, ...tp });
+          superGain += tp.gained;
+        }
+        steps.push({ type: 'super', stops, gained: superGain, count: n });
+        win += superGain;
+      }
+
+      // Special tile → 三輪 Bonus stage
+      if (s.modes.slotBonus && isSlotSpecial(TRACK[target]) && rng() < SLOT_BONUS.chance * (s.bonusRate || 1)) {
+        pushSlotChain();
+      }
+
+      // FEVER stage after JP or big multiplier land
+      if (
+        s.modes.fever
+        && !feverDone
+        && (jpWin > 0 || p.mult >= 30)
+        && rng() < FEVER_STAGE.chance * (s.bonusRate || 1) * (jpWin > 0 ? 2 : 1)
+      ) {
+        feverDone = true;
+        const n = FEVER_STAGE.minRuns + Math.floor(rng() * (FEVER_STAGE.maxRuns - FEVER_STAGE.minRuns + 1));
+        const runs = [];
+        let feverGain = 0;
+        for (let k = 0; k < n; k++) {
+          const ti = pickWeighted(weights, rng);
+          if (TRACK[ti].s === 'once') {
+            runs.push({ target: ti, si: -1, mult: 0, gained: 0, fx: rollLightFx(s, rng) });
+            continue;
+          }
+          const tp = tilePay(ti, bets);
+          runs.push({ target: ti, ...tp, fx: rollLightFx(s, rng) });
+          feverGain += tp.gained;
+        }
+        steps.push({ type: 'fever', runs, gained: feverGain, count: n });
+        win += feverGain;
+      }
+
+      if (queue > 0) continue;
       break;
     }
-    return { steps, win: win + jpWin, jpWin };
+    return { steps, win: win + jpWin, jpWin, bingoBoard };
   }
 
   /** Pot after a round: grows by JP.rate × jpRate × bet; a JP win resets it to the seed. */
@@ -391,13 +612,15 @@
     const total = bets.reduce((a, b) => a + b, 0);
     const grow = JP.rate * (s.jpRate != null ? s.jpRate : 1);
     let paid = 0, won = 0, hits = 0, bonuses = 0, jps = 0, pot = JP.seed;
+    let bingoBoard = new Array(9).fill(false);
     for (let n = 0; n < rounds; n++) {
       pot = Math.min(JP.max, pot + total * grow);
-      const r = resolveRound(bets, s, rng, s.modes.jp ? pot : 0);
+      const r = resolveRound(bets, s, rng, s.modes.jp ? pot : 0, { bingoBoard });
+      bingoBoard = r.bingoBoard || bingoBoard;
       paid += total;
       won += r.win;
-      if (r.win > total) hits++; // net profit this round
-      if (r.steps.some((st) => st.type === 'bonus')) bonuses++;
+      if (r.win > total) hits++;
+      if (r.steps.some((st) => st.type === 'bonus' || st.type === 'slot' || st.type === 'fever' || st.type === 'super')) bonuses++;
       if (r.jpWin > 0) { jps++; pot = JP.seed; }
     }
     return { rtp: won / paid, hitRate: hits / rounds, bonusRate: bonuses / rounds, jpRate: jps / rounds };
@@ -406,8 +629,9 @@
   const api = {
     SYMBOLS, SYM_INDEX, TRACK, N, MAX_ONCE_MORE_CHAIN, ONCE_GRANT, WEIGHT_KEYS, WEIGHT_LABELS,
     BONUS, JP, BIG_BAR_TILE, MODE_KEYS, MODE_LABELS, PRESETS, DEFAULT_SETTINGS,
+    LIGHT_FX, SUPER_RUN, SLOT_BONUS, FEVER_STAGE, BINGO_CELLS, BINGO_LINES, BINGO_LINE_MULT,
     normalizeSettings, applyPreset, effectiveWeights, landingOdds, pickWeighted,
-    tilePay, rollOnceGrant, resolveRound, nextJpPot, simulate,
+    tilePay, rollOnceGrant, rollLightFx, resolveSlotBonus, applyBingoMark, resolveRound, nextJpPot, simulate,
   };
   if (typeof module === 'object' && module.exports) module.exports = api;
   else root.XiaomaliEngine = api;

@@ -1,8 +1,9 @@
 # AGENTS.md — notes for Cursor / Codex / AI maintainers
 
 ## What this is
-「小瑪莉」fruit-machine web game. **Pure static** (HTML/CSS/vanilla JS), no build,
-no dependencies. Deployed as-is to GitHub Pages from repo root. Fake play credit only.
+「小瑪莉」fruit-machine web game with Running-Light / Pachislot / Medal / Bingo
+inspired layers. **Pure static** (HTML/CSS/vanilla JS), no build, no dependencies.
+Deployed as-is to GitHub Pages from repo root. Fake play credit only. Keep cabinet UI.
 
 Live: https://chenchihcu.github.io/xiaomali-game/
 Repo: https://github.com/chenchihcu/xiaomali-game
@@ -10,10 +11,10 @@ Repo: https://github.com/chenchihcu/xiaomali-game
 ## Structure
 | File | Role |
 |---|---|
-| `index.html` | Real-cabinet layout: `.cabinet` (wood) → `.marquee` (🔊 knob, WIN/CREDIT meters, ⚙ knob) → `.glass` (`#board` 7×7 track; `#center` machine window = JP + **3 reels** + dice + `#onceBanner` + VFD `#msg`; `#betpanel` payout strip = mult + bet LED) → `.deck` (CREDIT/WIN/BET plate groups, `#betKeys` 8 fruit keycaps, 清除/全押/自動/開始) → disclaimer plate. Settings/help dialogs. Scripts: `engine.js` then `game.js` (`defer`). |
-| `styles.css` | `--u` = 1/100 of `--W`; cabinet height ≈ 1.80×W. Portrait-first. Tiles get `side-*` class for inner-edge lamp bulbs. |
-| `engine.js` | Pure logic → `XiaomaliEngine`. `resolveRound` queues free runs on ONCE MORE (`once` / `onceMulti` 連跑 / `onceBig`), then bonus + JP. Cap `MAX_ONCE_MORE_CHAIN`. |
-| `game.js` | UI: light run, reels, sound/BGM, settings, **「再跑 N 次」** banner. Animates `E.resolveRound` steps only. |
+| `index.html` | Real-cabinet layout: `.cabinet` → `.marquee` → `#holdStrip` → `#bingoBoard` → `#flourishLayer` → `.glass` (`#board` track; `#center` = JP + **3 reels** + dice + `#onceBanner` + VFD) → `#betpanel` → `.deck` → disclaimer. Settings/help. Scripts: `engine.js` then `game.js` (`defer`). |
+| `styles.css` | `--u` = 1/100 of `--W`; cabinet height ≈ 1.80×W. Portrait-first. Bingo board, coin/horse flourishes, tile `side-*` lamps. |
+| `engine.js` | Pure logic → `XiaomaliEngine`. `resolveRound(bets, settings, rng, jpPot, { bingoBoard })` → steps: `once` / `land` (+`fx`,`double`) / `bonus` / `jp` / `super` / `slot` / `fever` / `bingo`. Cap `MAX_ONCE_MORE_CHAIN`. |
+| `game.js` | UI: light FX (reverse/skip/fake), reels + slot stop-feel, FEVER/bingo, flourishes, settings. Animates engine steps only. |
 | `sim.js` | `node sim.js [rounds]` balance check (not loaded in browser). |
 | `icon*`, `manifest.webmanifest` | PWA-ish home screen (no service worker). |
 
@@ -26,14 +27,26 @@ Repo: https://github.com/chenchihcu/xiaomali-game
 - `startCredit`: 100–99999 (reset button)
 - `betUnit`: 1–10 credit per bet tap
 - `sfxVol` / `bgmVol`: 0–1
-- `modes`: `{ once, onceMulti, onceBig, song, train, sanyuan, jp }`
+- `modes`: `{ once, onceMulti, onceBig, song, train, sanyuan, jp,
+  slotBonus, fever, bingo, reverse, skip, doubleRun, fakeStop, superRun }`
 - `music`: `off` \| `arcade` \| `breezy` \| `festive` \| `retro` \| `neon`
 
-Credit/win/sound/jp/lastBets: `xiaomali.v1`.
+Credit/win/sound/jp/lastBets/bingo: `xiaomali.v1`.
 
-## Cabinet FX (visual only)
-Frame LED rails, side lamps, 假保留燈 strip, FEVER/READY banner. Classes on `#cabinet`:
-`fx-spin` / `fx-reach` / `fx-expect` / `fx-win` / `fx-fever`. No gameplay effect.
+## Stages & light modes (toggleable)
+| Mode | Trigger | Effect |
+|---|---|---|
+| `slotBonus` | Special full tiles (77/star/bar) or ONCE MORE | 3-reel bonus; possible free spin |
+| `fever` | After JP or land mult≥30 | 2–3 FEVER light runs |
+| `bingo` | Paying land marks 3×3; line pays floor(bet/4) | Mission board under hold lamps |
+| `reverse` / `skip` / `fakeStop` | Per light-run roll | Animation FX on `step.fx` |
+| `doubleRun` | On land | Second paying lamp |
+| `superRun` | After paying/special land | 3–8 chained stops |
+
+## Cabinet FX (mostly visual)
+Frame LED rails, side lamps, 假保留燈, FEVER/READY, coin cascade / horse dash flourishes.
+Classes on `#cabinet`: `fx-spin` / `fx-reach` / `fx-expect` / `fx-win` / `fx-fever`.
+Bingo marks and stage pays are real (fake credit); flourishes are not.
 
 ## UI 防呆 (guards)
 - `why.*()` in `game.js` returns a reason string (blocked) or `null` for every action
@@ -51,14 +64,16 @@ Frame LED rails, side lamps, 假保留燈 strip, FEVER/READY banner. Classes on 
 
 ## Game rules in code
 - Stop = `effectiveWeights` (ONCE MORE weight 0 if `modes.once` off).
-- `resolveRound` steps: `once` `{grant,remaining,variant}` → `land` `{runsLeft}` → optional `bonus` / `jp`.
-  - Landing on ONCE MORE queues free light-runs (`single` 1 / `multi` 2–4 / `big` 3–5). Each free stop may pay; another ONCE MORE adds more (cap `MAX_ONCE_MORE_CHAIN`). UI shows countdown banner — do not re-roll in `game.js`.
-- Bonus: `song` / `train` / `sanyuan`. JP: big BAR + BAR bet.
-- Big/small: 1–4 / 6–9 / 5 push. Center reels are cosmetic; outer track pays.
+- `resolveRound` steps (order): `once` / `land` (+ optional `double`) / `bingo` / `bonus` / `jp` / `super` / `slot` / `fever`.
+  - Landing on ONCE MORE queues free light-runs (`single` 1 / `multi` 2–4 / `big` 3–5). Cap `MAX_ONCE_MORE_CHAIN`. UI countdown only — do not re-roll in `game.js`.
+  - `land.fx` / `once.fx` drive `runLight` (reverse/skip/fakeStop).
+- Classic bonus: `song` / `train` / `sanyuan`. JP: big BAR + BAR bet.
+- Stages: `slot` (reel ids + match/gained/freeSpin), `fever` (runs[]), `super` (stops[]), `bingo` (cell/lines/board).
+- Big/small: 1–4 / 6–9 / 5 push. Center reels cosmetic in base play; **slot bonus** uses them with staggered stop-feel.
 - Prefer short Traditional Chinese UI copy on portrait.
-- Layout follows real 小瑪莉 cabinets (WIN/CREDIT on top marquee, payout strip under track, button deck at bottom). Don't reintroduce app-style top bars.
-- Controls: `.btn` = illuminated arcade push-button (chrome bezel, lit cap via `::before`, unlit when disabled). Bet keys = white keycaps on the deck; LEDs live in the payout strip (`betKeys[i].cell`).
-- Track / bet icons: CSS/SVG glossy fruit (unique gradient ids in `iconHTML`), not emoji.
+- Layout follows real 小瑪莉 cabinets — don't reintroduce app-style top bars.
+- Controls: `.btn` arcade push-button; bet keys on deck; LEDs in payout strip.
+- Track / bet icons: CSS/SVG glossy fruit (`iconHTML`), not copyrighted IP.
 
 ## How to test
 ```bash

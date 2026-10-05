@@ -55,6 +55,12 @@
         <span class="hold-lamp" data-h="3"></span>
       </div>
 
+      <div class="bingo-board" id="bingoBoard" aria-label="賓果任務" hidden>
+        <!-- cells filled by game.js -->
+      </div>
+
+      <div class="flourish-layer" id="flourishLayer" aria-hidden="true"></div>
+
       <section class="glass" aria-label="機台面板">
         <div class="fever-banner" id="feverBanner" hidden aria-hidden="true">
           <span class="fever-tag" id="feverTag">READY</span>
@@ -231,10 +237,12 @@
         <li>「開始」→ 外圈跑燈＋中央轉盤。「自動」會連續續押再開局。</li>
         <li>停在有押的圖案：押注 × 倍率（小圖 ×3、BAR50 ×50）。</li>
         <li><b>ONCE MORE</b> 免費再跑；可連跑／大 ONCE MORE（設定開關）。</li>
-        <li>中彩：送燈、開火車、三元四喜；JP＝停大 BAR 且押 BAR。</li>
+        <li>中彩：送燈、開火車、三元四喜；JP＝停大 BAR 且押 BAR（Medal 風彩池＋FEVER）。</li>
+        <li><b>特殊停燈</b>可進舞台：三輪 Bonus（柏青嫂風停輪／Free Spin）、FEVER 連跑、賓果連線倍率。</li>
+        <li>跑燈模式（可關）：倒跑、跳格、假停、雙燈、超跑（連停 3–8）。</li>
         <li>WIN 可「得分」或比大小（1–4 小、6–9 大；5 和）。</li>
         <li>「開分」虛擬加分（點 +100／按住 +500）；「洗分」WIN→CREDIT 後清零。</li>
-        <li>⚙️ 調難度、中彩／連跑／JP 機率、停燈權重、押注單位、音量。分數存本機。</li>
+        <li>⚙️ 調難度、機率、玩法開關（含舞台／跑燈）、押注、音量。分數存本機。</li>
         <li>防呆：轉動中按鈕變灰；無押注／CREDIT 不足無法開始；CREDIT 不夠會自動停；設定超出範圍會修正並提示。</li>
       </ol>
       <table class="paytable" id="paytable"></table>

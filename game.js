@@ -23,6 +23,7 @@
   const {
     SYMBOLS, SYM_INDEX, TRACK, N, MAX_ONCE_MORE_CHAIN, JP,
     MODE_KEYS, MODE_LABELS, PRESETS, WEIGHT_KEYS, WEIGHT_LABELS,
+    BINGO_CELLS, BINGO_LINES,
   } = E;
 
   const TRACK_POS = (() => {
@@ -205,6 +206,10 @@
     coin()  { this.beep(1568, 0.03, 'square', 0.03); },
     lucky() { this.seq([659, 784, 988, 1319, 988, 1319, 1568, 1976], 0.06, 'square', 0.05); },
     jp()    { this.seq([523, 784, 1047, 1568, 2093, 1568, 2093, 2637], 0.08, 'square', 0.055); },
+    slot()  { this.seq([440, 554, 659, 880, 0, 880, 1175], 0.07, 'square', 0.05); },
+    fever() { this.seq([523, 784, 1047, 784, 1047, 1319, 1568, 2093], 0.065, 'square', 0.055); },
+    bingo() { this.seq([659, 784, 988, 1319], 0.08, 'triangle', 0.05); },
+    super() { this.seq([392, 523, 659, 784, 988, 1175, 1319, 1568], 0.05, 'square', 0.045); },
   };
 
   const MUSIC_TRACKS = {
@@ -371,6 +376,7 @@
     busy: false,
     auto: false,
     jp: JP.seed,
+    bingo: new Array(9).fill(false),
   };
 
   let settings = E.normalizeSettings(null);
@@ -403,6 +409,7 @@
         state.pos = (d.pos | 0) % N;
         Sound.on = d.sound !== false;
         if (Number.isFinite(d.jp) && d.jp >= 0) state.jp = Math.min(JP.max, d.jp);
+        if (Array.isArray(d.bingo) && d.bingo.length === 9) state.bingo = d.bingo.map(Boolean);
         if (Array.isArray(d.lastBets) && d.lastBets.length === SYMBOLS.length) {
           state.bets = d.lastBets.map((n) => Math.min(MAX_BET_PER_SYMBOL, Math.max(0, n | 0)));
           state.betsPaid = false;
@@ -427,6 +434,7 @@
         lastBets: state.bets,
         lastPlayedBets: state.lastPlayedBets,
         jp: state.jp,
+        bingo: state.bingo,
       }));
     } catch { /* */ }
   }
@@ -530,6 +538,26 @@
   buildRails();
   FX.holdsSet(0);
 
+  // Bingo 3×3 mission board (Medal/Bingo hybrid — marks on land)
+  (function buildBingo() {
+    const root = $('bingoBoard');
+    if (!root || root.childElementCount) return;
+    const labels = {
+      apple: '蘋', orange: '橙', mango: '芒', bell: '鈴',
+      melon: '西', star: '星', seven: '77', bar: 'BAR', once: 'OM',
+    };
+    BINGO_CELLS.forEach((id, i) => {
+      const c = document.createElement('button');
+      c.type = 'button';
+      c.className = 'bingo-cell';
+      c.dataset.b = String(i);
+      c.disabled = true;
+      c.setAttribute('aria-label', WEIGHT_LABELS[id] || id);
+      c.innerHTML = `<span>${labels[id] || id}</span>`;
+      root.appendChild(c);
+    });
+  })();
+
   /** Glossy CSS/SVG fruit icons (no flat emoji). Unique gradient ids per instance. */
   let _icUid = 0;
   function iconHTML(symId) {
@@ -592,7 +620,9 @@
     '<tr><td>×3</td><td>小圖／BAR50</td><td>×3／×50</td></tr>' +
     '<tr><td><span class="ic-once" style="font-size:8px">ONCE<br>MORE</span></td><td>再跑／連跑</td><td>FREE</td></tr>' +
     `<tr><td>JP</td><td>大 BAR＋押 BAR</td><td>彩金</td></tr>` +
-    '<tr><td>★</td><td>送燈／火車／三元</td><td>中彩</td></tr>';
+    '<tr><td>★</td><td>送燈／火車／三元</td><td>中彩</td></tr>' +
+    '<tr><td>🎰</td><td>三輪 Bonus／FEVER／賓果</td><td>舞台</td></tr>' +
+    '<tr><td>💡</td><td>倒跑／跳格／假停／雙燈／超跑</td><td>跑燈</td></tr>';
 
   // --- 3 fruit reels --------------------------------------------------------
   const REEL_LOOPS = 8; // repeated strip length multiplier
@@ -880,6 +910,7 @@
       jpRow.hidden = !settings.modes.jp;
       $('jpVal').textContent = String(Math.floor(state.jp));
     }
+    renderBingo();
     winLed.set(state.win);
     creditLed.set(state.credit);
     betKeys.forEach((k, i) => {
@@ -1031,21 +1062,47 @@
     save();
   }
 
-  async function runLight(target, { expect = false } = {}) {
-    const dist = (target - state.pos + N) % N;
+  /**
+   * Run the outer light to `target`.
+   * fx.reverse — counterclockwise; fx.skip — step by 2; fx.fakeStop — brief pause near end then continue.
+   */
+  async function runLight(target, { expect = false, fx = null } = {}) {
+    const rev = !!(fx && fx.reverse);
+    const skip = !!(fx && fx.skip);
+    const fake = !!(fx && fx.fakeStop);
+    const step = skip ? 2 : 1;
+    // distance in the travel direction, measured in step units
+    let dist;
+    if (rev) dist = (state.pos - target + N) % N;
+    else dist = (target - state.pos + N) % N;
+    if (skip) {
+      // align so we land exactly on target with stride 2
+      if (dist % 2 === 1) dist += N; // odd → add full lap of odd length? N=24 even, so odd dist never lands with step 2
+      // With N even and step 2, parity must match. Nudge one single step first if needed.
+    }
+    const needAlign = skip && ((rev ? (state.pos - target + N) % N : (target - state.pos + N) % N) % 2 === 1);
+    if (needAlign) {
+      state.pos = rev ? (state.pos - 1 + N) % N : (state.pos + 1) % N;
+      setLight(state.pos, 0);
+      Sound.tick();
+      await sleep(40);
+      dist = rev ? (state.pos - target + N) % N : (target - state.pos + N) % N;
+    }
     const laps = 2 + (randomFloat() < 0.5 ? 1 : 0);
-    const total = laps * N + dist;
-    const FAST = 28;
+    const totalSteps = Math.floor((laps * N + dist) / step);
+    const FAST = skip ? 36 : 28;
     const DECEL = 15;
     let expectOn = false;
-    for (let s = 1; s <= total; s++) {
-      state.pos = (state.pos + 1) % N;
-      const remaining = total - s;
+    let faked = false;
+    for (let s = 1; s <= totalSteps; s++) {
+      state.pos = rev
+        ? (state.pos - step + N) % N
+        : (state.pos + step) % N;
+      const remaining = totalSteps - s;
       let delay;
       if (s <= 6) delay = FAST + (7 - s) * 16;
       else if (remaining >= DECEL) delay = FAST;
       else delay = FAST + Math.pow(DECEL - remaining, 2) * 2;
-      // Red high-expectation flash during late decelerate when stop will pay
       if (expect && remaining < DECEL && !expectOn) {
         FX.expect();
         expectOn = true;
@@ -1053,28 +1110,171 @@
         FX.reach();
         expectOn = true;
       }
-      setLight(state.pos, delay < 60 ? 2 : delay < 120 ? 1 : 0);
+      // Fake stop: freeze briefly mid-decel, then resume
+      if (fake && !faked && remaining === Math.floor(DECEL * 0.55)) {
+        setLight(state.pos, 0);
+        tileEls[state.pos].classList.add('win');
+        await sleep(280);
+        tileEls[state.pos].classList.remove('win');
+        Sound.beep(330, 0.05, 'sawtooth', 0.04);
+        faked = true;
+        delay = FAST;
+      }
+      const trailDir = rev ? 1 : -1;
+      for (const el of tileEls) el.classList.remove('lit', 'trail1', 'trail2');
+      tileEls[state.pos].classList.add('lit');
+      if (delay < 120) tileEls[(state.pos + trailDir + N) % N].classList.add('trail1');
+      if (delay < 60) tileEls[(state.pos + trailDir * 2 + N) % N].classList.add('trail2');
       Sound.tick();
       await sleep(delay);
     }
+    // Snap exactly onto target (parity / rounding safety)
+    state.pos = target;
     setLight(state.pos, 0);
   }
 
   /** Estimate light-run duration so reels can finish roughly together. */
-  function estimateLightMs(target) {
-    const dist = (target - state.pos + N) % N;
+  function estimateLightMs(target, fx = null) {
+    const skip = !!(fx && fx.skip);
+    const step = skip ? 2 : 1;
+    let dist = (target - state.pos + N) % N;
+    if (fx && fx.reverse) dist = (state.pos - target + N) % N;
+    if (skip && dist % 2 === 1) dist += 1; // align nudge approx
     const laps = 2;
-    const total = laps * N + dist;
-    const FAST = 28;
+    const totalSteps = Math.floor((laps * N + dist) / step);
+    const FAST = skip ? 36 : 28;
     const DECEL = 15;
-    let ms = 0;
-    for (let s = 1; s <= total; s++) {
-      const remaining = total - s;
+    let ms = (fx && fx.fakeStop) ? 280 : 0;
+    for (let s = 1; s <= totalSteps; s++) {
+      const remaining = totalSteps - s;
       if (s <= 6) ms += FAST + (7 - s) * 16;
       else if (remaining >= DECEL) ms += FAST;
       else ms += FAST + Math.pow(DECEL - remaining, 2) * 2;
     }
     return ms;
+  }
+
+  /** Compact mode tag shown on the VFD during a special light run. */
+  function lightModeLabel(fx) {
+    if (!fx) return '';
+    const bits = [];
+    if (fx.reverse) bits.push('倒跑');
+    if (fx.skip) bits.push('跳格');
+    if (fx.fakeStop) bits.push('假停');
+    return bits.length ? bits.join('・') : '';
+  }
+
+  function renderBingo() {
+    const root = $('bingoBoard');
+    if (!root) return;
+    root.hidden = !settings.modes.bingo;
+    root.querySelectorAll('.bingo-cell').forEach((el, i) => {
+      el.classList.toggle('on', !!state.bingo[i]);
+      el.classList.toggle('flash', false);
+    });
+  }
+
+  function flashBingoCell(i) {
+    const root = $('bingoBoard');
+    if (!root) return;
+    const el = root.querySelector(`.bingo-cell[data-b="${i}"]`);
+    if (!el) return;
+    el.classList.add('on', 'flash');
+    setTimeout(() => el.classList.remove('flash'), 600);
+  }
+
+  function flashBingoLine(line) {
+    const root = $('bingoBoard');
+    if (!root) return;
+    line.forEach((i) => {
+      const el = root.querySelector(`.bingo-cell[data-b="${i}"]`);
+      if (el) el.classList.add('line');
+    });
+    setTimeout(() => {
+      root.querySelectorAll('.bingo-cell.line').forEach((el) => el.classList.remove('line'));
+    }, 900);
+  }
+
+  /** Coin-pusher style cascade (visual only). */
+  function flourishCoins(n = 12) {
+    const host = $('flourishLayer');
+    if (!host || window.matchMedia('(prefers-reduced-motion: reduce)').matches) return;
+    for (let i = 0; i < n; i++) {
+      const c = document.createElement('i');
+      c.className = 'coin-fall';
+      c.style.left = (8 + Math.random() * 84) + '%';
+      c.style.animationDelay = (Math.random() * 0.35) + 's';
+      c.style.animationDuration = (0.7 + Math.random() * 0.55) + 's';
+      host.appendChild(c);
+      setTimeout(() => c.remove(), 1600);
+    }
+  }
+
+  /** Tiny e-horse dash across the marquee during FEVER (visual only). */
+  function flourishHorse() {
+    const host = $('flourishLayer');
+    if (!host || window.matchMedia('(prefers-reduced-motion: reduce)').matches) return;
+    const h = document.createElement('div');
+    h.className = 'horse-dash';
+    h.textContent = '馬';
+    host.appendChild(h);
+    setTimeout(() => h.remove(), 1400);
+  }
+
+  /** Pachislot-style staggered reel stop (stop-button feel). */
+  async function playSlotBonus(step) {
+    setMsg(step.freeSpin ? '三輪 Bonus・FREE' : '三輪 Bonus', 'hot');
+    FX.flashFever('ready', 1200);
+    Sound.slot();
+    const ids = step.reels || ['apple', 'orange', 'mango'];
+    measureReelCells();
+    reelStrips.forEach((r) => {
+      r.parent.classList.remove('landed');
+      r.parent.classList.add('spinning');
+      r.el.classList.remove('settle');
+    });
+    const spinMs = [900, 1300, 1700];
+    const start = performance.now();
+    let done = [false, false, false];
+    await new Promise((resolve) => {
+      const tick = (now) => {
+        const t = now - start;
+        let all = true;
+        reelStrips.forEach((r, ri) => {
+          if (done[ri]) return;
+          if (t >= spinMs[ri]) {
+            const idx = findReelIndex(ri, ids[ri], true);
+            setReelOffset(ri, idx, true);
+            r.parent.classList.remove('spinning');
+            r.parent.classList.add('landed');
+            Sound.beep(700 + ri * 180, 0.05, 'square', 0.045);
+            done[ri] = true;
+          } else {
+            all = false;
+            const cells = (t / 16) * (3.2 + ri * 0.35);
+            setReelOffset(ri, Math.floor(cells) % r.seq.length, false);
+          }
+        });
+        if (all) resolve();
+        else requestAnimationFrame(tick);
+      };
+      requestAnimationFrame(tick);
+    });
+    await sleep(350);
+    if (step.gained > 0) {
+      Sound.win();
+      setMsg(`三輪 ${step.match} 連 +${step.gained}`, 'hot');
+      await animateWin(state.win, state.win + step.gained);
+      if (step.match >= 3) flourishCoins(10);
+    } else {
+      setMsg('三輪・沒中', 'bad');
+      Sound.lose();
+    }
+    if (step.freeSpin) {
+      setMsg('三輪 FREE SPIN', 'hot');
+      await sleep(500);
+    }
+    await sleep(280);
   }
 
   async function animateWin(from, to) {
@@ -1113,19 +1313,47 @@
     save();
 
     const potBefore = settings.modes.jp ? state.jp : 0;
-    const result = E.resolveRound(state.bets, settings, randomFloat, potBefore);
+    const result = E.resolveRound(state.bets, settings, randomFloat, potBefore, { bingoBoard: state.bingo });
+    if (Array.isArray(result.bingoBoard)) state.bingo = result.bingoBoard.map(Boolean);
     let roundWin = 0;
     let inOnceRun = false;
     let onceVariant = 'single';
 
+    async function playLandPay(step, { fromSuper = false } = {}) {
+      const sym = step.si >= 0 ? SYMBOLS[step.si] : null;
+      if (step.gained > 0 && sym) {
+        roundWin += step.gained;
+        tileEls[step.target].classList.add('win');
+        setKeyHit(betKeys[step.si], true);
+        FX.win();
+        if (step.mult >= 40) {
+          Sound.big();
+          FX.flashFever('fever', 1400);
+          flourishCoins(8);
+        } else {
+          Sound.win();
+          if (step.mult >= 20) FX.flashFever('ready', 900);
+        }
+        const small = TRACK[step.target].small ? '小' : '';
+        const prefix = fromSuper ? '超跑・' : '';
+        setMsg(`${prefix}${sym.name}${small} ${state.bets[step.si]}×${step.mult}=${step.gained}`, 'hot');
+        await animateWin(state.win, state.win + step.gained);
+      } else if (sym) {
+        setMsg(`${sym.name}${TRACK[step.target].small ? '小' : ''}・沒中`, 'bad');
+        Sound.lose();
+        if (!fromSuper) FX.idle();
+      }
+    }
+
     for (const step of result.steps) {
       if (step.type === 'once') {
         const label = ONCE_VARIANT_LABEL[step.variant] || 'ONCE MORE';
+        const modeTag = lightModeLabel(step.fx);
         showOnceBanner(step.variant, step.remaining);
-        setMsg(step.remaining > 0 ? `${label}…` : `${label}・上限`, 'hot');
-        const dur = estimateLightMs(step.target);
+        setMsg((modeTag ? modeTag + '・' : '') + (step.remaining > 0 ? `${label}…` : `${label}・上限`), 'hot');
+        const dur = estimateLightMs(step.target, step.fx);
         FX.spin();
-        await Promise.all([runLight(step.target, { expect: false }), spinReels('once', Math.max(900, dur - 400))]);
+        await Promise.all([runLight(step.target, { expect: false, fx: step.fx }), spinReels('once', Math.max(900, dur - 400))]);
         tileEls[step.target].classList.add('win');
         FX.win();
         Sound.once();
@@ -1134,7 +1362,8 @@
           await sleep(700);
           tileEls[step.target].classList.remove('win');
           hideOnceBanner();
-          break;
+          // don't break — later steps may still be slot/bingo after a capped once
+          continue;
         }
         setMsg(`${label}！再跑 ${step.remaining} 次`, 'hot');
         await sleep(850);
@@ -1145,33 +1374,25 @@
       }
 
       if (step.type === 'land') {
-        setMsg(inOnceRun ? '連跑中…' : '轉動中…', inOnceRun ? 'hot' : '');
+        const modeTag = lightModeLabel(step.fx);
+        setMsg(modeTag || (inOnceRun ? '連跑中…' : '轉動中…'), (modeTag || inOnceRun) ? 'hot' : '');
         if (inOnceRun) showOnceBanner(onceVariant, step.runsLeft + 1);
-        const dur = estimateLightMs(step.target);
+        const dur = estimateLightMs(step.target, step.fx);
         const landId = TRACK[step.target].s;
-        const willPay = step.gained > 0;
+        const willPay = step.gained > 0 || (step.double && step.double.gained > 0);
         FX.spin();
-        await Promise.all([runLight(step.target, { expect: willPay }), spinReels(landId, Math.max(900, dur - 400))]);
-        const sym = step.si >= 0 ? SYMBOLS[step.si] : null;
-        if (step.gained > 0 && sym) {
-          roundWin += step.gained;
-          tileEls[step.target].classList.add('win');
-          setKeyHit(betKeys[step.si], true);
-          FX.win();
-          if (step.mult >= 40) {
-            Sound.big();
-            FX.flashFever('fever', 1400);
-          } else {
-            Sound.win();
-            if (step.mult >= 20) FX.flashFever('ready', 900);
-          }
-          const small = TRACK[step.target].small ? '小' : '';
-          setMsg(`${sym.name}${small} ${state.bets[step.si]}×${step.mult}=${step.gained}`, 'hot');
-          await animateWin(state.win, state.win + step.gained);
-        } else if (sym) {
-          setMsg(`${sym.name}${TRACK[step.target].small ? '小' : ''}・沒中`, 'bad');
-          Sound.lose();
-          FX.idle();
+        await Promise.all([runLight(step.target, { expect: willPay, fx: step.fx }), spinReels(landId, Math.max(900, dur - 400))]);
+        await playLandPay(step);
+        if (step.double) {
+          setMsg('雙燈！', 'hot');
+          Sound.lucky();
+          await sleep(280);
+          // quick hop to second lamp (no full re-spin)
+          state.pos = step.double.target;
+          setLight(state.pos, 0);
+          tileEls[step.double.target].classList.add('win', 'lit2');
+          await playLandPay({ ...step.double, target: step.double.target });
+          await sleep(350);
         }
         if (step.runsLeft > 0) {
           showOnceBanner(onceVariant, step.runsLeft);
@@ -1182,6 +1403,75 @@
           hideOnceBanner();
           inOnceRun = false;
         }
+        continue;
+      }
+
+      if (step.type === 'super') {
+        Sound.super();
+        FX.flashFever('ready', 1000);
+        setMsg(`超跑 ${step.count} 連停！`, 'hot');
+        showOnceBanner('multi', step.count);
+        for (let i = 0; i < step.stops.length; i++) {
+          const st = step.stops[i];
+          showOnceBanner('multi', step.stops.length - i);
+          const dur = estimateLightMs(st.target);
+          FX.spin();
+          await Promise.all([runLight(st.target, { expect: st.gained > 0 }), spinReels(TRACK[st.target].s, Math.max(700, dur - 500))]);
+          await playLandPay(st, { fromSuper: true });
+          await sleep(220);
+        }
+        hideOnceBanner();
+        if (step.gained > 0) flourishCoins(14);
+        await sleep(300);
+        continue;
+      }
+
+      if (step.type === 'slot') {
+        await playSlotBonus(step);
+        roundWin += Math.max(0, step.gained);
+        continue;
+      }
+
+      if (step.type === 'fever') {
+        Sound.fever();
+        FX.showFever('fever');
+        flourishHorse();
+        setMsg(`FEVER ×${step.count}`, 'hot');
+        for (let i = 0; i < step.runs.length; i++) {
+          const fr = step.runs[i];
+          setMsg(`FEVER ${i + 1}/${step.count}`, 'hot');
+          const dur = estimateLightMs(fr.target, fr.fx);
+          FX.spin();
+          cabinetEl?.classList.add('fx-fever');
+          await Promise.all([runLight(fr.target, { expect: fr.gained > 0, fx: fr.fx }), spinReels(TRACK[fr.target].s, Math.max(800, dur - 450))]);
+          await playLandPay(fr, { fromSuper: true });
+          await sleep(200);
+        }
+        FX.hideFever();
+        if (step.gained > 0) flourishCoins(16);
+        await sleep(300);
+        continue;
+      }
+
+      if (step.type === 'bingo') {
+        renderBingo();
+        if (step.cell >= 0) flashBingoCell(step.cell);
+        if (step.lines && step.lines.length) {
+          Sound.bingo();
+          FX.flashFever('ready', 900);
+          for (const line of step.lines) flashBingoLine(line);
+          setMsg(`賓果連線 ×${step.lines.length}`, 'hot');
+          if (step.gained > 0) {
+            roundWin += step.gained;
+            await animateWin(state.win, state.win + step.gained);
+            setMsg(`賓果 +${step.gained}`, 'hot');
+            flourishCoins(6);
+          }
+          await sleep(500);
+        } else {
+          await sleep(180);
+        }
+        renderBingo();
         continue;
       }
 
@@ -1212,6 +1502,8 @@
         FX.win();
         FX.flashFever('fever', 2000);
         FX.holdsSet(4);
+        flourishHorse();
+        flourishCoins(18);
         setMsg(`JP！+${step.amount}`, 'hot');
         roundWin += step.amount;
         await animateWin(state.win, state.win + step.amount);
@@ -1219,6 +1511,7 @@
       }
     }
     hideOnceBanner();
+    renderBingo();
 
     state.jp = E.nextJpPot(state.jp, total, result.jpWin, settings);
 
@@ -1232,7 +1525,6 @@
     if (roundWin > 0) {
       FX.win();
       if (roundWin >= 100) FX.flashFever('fever', 1200);
-      // bump fake hold lamps on a paying round
       FX.holdsSet(Math.min(4, holdCount + 1));
     } else {
       FX.idle();
@@ -1518,6 +1810,8 @@
     state.bets.fill(0);
     state.betsPaid = true;
     state.jp = JP.seed;
+    state.bingo = new Array(9).fill(false);
+    renderBingo();
     clearHighlights();
     diceLed.set('-');
     setMsg(`已重設 ${amt}`);
@@ -1627,6 +1921,11 @@
     if (!BONUS_MODES.some((k) => m[k]) && s.bonusRate > 0) w.push('中彩玩法全關：中彩機率無效');
     if (m.jp && s.weights.bar <= 0) w.push('BAR 權重 0：JP 無法觸發');
     if (m.jp && s.jpRate <= 0) w.push('JP 累積 0：彩池不會增加');
+    if (m.slotBonus && s.bonusRate <= 0) w.push('中彩機率 0：三輪 Bonus 較難觸發');
+    if (m.superRun && s.onceRate <= 0) w.push('連跑機率 0：超跑較難觸發');
+    if (!(m.reverse || m.skip || m.fakeStop || m.doubleRun) && (m.superRun || m.slotBonus)) {
+      /* no-op — stages still work without light FX */
+    }
     if (s.betUnit * SYMBOLS.length > s.startCredit) w.push('單次押注 × 8 超過起始 CREDIT');
     return w;
   }
