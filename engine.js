@@ -101,6 +101,7 @@
   const MODE_KEYS = [
     'once', 'onceMulti', 'onceBig', 'song', 'train', 'sanyuan', 'jp',
     'slotBonus', 'fever', 'bingo',
+    'luckyWheel', 'gacha', 'sicbo', 'pachinko', 'ballDraw', 'roulette',
     'reverse', 'skip', 'doubleRun', 'fakeStop', 'superRun',
   ];
   const MODE_LABELS = {
@@ -114,6 +115,12 @@
     slotBonus: '三輪 Bonus',
     fever: 'FEVER 舞台',
     bingo: '賓果任務',
+    luckyWheel: '幸運轉輪',
+    gacha: '轉蛋',
+    sicbo: '骰寶',
+    pachinko: '彈珠台',
+    ballDraw: '抽球機',
+    roulette: '電子輪盤',
     reverse: '倒跑',
     skip: '跳格',
     doubleRun: '雙燈',
@@ -136,6 +143,54 @@
     special: ['seven', 'star', 'bar'],
   };
   const FEVER_STAGE = { chance: 0.012, minRuns: 2, maxRuns: 3 };
+
+  /** Extra cabinet stages opened from special track hits (toggleable). Chances × bonusRate. */
+  const STAGE_KEYS = ['luckyWheel', 'gacha', 'sicbo', 'pachinko', 'ballDraw', 'roulette'];
+  const STAGE_ENTRY = {
+    /** Shared roll chance when a special full tile (77/star/BAR) or ONCE MORE lands. */
+    chance: 0.018,
+    /** At most one of these mini-stages per round (keeps RTP in check). */
+    maxPerRound: 1,
+  };
+  /** Lucky Wheel segments: relative weights + payout as floor(totalBet * mult / 4). */
+  const WHEEL_SEGS = [
+    { label: '×0',  mult: 0,  w: 10, tone: 'miss' },
+    { label: '×1',  mult: 1,  w: 18, tone: 'low' },
+    { label: '×2',  mult: 2,  w: 16, tone: 'low' },
+    { label: '×3',  mult: 3,  w: 14, tone: 'mid' },
+    { label: '×5',  mult: 5,  w: 12, tone: 'mid' },
+    { label: '×8',  mult: 8,  w: 8,  tone: 'high' },
+    { label: '×10', mult: 10, w: 6,  tone: 'high' },
+    { label: '×15', mult: 15, w: 3,  tone: 'mega' },
+    { label: '×20', mult: 20, w: 2,  tone: 'mega' },
+    { label: 'JP!', mult: 30, w: 1,  tone: 'jp' },
+  ];
+  /** Gacha rarity table (weights). Pay = betOnSymbol × payMult. */
+  const GACHA_TIERS = [
+    { id: 'N',  name: 'N',  w: 48, payMult: 1,  glow: 'n' },
+    { id: 'R',  name: 'R',  w: 28, payMult: 2,  glow: 'r' },
+    { id: 'SR', name: 'SR', w: 16, payMult: 5,  glow: 'sr' },
+    { id: 'SSR',name: 'SSR',w: 8,  payMult: 12, glow: 'ssr' },
+  ];
+  /** Sic Bo big/small/triple payouts vs totalBet (entertainment). */
+  const SICBO_PAY = { small: 1, big: 1, triple: 8, point: 0 };
+  /** Pachinko pockets left→right: multipliers for floor(totalBet * m / 4). */
+  const PACHINKO_POCKETS = [
+    { label: '×1', mult: 1, w: 14 },
+    { label: '×2', mult: 2, w: 18 },
+    { label: '×3', mult: 3, w: 16 },
+    { label: '×5', mult: 5, w: 14 },
+    { label: '×8', mult: 8, w: 10 },
+    { label: 'JP', mult: 20, w: 4 },
+    { label: '×3', mult: 3, w: 16 },
+    { label: '×2', mult: 2, w: 18 },
+    { label: '×1', mult: 1, w: 14 },
+  ];
+  /** Ball-draw cage: draw count + match pay as bet × mult. */
+  const BALL_DRAW = { minBalls: 1, maxBalls: 3, matchMult: 2, tripleBonus: 5 };
+  /** Compact electronic roulette 0–12 (0 green). Pay floor(totalBet * mult / 4). */
+  const ROULETTE_N = 13;
+  const ROULETTE_PAY = { number: 12, color: 2, evenOdd: 2, zero: 8 };
   /** 3×3 bingo cells → symbol id (once = wild filler cell). */
   const BINGO_CELLS = ['apple', 'orange', 'mango', 'bell', 'melon', 'star', 'seven', 'bar', 'once'];
   const BINGO_LINES = [
@@ -188,6 +243,7 @@
     modes: {
       once: true, onceMulti: true, onceBig: true, song: true, train: true, sanyuan: true, jp: true,
       slotBonus: true, fever: true, bingo: true,
+      luckyWheel: true, gacha: true, sicbo: true, pachinko: true, ballDraw: true, roulette: true,
       reverse: true, skip: true, doubleRun: true, fakeStop: true, superRun: true,
     },
   };
@@ -386,7 +442,183 @@
     return { reels, match, mult, gained, freeSpin, payId };
   }
 
-  /** Mark bingo cell for a landed symbol; return completed lines (clears those cells). */
+  function pickWeightedItems(items, rng, wKey = 'w') {
+    const weights = items.map((it) => Math.max(0, it[wKey] || 0));
+    return items[pickWeighted(weights, rng)];
+  }
+
+  function stagePayFromTotal(totalBet, mult) {
+    if (!mult || totalBet <= 0) return 0;
+    return Math.max(0, Math.floor(totalBet * mult / 4));
+  }
+
+  /** Resolve Lucky Wheel: spin to a weighted segment. */
+  function resolveLuckyWheel(totalBet, rng) {
+    const seg = pickWeightedItems(WHEEL_SEGS, rng);
+    const index = WHEEL_SEGS.indexOf(seg);
+    const gained = stagePayFromTotal(totalBet, seg.mult);
+    return {
+      type: 'luckyWheel',
+      index,
+      label: seg.label,
+      mult: seg.mult,
+      tone: seg.tone,
+      segments: WHEEL_SEGS.map((s) => ({ label: s.label, mult: s.mult, tone: s.tone })),
+      gained,
+    };
+  }
+
+  /** Resolve gacha capsule: tier + random symbol; pays only if that symbol was bet. */
+  function resolveGacha(bets, rng) {
+    const tier = pickWeightedItems(GACHA_TIERS, rng);
+    const si = Math.floor(rng() * SYMBOLS.length);
+    const sym = SYMBOLS[si];
+    const bet = bets[si] || 0;
+    const gained = bet * tier.payMult;
+    return {
+      type: 'gacha',
+      tier: tier.id,
+      tierName: tier.name,
+      glow: tier.glow,
+      payMult: tier.payMult,
+      symbol: sym.id,
+      symbolName: sym.name,
+      icon: sym.icon,
+      si,
+      bet,
+      gained,
+    };
+  }
+
+  /** Resolve Sic Bo: 3 dice. Big 11–17 / Small 4–10 / Triple special. */
+  function resolveSicbo(totalBet, rng) {
+    const dice = [1 + Math.floor(rng() * 6), 1 + Math.floor(rng() * 6), 1 + Math.floor(rng() * 6)];
+    const sum = dice[0] + dice[1] + dice[2];
+    const triple = dice[0] === dice[1] && dice[1] === dice[2];
+    let outcome = 'point';
+    let mult = SICBO_PAY.point;
+    if (triple) {
+      outcome = 'triple';
+      mult = SICBO_PAY.triple;
+    } else if (sum >= 11 && sum <= 17) {
+      outcome = 'big';
+      mult = SICBO_PAY.big;
+    } else if (sum >= 4 && sum <= 10) {
+      outcome = 'small';
+      mult = SICBO_PAY.small;
+    }
+    // Entertainment: always pay small/big/triple vs totalBet (house edge via entry rate)
+    const gained = stagePayFromTotal(totalBet, mult);
+    return { type: 'sicbo', dice, sum, triple, outcome, mult, gained };
+  }
+
+  /** Light Pachinko: ball path through pegs into a pocket. */
+  function resolvePachinko(totalBet, rng) {
+    const pocket = pickWeightedItems(PACHINKO_POCKETS, rng);
+    const index = PACHINKO_POCKETS.indexOf(pocket);
+    // Fake peg path: sequence of column biases toward the pocket
+    const cols = 9;
+    const path = [];
+    let col = 4;
+    for (let row = 0; row < 8; row++) {
+      const pull = index > col ? 0.62 : index < col ? 0.38 : 0.5;
+      col += rng() < pull ? 1 : -1;
+      col = Math.max(0, Math.min(cols - 1, col));
+      path.push(col);
+    }
+    path.push(index);
+    const gained = stagePayFromTotal(totalBet, pocket.mult);
+    return {
+      type: 'pachinko',
+      index,
+      label: pocket.label,
+      mult: pocket.mult,
+      path,
+      pockets: PACHINKO_POCKETS.map((p) => ({ label: p.label, mult: p.mult })),
+      gained,
+    };
+  }
+
+  /** Ball-draw machine: pull 1–3 symbol balls; pay on bet matches. */
+  function resolveBallDraw(bets, rng) {
+    const n = BALL_DRAW.minBalls + Math.floor(rng() * (BALL_DRAW.maxBalls - BALL_DRAW.minBalls + 1));
+    const balls = [];
+    let gained = 0;
+    const matched = [];
+    for (let i = 0; i < n; i++) {
+      const si = Math.floor(rng() * SYMBOLS.length);
+      const sym = SYMBOLS[si];
+      const bet = bets[si] || 0;
+      const hit = bet > 0;
+      const pay = hit ? bet * BALL_DRAW.matchMult : 0;
+      gained += pay;
+      if (hit) matched.push(sym.id);
+      balls.push({ si, id: sym.id, name: sym.name, icon: sym.icon, hit, pay });
+    }
+    // Same-symbol triple bonus
+    if (n === 3 && balls[0].id === balls[1].id && balls[1].id === balls[2].id) {
+      const si = balls[0].si;
+      const extra = (bets[si] || 0) * BALL_DRAW.tripleBonus;
+      gained += extra;
+      return { type: 'ballDraw', balls, matched, gained, triple: true, tripleBonus: extra };
+    }
+    return { type: 'ballDraw', balls, matched, gained, triple: false, tripleBonus: 0 };
+  }
+
+  /** Electronic roulette 0–12. Color / even-odd / number pays. */
+  function resolveRoulette(totalBet, rng) {
+    const n = Math.floor(rng() * ROULETTE_N); // 0..12
+    const isZero = n === 0;
+    const color = isZero ? 'green' : (n % 2 === 1 ? 'red' : 'black');
+    const evenOdd = isZero ? 'zero' : (n % 2 === 0 ? 'even' : 'odd');
+    // Entertainment auto-ticket: favor color hit (~50%), occasional number
+    let kind = 'color';
+    let mult = ROULETTE_PAY.color;
+    const roll = rng();
+    if (isZero) {
+      kind = 'zero';
+      mult = ROULETTE_PAY.zero;
+    } else if (roll < 0.12) {
+      kind = 'number';
+      mult = ROULETTE_PAY.number;
+    } else if (roll < 0.42) {
+      kind = evenOdd;
+      mult = ROULETTE_PAY.evenOdd;
+    } else {
+      kind = 'color';
+      mult = ROULETTE_PAY.color;
+    }
+    const gained = stagePayFromTotal(totalBet, mult);
+    return {
+      type: 'roulette',
+      number: n,
+      color,
+      evenOdd,
+      kind,
+      mult,
+      gained,
+      pockets: ROULETTE_N,
+    };
+  }
+
+  /** Pick one enabled stage kind for a special-track entry (or null). */
+  function pickStageKind(settings, rng) {
+    const enabled = STAGE_KEYS.filter((k) => settings.modes[k]);
+    if (!enabled.length) return null;
+    return enabled[Math.floor(rng() * enabled.length)];
+  }
+
+  function resolveStage(kind, bets, totalBet, rng) {
+    if (kind === 'luckyWheel') return resolveLuckyWheel(totalBet, rng);
+    if (kind === 'gacha') return resolveGacha(bets, rng);
+    if (kind === 'sicbo') return resolveSicbo(totalBet, rng);
+    if (kind === 'pachinko') return resolvePachinko(totalBet, rng);
+    if (kind === 'ballDraw') return resolveBallDraw(bets, rng);
+    if (kind === 'roulette') return resolveRoulette(totalBet, rng);
+    return null;
+  }
+
+    /** Mark bingo cell for a landed symbol; return completed lines (clears those cells). */
   function applyBingoMark(board, symId, totalBet, rng) {
     if (!board || board.length !== 9) board = new Array(9).fill(false);
     const next = board.slice();
@@ -420,6 +652,7 @@
    *   { type: 'slot', reels, match, mult, gained, freeSpin }
    *   { type: 'fever', runs:[{target,...pay}], gained }
    *   { type: 'bingo', cell, lines, gained, board }
+   *   { type: 'luckyWheel'|'gacha'|'sicbo'|'pachinko'|'ballDraw'|'roulette' }
    *   { type: 'bonus' | 'jp' } — existing LUCKY / JP
    *
    * `bingoBoard` (bool[9]) is the board AFTER this round (pass previous via opts.bingoBoard).
@@ -435,6 +668,7 @@
     let paidDone = false;
     let feverDone = false;
     let slotOpens = 0;
+    let stageOpens = 0;
     const totalBet = bets.reduce((a, b) => a + b, 0);
     let bingoBoard = Array.isArray(opts.bingoBoard) && opts.bingoBoard.length === 9
       ? opts.bingoBoard.map(Boolean)
@@ -451,6 +685,23 @@
         spins++;
         if (!slot.freeSpin || spins >= 3) break;
       } while (true);
+    };
+
+    const tryPushCabinetStage = (force = false) => {
+      if (stageOpens >= STAGE_ENTRY.maxPerRound) return false;
+      const anyOn = STAGE_KEYS.some((k) => s.modes[k]);
+      if (!anyOn) return false;
+      const rate = STAGE_ENTRY.chance * (s.bonusRate || 1) * (force ? 1.35 : 1);
+      if (!force && rng() >= rate) return false;
+      if (force && rng() >= rate) return false;
+      const kind = pickStageKind(s, rng);
+      if (!kind) return false;
+      const stage = resolveStage(kind, bets, totalBet, rng);
+      if (!stage) return false;
+      stageOpens++;
+      steps.push(stage);
+      win += stage.gained || 0;
+      return true;
     };
 
     for (;;) {
@@ -496,6 +747,8 @@
         if (s.modes.slotBonus && rng() < SLOT_BONUS.chance * (s.bonusRate || 1)) {
           pushSlotChain();
         }
+        // ONCE MORE also eligible for cabinet mini-stages (wheel / gacha / …)
+        tryPushCabinetStage(false);
         if (queue <= 0) break;
         continue;
       }
@@ -571,6 +824,11 @@
         pushSlotChain();
       }
 
+      // Special full tiles (77 / star / BAR) → cabinet mini-stages
+      if (isSlotSpecial(TRACK[target])) {
+        tryPushCabinetStage(false);
+      }
+
       // FEVER stage after JP or big multiplier land
       if (
         s.modes.fever
@@ -625,7 +883,8 @@
       paid += total;
       won += r.win;
       if (r.win > total) hits++;
-      if (r.steps.some((st) => st.type === 'bonus' || st.type === 'slot' || st.type === 'fever' || st.type === 'super')) bonuses++;
+      if (r.steps.some((st) => st.type === 'bonus' || st.type === 'slot' || st.type === 'fever' || st.type === 'super'
+        || STAGE_KEYS.includes(st.type))) bonuses++;
       if (r.jpWin > 0) jps++;
       pot = nextJpPot(pot, total, r.jpWin, s);
     }
@@ -636,8 +895,11 @@
     SYMBOLS, SYM_INDEX, TRACK, N, MAX_ONCE_MORE_CHAIN, ONCE_GRANT, WEIGHT_KEYS, WEIGHT_LABELS,
     BONUS, JP, BIG_BAR_TILE, MODE_KEYS, MODE_LABELS, PRESETS, DEFAULT_SETTINGS,
     LIGHT_FX, SUPER_RUN, SLOT_BONUS, FEVER_STAGE, BINGO_CELLS, BINGO_LINES, BINGO_LINE_MULT,
+    STAGE_KEYS, STAGE_ENTRY, WHEEL_SEGS, GACHA_TIERS, SICBO_PAY, PACHINKO_POCKETS, BALL_DRAW, ROULETTE_N, ROULETTE_PAY,
     normalizeSettings, applyPreset, effectiveWeights, landingOdds, pickWeighted,
-    tilePay, rollOnceGrant, rollLightFx, resolveSlotBonus, applyBingoMark, resolveRound, nextJpPot, simulate,
+    tilePay, rollOnceGrant, rollLightFx, resolveSlotBonus,
+    resolveLuckyWheel, resolveGacha, resolveSicbo, resolvePachinko, resolveBallDraw, resolveRoulette,
+    pickStageKind, resolveStage, applyBingoMark, resolveRound, nextJpPot, simulate,
   };
   if (typeof module === 'object' && module.exports) module.exports = api;
   else root.XiaomaliEngine = api;

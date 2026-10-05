@@ -320,6 +320,31 @@
       this.seq([392, 523, 659, 784, 988, 1175, 1319, 1568], 0.048, 'square', 0.045);
       this.noiseBurst(0.14, 0.035, 0.2, { freq: 1600, type: 'bandpass', Q: 0.9 });
     },
+    stageOpen() {
+      this.seq([523, 659, 784, 988, 1175], 0.06, 'square', 0.048);
+      this.noiseBurst(0.1, 0.03, 0.15, { freq: 2400, type: 'bandpass', Q: 1 });
+    },
+    wheelTick() { this.beep(1480, 0.018, 'square', 0.022); },
+    gacha() {
+      this.noiseBurst(0.08, 0.04, 0, { freq: 900, type: 'lowpass', Q: 0.8 });
+      this.seq([880, 1175, 1568], 0.08, 'triangle', 0.045);
+    },
+    dice() {
+      this.noiseBurst(0.06, 0.05, 0, { freq: 1200, type: 'bandpass', Q: 0.7 });
+      this.beep(660, 0.04, 'square', 0.03);
+    },
+    pachi() {
+      this.beep(1760, 0.02, 'square', 0.02);
+      this.noiseBurst(0.04, 0.02, 0.01, { freq: 3000, type: 'highpass', Q: 1.2 });
+    },
+    ballPop() {
+      this.beep(990, 0.05, 'triangle', 0.04);
+      this.noiseBurst(0.05, 0.025, 0.02, { freq: 2200, type: 'bandpass', Q: 1 });
+    },
+    roulette() {
+      this.seq([440, 554, 659, 0, 880], 0.07, 'square', 0.04);
+      this.noiseBurst(0.1, 0.03, 0.2, { freq: 1800, type: 'bandpass', Q: 1.1 });
+    },
   };
 
   const MUSIC_TRACKS = {
@@ -1590,7 +1615,403 @@
   }
 
   /** Pachislot-style staggered reel stop (stop-button feel). */
-  async function playSlotBonus(step) {
+  // ---------------------------------------------------------------------------
+  // Cabinet mini-stage overlays (wheel / gacha / sicbo / pachinko / balls / roulette)
+  // ---------------------------------------------------------------------------
+  const STAGE_META = {
+    luckyWheel: { badge: 'WHEEL', title: '幸運轉輪' },
+    gacha: { badge: 'GACHA', title: '轉蛋' },
+    sicbo: { badge: 'SIC BO', title: '骰寶' },
+    pachinko: { badge: 'PACHI', title: '彈珠台' },
+    ballDraw: { badge: 'DRAW', title: '抽球機' },
+    roulette: { badge: 'ROULETTE', title: '電子輪盤' },
+  };
+
+  function openStageOverlay(kind) {
+    const overlay = $('stageOverlay');
+    const body = $('stageBody');
+    const result = $('stageResult');
+    const badge = $('stageBadge');
+    const title = $('stageTitle');
+    if (!overlay || !body) return null;
+    const meta = STAGE_META[kind] || { badge: 'BONUS', title: '舞台' };
+    if (badge) badge.textContent = meta.badge;
+    if (title) title.textContent = meta.title;
+    if (result) { result.textContent = ''; result.className = 'stage-result'; }
+    body.innerHTML = '';
+    body.dataset.kind = kind;
+    overlay.hidden = false;
+    overlay.setAttribute('aria-hidden', 'false');
+    cabinetEl?.classList.add('fx-expect');
+    Sound.stageOpen();
+    Music.duck(600, 0.25);
+    return { overlay, body, result };
+  }
+
+  function closeStageOverlay() {
+    const overlay = $('stageOverlay');
+    if (!overlay) return;
+    overlay.hidden = true;
+    overlay.setAttribute('aria-hidden', 'true');
+    const body = $('stageBody');
+    if (body) body.innerHTML = '';
+    cabinetEl?.classList.remove('fx-expect');
+  }
+
+  function setStageResult(el, gained, label) {
+    if (!el) return;
+    if (gained > 0) {
+      el.textContent = label || `+${gained}`;
+      el.className = 'stage-result hit';
+    } else {
+      el.textContent = label || '沒中';
+      el.className = 'stage-result miss';
+    }
+  }
+
+  function iconForSym(id) {
+    const s = SYMBOLS.find((x) => x.id === id);
+    if (!s) return '❓';
+    if (s.icon) return s.icon;
+    if (id === 'seven') return '7️⃣';
+    if (id === 'bar') return '🅱️';
+    return s.name[0];
+  }
+
+  async function playLuckyWheel(step) {
+    const ui = openStageOverlay('luckyWheel');
+    if (!ui) return;
+    const n = (step.segments && step.segments.length) || 10;
+    const segAngle = 360 / n;
+    const wrap = document.createElement('div');
+    wrap.className = 'sw-wheel-wrap';
+    wrap.innerHTML = `<div class="sw-pointer"></div><div class="sw-wheel" id="swWheel"><div class="sw-hub">GO</div></div>`;
+    ui.body.appendChild(wrap);
+    const wheel = wrap.querySelector('.sw-wheel');
+    // Labels around the rim
+    const labs = document.createElement('div');
+    labs.className = 'sw-labels';
+    (step.segments || []).forEach((seg, i) => {
+      const lab = document.createElement('div');
+      lab.className = 'sw-lab';
+      lab.textContent = seg.label;
+      const ang = i * segAngle + segAngle / 2;
+      lab.style.transform = `rotate(${ang}deg) translateY(calc(var(--u) * -18)) rotate(${-ang}deg)`;
+      labs.appendChild(lab);
+    });
+    wheel.appendChild(labs);
+
+    const targetAngle = 360 * (5 + Math.floor(randomFloat() * 3)) + (360 - (step.index * segAngle + segAngle / 2));
+    const reduced = window.matchMedia('(prefers-reduced-motion: reduce)').matches;
+    const dur = reduced ? 500 : 3200;
+    const t0 = performance.now();
+    let lastTick = -1;
+    await new Promise((resolve) => {
+      const tick = (now) => {
+        const p = Math.min(1, (now - t0) / dur);
+        const ease = 1 - Math.pow(1 - p, 3);
+        const ang = targetAngle * ease;
+        wheel.style.transform = `rotate(${ang}deg)`;
+        const seg = Math.floor(((ang % 360) / segAngle)) % n;
+        if (seg !== lastTick) {
+          lastTick = seg;
+          if (!reduced) Sound.wheelTick();
+        }
+        if (p < 1) requestAnimationFrame(tick);
+        else resolve();
+      };
+      requestAnimationFrame(tick);
+    });
+    await sleep(280);
+    if (step.gained > 0) {
+      celebrateHit({ amount: step.gained, mult: step.mult || 10, kind: step.tone === 'jp' ? 'jp' : 'win', originEl: wrap });
+      setStageResult(ui.result, step.gained, `${step.label}  +${step.gained}`);
+    } else {
+      Sound.lose();
+      setStageResult(ui.result, 0, `${step.label}・沒中`);
+    }
+    await sleep(900);
+    closeStageOverlay();
+  }
+
+  async function playGacha(step) {
+    const ui = openStageOverlay('gacha');
+    if (!ui) return;
+    const stage = document.createElement('div');
+    stage.className = 'sg-stage';
+    const colors = ['#ff6080', '#42a5f5', '#66bb6a', '#ffca28', '#ab47bc', '#26c6da'];
+    let caps = '';
+    for (let i = 0; i < 8; i++) {
+      const c = colors[i % colors.length];
+      const left = 10 + (i % 4) * 20;
+      const top = 15 + Math.floor(i / 4) * 28 + (i % 2) * 8;
+      caps += `<span class="sg-capsule" style="left:${left}%;top:${top}%;--cap:${c};animation-delay:${(i * 0.12).toFixed(2)}s"></span>`;
+    }
+    stage.innerHTML = `
+      <div class="sg-machine">
+        <div class="sg-dome">${caps}</div>
+        <div class="sg-chute"><div class="sg-prize glow-${step.glow || 'n'}" id="sgPrize">${iconForSym(step.symbol)}</div></div>
+      </div>
+      <div class="sg-tier" id="sgTier">…</div>`;
+    ui.body.appendChild(stage);
+    Sound.gacha();
+    await sleep(700);
+    const prize = stage.querySelector('#sgPrize');
+    const tierEl = stage.querySelector('#sgTier');
+    prize?.classList.add('show');
+    if (tierEl) tierEl.textContent = `${step.tierName}・${step.symbolName}`;
+    hapticVibrate(step.tier === 'SSR' ? 4 : step.tier === 'SR' ? 3 : 2);
+    await sleep(450);
+    if (step.gained > 0) {
+      celebrateHit({
+        amount: step.gained,
+        mult: step.payMult * 5,
+        kind: step.tier === 'SSR' ? 'fever' : 'win',
+        originEl: prize,
+      });
+      setStageResult(ui.result, step.gained, `${step.tierName} ×${step.payMult}  +${step.gained}`);
+    } else {
+      Sound.lose();
+      setStageResult(ui.result, 0, `${step.tierName}・未押 ${step.symbolName}`);
+    }
+    await sleep(950);
+    closeStageOverlay();
+  }
+
+  async function playSicbo(step) {
+    const ui = openStageOverlay('sicbo');
+    if (!ui) return;
+    const stage = document.createElement('div');
+    stage.className = 'ss-stage';
+    stage.innerHTML = `
+      <div class="ss-tray">
+        <div class="ss-die rolling" data-d="0">?</div>
+        <div class="ss-die rolling" data-d="1">?</div>
+        <div class="ss-die rolling" data-d="2">?</div>
+      </div>
+      <div class="ss-sum" id="ssSum">擲骰中…</div>
+      <div class="ss-tag" id="ssTag">—</div>`;
+    ui.body.appendChild(stage);
+    const diceEls = [...stage.querySelectorAll('.ss-die')];
+    const reduced = window.matchMedia('(prefers-reduced-motion: reduce)').matches;
+    const rollMs = reduced ? 200 : 900;
+    const t0 = performance.now();
+    await new Promise((resolve) => {
+      const tick = (now) => {
+        if (now - t0 < rollMs) {
+          diceEls.forEach((el) => { el.textContent = String(1 + Math.floor(randomFloat() * 6)); });
+          if (Math.floor((now - t0) / 80) !== Math.floor((now - t0 - 16) / 80)) Sound.dice();
+          requestAnimationFrame(tick);
+        } else resolve();
+      };
+      requestAnimationFrame(tick);
+    });
+    diceEls.forEach((el, i) => {
+      el.classList.remove('rolling');
+      el.textContent = String(step.dice[i]);
+      if (step.triple) el.classList.add('triple');
+    });
+    const sumEl = stage.querySelector('#ssSum');
+    const tagEl = stage.querySelector('#ssTag');
+    if (sumEl) sumEl.textContent = `合計 ${step.sum}`;
+    const outcomeLabel = { big: '大', small: '小', triple: '豹子', point: '點' }[step.outcome] || step.outcome;
+    if (tagEl) {
+      tagEl.textContent = outcomeLabel;
+      tagEl.className = `ss-tag ${step.outcome}`;
+    }
+    await sleep(350);
+    if (step.gained > 0) {
+      celebrateHit({ amount: step.gained, mult: step.mult * 8, kind: step.triple ? 'fever' : 'win', originEl: stage });
+      setStageResult(ui.result, step.gained, `${outcomeLabel}  +${step.gained}`);
+    } else {
+      Sound.lose();
+      setStageResult(ui.result, 0, `${outcomeLabel}・沒中`);
+    }
+    await sleep(900);
+    closeStageOverlay();
+  }
+
+  async function playPachinko(step) {
+    const ui = openStageOverlay('pachinko');
+    if (!ui) return;
+    const stage = document.createElement('div');
+    stage.className = 'sp-stage';
+    const pegs = Array.from({ length: 54 }, () => '<span class="sp-peg"></span>').join('');
+    const pockets = (step.pockets || []).map((p, i) =>
+      `<div class="sp-pocket" data-i="${i}">${p.label}</div>`).join('');
+    stage.innerHTML = `
+      <div class="sp-board">
+        <div class="sp-pegs">${pegs}</div>
+        <div class="sp-ball" id="spBall"></div>
+        <div class="sp-pockets">${pockets}</div>
+      </div>`;
+    ui.body.appendChild(stage);
+    const ball = stage.querySelector('#spBall');
+    const board = stage.querySelector('.sp-board');
+    const path = step.path || [4, 4, 4, 4, 4, 4, 4, 4, step.index];
+    const reduced = window.matchMedia('(prefers-reduced-motion: reduce)').matches;
+    const cols = 9;
+    for (let i = 0; i < path.length; i++) {
+      const col = path[i];
+      const row = i;
+      const xPct = ((col + 0.5) / cols) * 100;
+      const yPct = 4 + (row / Math.max(1, path.length - 1)) * 72;
+      if (ball) {
+        ball.style.left = `${xPct}%`;
+        ball.style.top = `${yPct}%`;
+      }
+      if (!reduced) Sound.pachi();
+      await sleep(reduced ? 30 : 70);
+    }
+    const pocketEl = stage.querySelector(`.sp-pocket[data-i="${step.index}"]`);
+    pocketEl?.classList.add('hit');
+    await sleep(300);
+    if (step.gained > 0) {
+      celebrateHit({ amount: step.gained, mult: step.mult * 4, kind: step.mult >= 20 ? 'jp' : 'win', originEl: pocketEl || board });
+      setStageResult(ui.result, step.gained, `${step.label}  +${step.gained}`);
+    } else {
+      Sound.lose();
+      setStageResult(ui.result, 0, `${step.label}・沒中`);
+    }
+    await sleep(900);
+    closeStageOverlay();
+  }
+
+  async function playBallDraw(step) {
+    const ui = openStageOverlay('ballDraw');
+    if (!ui) return;
+    const stage = document.createElement('div');
+    stage.className = 'sb-stage';
+    let floats = '';
+    for (let i = 0; i < 10; i++) {
+      const sym = SYMBOLS[i % SYMBOLS.length];
+      const left = 8 + (i % 5) * 18;
+      const top = 12 + Math.floor(i / 5) * 35 + (i % 3) * 5;
+      floats += `<span class="sb-float" style="left:${left}%;top:${top}%;animation-delay:${(i * 0.11).toFixed(2)}s">${iconForSym(sym.id)}</span>`;
+    }
+    stage.innerHTML = `
+      <div class="sb-cage">${floats}</div>
+      <div class="sb-drawn" id="sbDrawn"></div>`;
+    ui.body.appendChild(stage);
+    await sleep(600);
+    const drawn = stage.querySelector('#sbDrawn');
+    for (const b of step.balls || []) {
+      const el = document.createElement('div');
+      el.className = 'sb-ball' + (b.hit ? ' hit' : '');
+      el.textContent = iconForSym(b.id);
+      el.title = b.name;
+      drawn.appendChild(el);
+      await sleep(180);
+      el.classList.add('show');
+      Sound.ballPop();
+      hapticVibrate(b.hit ? 2 : 1);
+      await sleep(280);
+    }
+    await sleep(200);
+    if (step.gained > 0) {
+      celebrateHit({
+        amount: step.gained,
+        mult: step.triple ? 30 : 12,
+        kind: step.triple ? 'fever' : 'win',
+        originEl: drawn,
+      });
+      const tag = step.triple ? '三同球！' : `中 ${(step.matched || []).length} 球`;
+      setStageResult(ui.result, step.gained, `${tag}  +${step.gained}`);
+    } else {
+      Sound.lose();
+      setStageResult(ui.result, 0, '未押中');
+    }
+    await sleep(950);
+    closeStageOverlay();
+  }
+
+  async function playRoulette(step) {
+    const ui = openStageOverlay('roulette');
+    if (!ui) return;
+    const pockets = step.pockets || 13;
+    const seg = 360 / pockets;
+    const wrap = document.createElement('div');
+    wrap.className = 'sr-wheel-wrap';
+    wrap.innerHTML = `
+      <div class="sr-pointer"></div>
+      <div class="sr-wheel" id="srWheel"><div class="sr-hub" id="srHub">?</div></div>
+      <div class="sr-ball" id="srBall"></div>`;
+    const info = document.createElement('div');
+    info.className = 'sr-info';
+    info.innerHTML = `<span class="sr-chip ${step.color}" id="srColor">—</span><span id="srKind">旋轉中…</span>`;
+    ui.body.appendChild(wrap);
+    ui.body.appendChild(info);
+    const wheel = wrap.querySelector('.sr-wheel');
+    const hub = wrap.querySelector('#srHub');
+    const ball = wrap.querySelector('#srBall');
+    const targetAngle = 360 * (6 + Math.floor(randomFloat() * 3)) + (360 - (step.number * seg + seg / 2));
+    const reduced = window.matchMedia('(prefers-reduced-motion: reduce)').matches;
+    const dur = reduced ? 500 : 3600;
+    Sound.roulette();
+    const t0 = performance.now();
+    let lastTick = -1;
+    if (ball) ball.classList.add('show');
+    await new Promise((resolve) => {
+      const tick = (now) => {
+        const p = Math.min(1, (now - t0) / dur);
+        const ease = 1 - Math.pow(1 - p, 3.2);
+        const ang = targetAngle * ease;
+        if (wheel) wheel.style.transform = `rotate(${ang}deg)`;
+        // Ball counter-rotates slightly for feel
+        if (ball) ball.style.transform = `rotate(${-ang * 0.15}deg) translateY(0)`;
+        const segI = Math.floor(((ang % 360) / seg)) % pockets;
+        if (segI !== lastTick) {
+          lastTick = segI;
+          if (!reduced) Sound.wheelTick();
+        }
+        if (p < 1) requestAnimationFrame(tick);
+        else resolve();
+      };
+      requestAnimationFrame(tick);
+    });
+    if (hub) hub.textContent = String(step.number);
+    const colorEl = info.querySelector('#srColor');
+    const kindEl = info.querySelector('#srKind');
+    if (colorEl) {
+      colorEl.className = `sr-chip ${step.color}`;
+      colorEl.textContent = step.color === 'red' ? '紅' : step.color === 'black' ? '黑' : '0';
+    }
+    const kindLabel = {
+      number: `號碼 ${step.number}`,
+      color: step.color === 'red' ? '押紅' : '押黑',
+      even: '雙數',
+      odd: '單數',
+      zero: '零',
+    }[step.kind] || step.kind;
+    if (kindEl) kindEl.textContent = kindLabel;
+    await sleep(300);
+    if (step.gained > 0) {
+      celebrateHit({ amount: step.gained, mult: step.mult * 3, kind: step.kind === 'number' || step.kind === 'zero' ? 'fever' : 'win', originEl: wrap });
+      setStageResult(ui.result, step.gained, `${kindLabel}  +${step.gained}`);
+    } else {
+      Sound.lose();
+      setStageResult(ui.result, 0, `${kindLabel}・沒中`);
+    }
+    await sleep(950);
+    closeStageOverlay();
+  }
+
+  async function playCabinetStage(step) {
+    setMsg(`${(STAGE_META[step.type] || {}).title || '舞台'}！`, 'hot');
+    FX.showFever('ready');
+    flourishFeverSplash('ready');
+    hapticVibrate(2);
+    if (step.type === 'luckyWheel') await playLuckyWheel(step);
+    else if (step.type === 'gacha') await playGacha(step);
+    else if (step.type === 'sicbo') await playSicbo(step);
+    else if (step.type === 'pachinko') await playPachinko(step);
+    else if (step.type === 'ballDraw') await playBallDraw(step);
+    else if (step.type === 'roulette') await playRoulette(step);
+    else closeStageOverlay();
+    FX.hideFever();
+  }
+
+    async function playSlotBonus(step) {
     setMsg(step.freeSpin ? '三輪 Bonus・FREE' : '三輪 Bonus', 'hot');
     FX.flashFever('ready', 1200);
     Sound.slot();
@@ -1811,6 +2232,13 @@
       if (step.type === 'slot') {
         await playSlotBonus(step);
         roundWin += Math.max(0, step.gained);
+        continue;
+      }
+
+      if ((E.STAGE_KEYS || []).includes(step.type)) {
+        await playCabinetStage(step);
+        roundWin += Math.max(0, step.gained || 0);
+        if (step.gained > 0) await animateWin(state.win, state.win + step.gained);
         continue;
       }
 
@@ -2268,6 +2696,7 @@
   };
   const WEIGHT_RANGE = { min: 0, max: 3, step: 0.1 };
   const BONUS_MODES = ['song', 'train', 'sanyuan'];
+  const STAGE_MODES = E.STAGE_KEYS || ['luckyWheel', 'gacha', 'sicbo', 'pachinko', 'ballDraw', 'roulette'];
   const DEFAULTS = E.normalizeSettings(null);
   function rangeOf(el, fb) {
     const n = (a, d) => (el && Number.isFinite(parseFloat(el.getAttribute(a))) ? parseFloat(el.getAttribute(a)) : d);
@@ -2326,12 +2755,12 @@
   function settingsWarnings(s) {
     const w = [];
     const m = s.modes;
-    const usesBonusRate = BONUS_MODES.some((k) => m[k]) || m.slotBonus || m.fever;
+    const usesBonusRate = BONUS_MODES.some((k) => m[k]) || m.slotBonus || m.fever || STAGE_MODES.some((k) => m[k]);
     if (!m.once && (m.onceMulti || m.onceBig)) w.push('ONCE MORE 已關：連跑／大 ONCE MORE 不會觸發');
     if (m.once && s.weights.once <= 0) w.push('ONCE MORE 權重 0：不會停到再跑');
     if (m.once && (m.onceMulti || m.onceBig) && s.onceRate <= 0) w.push('連跑機率 0：只會單次再跑');
-    if (usesBonusRate && s.bonusRate <= 0) w.push('中彩機率 0：中彩／三輪／FEVER 不會觸發');
-    if (!usesBonusRate && s.bonusRate > 0) w.push('中彩相關玩法全關：中彩機率無效');
+    if (usesBonusRate && s.bonusRate <= 0) w.push('中彩機率 0：中彩／三輪／FEVER／額外舞台不會觸發');
+    if (!usesBonusRate && s.bonusRate > 0) w.push('中彩／舞台玩法全關：中彩機率無效');
     if (m.jp && s.weights.bar <= 0) w.push('BAR 權重 0：JP 無法觸發');
     if (m.jp && s.jpRate <= 0) w.push('JP 累積 0：彩池不會增加');
     if (m.superRun && s.onceRate <= 0) w.push('連跑機率 0：超跑較難觸發');
@@ -2368,7 +2797,7 @@
       el.closest('label')?.classList.toggle('dim', off);
     };
     dim('onceRate', !m.once || !(m.onceMulti || m.onceBig));
-    dim('bonusRate', !(BONUS_MODES.some((k) => m[k]) || m.slotBonus || m.fever));
+    dim('bonusRate', !(BONUS_MODES.some((k) => m[k]) || m.slotBonus || m.fever || STAGE_MODES.some((k) => m[k])));
     dim('jpRate', !m.jp);
     const wOnce = weightList.querySelector('input[data-weight="once"]');
     if (wOnce) { wOnce.disabled = !m.once; wOnce.closest('label')?.classList.toggle('dim', !m.once); }

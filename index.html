@@ -121,6 +121,18 @@
         <div class="fever-banner" id="feverBanner" hidden aria-hidden="true">
           <span class="fever-tag" id="feverTag">READY</span>
         </div>
+        <div class="stage-overlay" id="stageOverlay" hidden aria-hidden="true" role="dialog" aria-modal="true" aria-labelledby="stageTitle">
+          <div class="stage-card" id="stageCard">
+            <header class="stage-head">
+              <span class="stage-badge" id="stageBadge">BONUS</span>
+              <h3 class="stage-title" id="stageTitle">舞台</h3>
+            </header>
+            <div class="stage-body" id="stageBody"></div>
+            <footer class="stage-foot">
+              <span class="stage-result" id="stageResult"></span>
+            </footer>
+          </div>
+        </div>
         <section class="board" id="board" aria-label="跑燈盤面">
           <div class="center" id="center">
             <div class="jp-row" id="jpRow" hidden>
@@ -210,7 +222,7 @@
           <input type="range" id="bonusRate" min="0" max="2" step="0.1" value="1">
           <span id="bonusRateVal">1.0×</span>
         </label>
-        <p class="hint">送燈／開火車／三元四喜／三輪／FEVER</p>
+        <p class="hint">送燈／開火車／三元／三輪／FEVER／轉輪・轉蛋・骰寶・彈珠・抽球・輪盤</p>
         <label class="range-label">連跑機率
           <input type="range" id="onceRate" min="0" max="2" step="0.1" value="1">
           <span id="onceRateVal">1.0×</span>
@@ -294,7 +306,7 @@
         <li>停在有押的圖案：押注 × 倍率（小圖 ×3、BAR50 ×50）。</li>
         <li><b>ONCE MORE</b> 免費再跑；可連跑／大 ONCE MORE（設定開關）。</li>
         <li>中彩：送燈、開火車、三元四喜；JP＝停大 BAR 且押 BAR（Medal 風彩池＋FEVER）。</li>
-        <li><b>特殊停燈</b>可進舞台：三輪 Bonus（柏青嫂風停輪／Free Spin）、FEVER 連跑、賓果連線倍率。</li>
+        <li><b>特殊停燈</b>（77／星星／BAR／ONCE MORE）可進舞台：三輪 Bonus、FEVER、賓果，以及幸運轉輪、轉蛋、骰寶、彈珠台、抽球機、電子輪盤（設定開關）。</li>
         <li>跑燈模式（可關）：倒跑、跳格、假停、雙燈、超跑（連停 3–8）。</li>
         <li>WIN 可「得分」或比大小（1–4 小、6–9 大；5 和）。</li>
         <li>「開分」虛擬加分（點 +100／按住 +500）；「洗分」WIN→CREDIT 後清零。</li>

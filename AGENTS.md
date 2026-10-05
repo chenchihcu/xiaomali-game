@@ -2,7 +2,7 @@
 
 ## What this is
 「小瑪莉」fruit-machine web game with Running-Light / Pachislot / Medal / Bingo
-inspired layers. **Pure static** (HTML/CSS/vanilla JS), no build, no dependencies.
+plus Lucky Wheel / Gacha / Sic Bo / Pachinko / Ball-draw / Roulette stage overlays. **Pure static** (HTML/CSS/vanilla JS), no build, no dependencies.
 Deployed as-is to GitHub Pages from repo root. Fake play credit only. Keep cabinet UI.
 
 Live: https://chenchihcu.github.io/xiaomali-game/
@@ -11,24 +11,26 @@ Repo: https://github.com/chenchihcu/xiaomali-game
 ## Structure
 | File | Role |
 |---|---|
-| `index.html` | Real-cabinet layout: `.cabinet` → `.marquee` → `.topper` (L/R painted wings with cherry/bell art + JP/LINE mini meters + wing lamps; center HOLD strip + bingo + MISSION bar) → `#flourishLayer` → `.glass` (`#board` track; `#center` = JP + **3 reels** + dice + `#onceBanner` + VFD) → `#betpanel` → `.deck` → disclaimer. Settings/help. Scripts: `engine.js` then `game.js` (`defer`). |
+| `index.html` | Real-cabinet layout: `.cabinet` → `.marquee` → `.topper` … → `#flourishLayer` → `.glass` (`#stageOverlay` bonus UIs; `#board` track; `#center` = JP + **3 reels** + dice + `#onceBanner` + VFD) → `#betpanel` → `.deck` → disclaimer. Settings/help. Scripts: `engine.js` then `game.js` (`defer`). |
 | `styles.css` | `--u` = 1/100 of `--W`. `--W` fitted by `fitCabinet()` to safe viewport (iPhone 16 Pro Max 430×932 first). Textured wood/metal/felt + original painted art (SVG). Portrait-first; `fit-1`/`fit-2` density. |
-| `engine.js` | Pure logic → `XiaomaliEngine`. `resolveRound(bets, settings, rng, jpPot, { bingoBoard })` → steps: `once` / `land` (+`fx`,`double`) / `bonus` / `jp` / `super` / `slot` / `fever` / `bingo`. Cap `MAX_ONCE_MORE_CHAIN`. |
-| `game.js` | UI: light FX (reverse/skip/fake), reels + slot stop-feel, FEVER/bingo, flourishes, settings. Animates engine steps only. |
+| `engine.js` | Pure logic → `XiaomaliEngine`. `resolveRound(...)` → steps: `once` / `land` / `bonus` / `jp` / `super` / `slot` / `fever` / `bingo` / `luckyWheel` / `gacha` / `sicbo` / `pachinko` / `ballDraw` / `roulette`. Cap `MAX_ONCE_MORE_CHAIN`; ≤1 mini-stage/round. |
+| `game.js` | UI: light FX, reels + slot stop-feel, FEVER/bingo, **cabinet stage overlays** (wheel/gacha/sicbo/pachinko/draw/roulette), flourishes, settings. Animates engine steps only. |
 | `sim.js` | `node sim.js [rounds]` balance check (not loaded in browser). |
 | `icon*`, `manifest.webmanifest` | PWA-ish home screen (no service worker). |
 
 ## Settings (localStorage `xiaomali.settings.v1`)
 - `preset`: `easy` \| `normal` \| `hard` \| `custom`
 - `weights`: per-symbol (+ `once`, `small`) 0–3
-- `bonusRate`: 中彩機率 — scales 送燈／開火車／三元四喜 **and** 三輪 Bonus／FEVER entry
+- `bonusRate`: 中彩機率 — scales 送燈／開火車／三元四喜、三輪／FEVER、**and** wheel/gacha/sicbo/pachinko/draw/roulette entry
 - `onceRate`: scales 連跑／大 ONCE MORE grant chances
 - `jpRate`: scales JP pot growth (`JP.rate × jpRate`)
 - `startCredit`: 100–99999 (reset button)
 - `betUnit`: 1–10 credit per bet tap
 - `sfxVol` / `bgmVol`: 0–1
 - `modes`: `{ once, onceMulti, onceBig, song, train, sanyuan, jp,
-  slotBonus, fever, bingo, reverse, skip, doubleRun, fakeStop, superRun }`
+  slotBonus, fever, bingo,
+  luckyWheel, gacha, sicbo, pachinko, ballDraw, roulette,
+  reverse, skip, doubleRun, fakeStop, superRun }`
 - `music`: `off` \| `arcade` \| `breezy` \| `festive` \| `retro` \| `neon`
 
 Credit/win/sound/jp/lastBets/bingo: `xiaomali.v1`.
@@ -39,6 +41,12 @@ Credit/win/sound/jp/lastBets/bingo: `xiaomali.v1`.
 | `slotBonus` | Special full tiles (77/star/bar) or ONCE MORE | 3-reel bonus; possible free spin |
 | `fever` | After JP or land mult≥30 | 2–3 FEVER light runs |
 | `bingo` | Paying land marks 3×3; line pays floor(bet/4) | Mission board under hold lamps |
+| `luckyWheel` | Special full tile / ONCE MORE | Overlay wheel → `floor(totalBet×mult/4)` |
+| `gacha` | Special / ONCE MORE | Capsule tier N–SSR; pays bet×payMult if symbol bet |
+| `sicbo` | Special / ONCE MORE | 3 dice big/small/triple overlay |
+| `pachinko` | Special / ONCE MORE | Peg path → pocket mult overlay |
+| `ballDraw` | Special / ONCE MORE | Draw 1–3 balls; match bet symbols |
+| `roulette` | Special / ONCE MORE | 0–12 electronic wheel overlay |
 | `reverse` / `skip` / `fakeStop` | Per light-run roll | Animation FX on `step.fx` |
 | `doubleRun` | On land | Second paying lamp |
 | `superRun` | After paying/special land | 3–8 chained stops |
