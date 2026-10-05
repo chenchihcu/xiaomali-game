@@ -495,7 +495,12 @@
     spin() { this.set('spin'); this.holdsSpin(); },
     expect() { this.set('expect', 'reach'); },
     reach() { this.set('reach'); },
-    win() { this.set('win'); this.holdsFlash(true); },
+    win() {
+      this.set('win');
+      this.holdsFlash(true);
+      const lit = document.querySelector('.tile.lit, .tile.win') || $('center');
+      flourishSparkles(12, lit);
+    },
     idle() {
       this.clear();
       this.holdsFlash(false);
@@ -532,6 +537,7 @@
     },
     flashFever(kind, ms = 1600) {
       this.showFever(kind);
+      flourishFeverSplash(kind);
       feverTimer = setTimeout(() => this.hideFever(), ms);
     },
   };
@@ -805,10 +811,11 @@
   }
 
   function setLight(pos, trail = 0) {
-    for (const el of tileEls) el.classList.remove('lit', 'trail1', 'trail2');
+    for (const el of tileEls) el.classList.remove('lit', 'trail1', 'trail2', 'trail3');
     tileEls[pos].classList.add('lit');
     if (trail >= 1) tileEls[(pos - 1 + N) % N].classList.add('trail1');
     if (trail >= 2) tileEls[(pos - 2 + N) % N].classList.add('trail2');
+    if (trail >= 3) tileEls[(pos - 3 + N) % N].classList.add('trail3');
   }
 
   // --- 防呆: availability rules. Each returns a reason string (blocked) or null.
@@ -1121,10 +1128,11 @@
         delay = FAST;
       }
       const trailDir = rev ? 1 : -1;
-      for (const el of tileEls) el.classList.remove('lit', 'trail1', 'trail2');
+      for (const el of tileEls) el.classList.remove('lit', 'trail1', 'trail2', 'trail3');
       tileEls[state.pos].classList.add('lit');
-      if (delay < 120) tileEls[(state.pos + trailDir + N) % N].classList.add('trail1');
-      if (delay < 60) tileEls[(state.pos + trailDir * 2 + N) % N].classList.add('trail2');
+      if (delay < 140) tileEls[(state.pos + trailDir + N) % N].classList.add('trail1');
+      if (delay < 90) tileEls[(state.pos + trailDir * 2 + N) % N].classList.add('trail2');
+      if (delay < 50) tileEls[(state.pos + trailDir * 3 + N) % N].classList.add('trail3');
       Sound.tick();
       await sleep(delay);
     }
@@ -1167,11 +1175,13 @@
   function renderBingo() {
     const root = $('bingoBoard');
     if (!root) return;
+    const was = root.hidden;
     root.hidden = !settings.modes.bingo;
     root.querySelectorAll('.bingo-cell').forEach((el, i) => {
       el.classList.toggle('on', !!state.bingo[i]);
       el.classList.toggle('flash', false);
     });
+    if (was !== root.hidden && typeof scheduleFit === 'function') scheduleFit();
   }
 
   function flashBingoCell(i) {
@@ -1219,6 +1229,47 @@
     h.textContent = '馬';
     host.appendChild(h);
     setTimeout(() => h.remove(), 1400);
+  }
+
+  /** Win sparkles around the lit tile / center (original SVG, visual only). */
+  function flourishSparkles(n = 10, originEl = null) {
+    const host = $('flourishLayer');
+    if (!host || window.matchMedia('(prefers-reduced-motion: reduce)').matches) return;
+    const cab = cabinetEl || host;
+    const cr = cab.getBoundingClientRect();
+    let ox = cr.width * 0.5, oy = cr.height * 0.42;
+    if (originEl) {
+      const r = originEl.getBoundingClientRect();
+      ox = r.left + r.width / 2 - cr.left;
+      oy = r.top + r.height / 2 - cr.top;
+    }
+    for (let i = 0; i < n; i++) {
+      const sp = document.createElement('i');
+      sp.className = 'sparkle';
+      const ang = (Math.PI * 2 * i) / n + Math.random() * 0.4;
+      const dist = (0.18 + Math.random() * 0.55) * Math.min(cr.width, cr.height);
+      sp.style.left = ox + 'px';
+      sp.style.top = oy + 'px';
+      sp.style.setProperty('--dx', Math.cos(ang) * dist + 'px');
+      sp.style.setProperty('--dy', Math.sin(ang) * dist + 'px');
+      sp.style.setProperty('--s', (0.55 + Math.random() * 0.9).toFixed(2));
+      sp.style.animationDelay = (Math.random() * 0.18) + 's';
+      host.appendChild(sp);
+      setTimeout(() => sp.remove(), 1100);
+    }
+  }
+
+  /** FEVER / READY burst behind the banner. */
+  function flourishFeverSplash(kind = 'fever') {
+    const host = $('flourishLayer');
+    if (!host || window.matchMedia('(prefers-reduced-motion: reduce)').matches) return;
+    const splash = document.createElement('div');
+    splash.className = 'fever-splash' + (kind === 'ready' ? ' ready' : '');
+    const ring = document.createElement('div');
+    ring.className = 'fever-ring';
+    host.appendChild(splash);
+    host.appendChild(ring);
+    setTimeout(() => { splash.remove(); ring.remove(); }, 1400);
   }
 
   /** Pachislot-style staggered reel stop (stop-button feel). */
@@ -2298,10 +2349,67 @@
     }
   });
   window.addEventListener('pagehide', save);
-  window.addEventListener('resize', () => {
-    // keep reel offsets correct after layout changes
-    idleReels();
-  });
+  // Fit the cabinet exactly into the safe viewport (iPhone 16 Pro Max first).
+  // Measures natural height @ current --W, then shrinks --W / applies fit-*
+  // density classes until the machine clears the bottom safe area.
+  function fitCabinet() {
+    const root = document.documentElement;
+    const cab = cabinetEl || $('cabinet');
+    if (!cab) return;
+    const cs = getComputedStyle(root);
+    const padT = parseFloat(cs.getPropertyValue('--pad-t')) || 0;
+    const padB = parseFloat(cs.getPropertyValue('--pad-b')) || 0;
+    const vv = window.visualViewport;
+    const vh = (vv && vv.height) ? vv.height : (window.innerHeight || root.clientHeight);
+    const vw = (vv && vv.width) ? vv.width : (window.innerWidth || root.clientWidth);
+    const safeL = parseFloat(cs.getPropertyValue('--safe-l')) || 0;
+    const safeR = parseFloat(cs.getPropertyValue('--safe-r')) || 0;
+    const gutter = parseFloat(cs.getPropertyValue('--gutter')) || 4;
+    const Wmax = Math.min(vw - 2 * gutter - safeL - safeR, 480);
+    const Hav = Math.max(240, vh - padT - padB);
+
+    // Reset density so we measure the "full" layout first.
+    root.classList.remove('fit-1', 'fit-2');
+    root.style.setProperty('--Wmax', Wmax + 'px');
+    root.style.setProperty('--Hav', Hav + 'px');
+    root.style.setProperty('--fit-ratio', '1.0'); // force width = Wmax for measure
+    root.style.setProperty('--W', Wmax + 'px');
+
+    // Force layout, then decide density based on overflow.
+    void cab.offsetHeight;
+    let h = cab.getBoundingClientRect().height;
+    let level = 0;
+    if (h > Hav * 1.02) { root.classList.add('fit-1'); level = 1; void cab.offsetHeight; h = cab.getBoundingClientRect().height; }
+    if (h > Hav * 1.02) { root.classList.add('fit-2'); level = 2; void cab.offsetHeight; h = cab.getBoundingClientRect().height; }
+
+    const ratio = Math.max(1.35, (h / Math.max(1, Wmax)) * 1.012);
+    const W = Math.max(280, Math.min(Wmax, Hav / ratio));
+    root.style.setProperty('--fit-ratio', ratio.toFixed(4));
+    root.style.setProperty('--W', W + 'px');
+    root.dataset.fit = String(level);
+
+    // Re-check: if still overflowing after width shrink (subpixel / bingo), nudge again.
+    void cab.offsetHeight;
+    h = cab.getBoundingClientRect().height;
+    if (h > Hav + 1) {
+      const W2 = Math.max(260, W * (Hav / h) * 0.995);
+      root.style.setProperty('--W', W2 + 'px');
+    }
+  }
+  let _fitRaf = 0;
+  function scheduleFit() {
+    cancelAnimationFrame(_fitRaf);
+    _fitRaf = requestAnimationFrame(() => {
+      fitCabinet();
+      idleReels();
+    });
+  }
+  window.addEventListener('resize', scheduleFit);
+  window.addEventListener('orientationchange', scheduleFit);
+  if (window.visualViewport) {
+    visualViewport.addEventListener('resize', scheduleFit);
+    visualViewport.addEventListener('scroll', scheduleFit);
+  }
 
   document.addEventListener('gesturestart', (e) => e.preventDefault());
 
@@ -2312,13 +2420,14 @@
   load();
   diceLed.set('-');
   setLight(state.pos);
-  requestAnimationFrame(() => idleReels());
   if (!state.betsPaid && sum(state.bets) > 0) setMsg('按開始續玩，或重押');
   render();
+  fitCabinet();
+  requestAnimationFrame(() => { fitCabinet(); idleReels(); });
   if (settingsNotice) setTimeout(() => toast(settingsNotice, 'warn', 3200), 400);
 
   window.__xiaomali = {
-    state, settings, TRACK, SYMBOLS, pickTarget, resetCredit, Music, Sound, E,
+    state, settings, TRACK, SYMBOLS, pickTarget, resetCredit, Music, Sound, E, fitCabinet,
     setSettings(s) {
       const v = validateSettings(s);
       settings = v.s;

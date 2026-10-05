@@ -19,6 +19,10 @@
   <div class="app" id="app">
     <div class="cabinet" id="cabinet">
       <i class="screw s-tl"></i><i class="screw s-tr"></i><i class="screw s-bl"></i><i class="screw s-br"></i>
+      <i class="paint-scroll ps-tl" aria-hidden="true"></i>
+      <i class="paint-scroll ps-tr" aria-hidden="true"></i>
+      <i class="paint-scroll ps-bl" aria-hidden="true"></i>
+      <i class="paint-scroll ps-br" aria-hidden="true"></i>
 
       <!-- decorative frame LEDs / side lamps (visual only) -->
       <div class="led-rail rail-top" id="railTop" aria-hidden="true"></div>
@@ -48,15 +52,16 @@
         </button>
       </header>
 
-      <div class="hold-strip" id="holdStrip" aria-hidden="true" title="保留燈">
-        <span class="hold-lamp" data-h="0"></span>
-        <span class="hold-lamp" data-h="1"></span>
-        <span class="hold-lamp" data-h="2"></span>
-        <span class="hold-lamp" data-h="3"></span>
-      </div>
-
-      <div class="bingo-board" id="bingoBoard" aria-label="賓果任務" hidden>
-        <!-- cells filled by game.js -->
+      <div class="topper" id="topper">
+        <div class="hold-strip" id="holdStrip" aria-hidden="true" title="保留燈">
+          <span class="hold-lamp" data-h="0"></span>
+          <span class="hold-lamp" data-h="1"></span>
+          <span class="hold-lamp" data-h="2"></span>
+          <span class="hold-lamp" data-h="3"></span>
+        </div>
+        <div class="bingo-board" id="bingoBoard" aria-label="賓果任務" hidden>
+          <!-- cells filled by game.js -->
+        </div>
       </div>
 
       <div class="flourish-layer" id="flourishLayer" aria-hidden="true"></div>

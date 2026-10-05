@@ -11,8 +11,8 @@ Repo: https://github.com/chenchihcu/xiaomali-game
 ## Structure
 | File | Role |
 |---|---|
-| `index.html` | Real-cabinet layout: `.cabinet` → `.marquee` → `#holdStrip` → `#bingoBoard` → `#flourishLayer` → `.glass` (`#board` track; `#center` = JP + **3 reels** + dice + `#onceBanner` + VFD) → `#betpanel` → `.deck` → disclaimer. Settings/help. Scripts: `engine.js` then `game.js` (`defer`). |
-| `styles.css` | `--u` = 1/100 of `--W`; cabinet height ≈ 1.80×W. Portrait-first. Bingo board, coin/horse flourishes, tile `side-*` lamps. |
+| `index.html` | Real-cabinet layout: `.cabinet` → `.marquee` → `.topper` (painted art + hold + bingo) → `#flourishLayer` → `.glass` (`#board` track; `#center` = JP + **3 reels** + dice + `#onceBanner` + VFD) → `#betpanel` → `.deck` → disclaimer. Settings/help. Scripts: `engine.js` then `game.js` (`defer`). |
+| `styles.css` | `--u` = 1/100 of `--W`. `--W` fitted by `fitCabinet()` to safe viewport (iPhone 16 Pro Max 430×932 first). Textured wood/metal/felt + original painted art (SVG). Portrait-first; `fit-1`/`fit-2` density. |
 | `engine.js` | Pure logic → `XiaomaliEngine`. `resolveRound(bets, settings, rng, jpPot, { bingoBoard })` → steps: `once` / `land` (+`fx`,`double`) / `bonus` / `jp` / `super` / `slot` / `fever` / `bingo`. Cap `MAX_ONCE_MORE_CHAIN`. |
 | `game.js` | UI: light FX (reverse/skip/fake), reels + slot stop-feel, FEVER/bingo, flourishes, settings. Animates engine steps only. |
 | `sim.js` | `node sim.js [rounds]` balance check (not loaded in browser). |
@@ -75,12 +75,19 @@ Bingo marks and stage pays are real (fake credit); flourishes are not.
 - Controls: `.btn` arcade push-button; bet keys on deck; LEDs in payout strip.
 - Track / bet icons: CSS/SVG glossy fruit (`iconHTML`), not copyrighted IP.
 
+## Viewport / iPhone 16 Pro Max
+- Target CSS: **430×932** portrait, `viewport-fit=cover`, safe-area insets for notch / home indicator.
+- `html, body` are `overflow: hidden` + `body { position: fixed; inset: 0 }` (no page scroll).
+- `fitCabinet()` (game.js) measures cabinet height, applies `fit-1` / `fit-2` density, then sets `--W` so the machine clears `--pad-t` / `--pad-b`. Re-runs on `resize` / `orientationchange` / `visualViewport`.
+- Touch targets ≥ 44px (knobs, chips, buttons, bet keys). Settings/help sheets scroll inside the dialog only.
+- FX: win sparkles, 3-step lamp trails, reel bounce, FEVER splash/ring — all original CSS/SVG, no IP.
+
 ## How to test
 ```bash
 python3 -m http.server 8000
 node sim.js 50000          # RTP / hit / LUCKY / JP rates per preset
 ```
-- DevTools device: iPhone 14/15/16 Pro Max portrait.
+- DevTools device: **iPhone 16 Pro Max** portrait (430×932); also try shorter heights (~746 Safari chrome, ~700).
 - Console: `__xiaomali.state`, `.settings`, `.Music`, `.setSettings(...)`, `.pickTarget()`.
 - iOS/WebKit: tap once to unlock; `Sound.unlock` awaits `resume` + silent buffer before BGM/SFX. Hardware mute still silences Web Audio. Tab-visible resumes suspended AudioContext.
 
