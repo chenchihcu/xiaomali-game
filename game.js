@@ -22,7 +22,7 @@
   }
   const {
     SYMBOLS, SYM_INDEX, TRACK, N, MAX_ONCE_MORE_CHAIN, JP,
-    MODE_KEYS, MODE_LABELS, PRESETS, WEIGHT_KEYS, WEIGHT_LABELS,
+    MODE_KEYS, MODE_LABELS, MODE_HINTS, PRESETS, WEIGHT_KEYS, WEIGHT_LABELS,
     BINGO_CELLS, BINGO_LINES,
   } = E;
 
@@ -721,20 +721,21 @@
     });
   })();
 
-  /** Glossy CSS/SVG fruit icons (no flat emoji). Unique gradient ids per instance. */
+  /** Classic 小瑪莉 cabinet tile icons: glossy molded plastic on cream face. */
   let _icUid = 0;
   function iconHTML(symId) {
     if (symId === 'once') return '<span class="ic-once">ONCE<br>MORE</span>';
     if (symId === 'seven') return '<span class="ic-77">77</span>';
     if (symId === 'bar') return '<span class="ic-bar"><i>BAR</i><i>BAR</i><i>BAR</i></span>';
     const u = 'i' + (++_icUid);
+    // Thick outline + plastic gloss = arcade-sticker look (not flat emoji).
     const SVGS = {
-      apple: `<svg class="ic-svg" viewBox="0 0 64 64" aria-hidden="true"><defs><radialGradient id="${u}a" cx="35%" cy="30%"><stop offset="0%" stop-color="#ff8a8a"/><stop offset="45%" stop-color="#e01818"/><stop offset="100%" stop-color="#7a0000"/></radialGradient></defs><ellipse cx="32" cy="36" rx="20" ry="22" fill="url(#${u}a)" stroke="#4a0000" stroke-width="1.5"/><path d="M32 14c0 0 2-8 10-10" stroke="#3a6a18" stroke-width="3" fill="none" stroke-linecap="round"/><ellipse cx="38" cy="8" rx="7" ry="3.5" fill="#4caf30" stroke="#2a6a18" stroke-width="1" transform="rotate(25 38 8)"/><ellipse cx="24" cy="26" rx="7" ry="4" fill="#fff" opacity=".45" transform="rotate(-30 24 26)"/></svg>`,
-      orange: `<svg class="ic-svg" viewBox="0 0 64 64" aria-hidden="true"><defs><radialGradient id="${u}o" cx="32%" cy="28%"><stop offset="0%" stop-color="#ffe0a0"/><stop offset="40%" stop-color="#ff9a1a"/><stop offset="100%" stop-color="#c45a00"/></radialGradient></defs><circle cx="32" cy="34" r="22" fill="url(#${u}o)" stroke="#8a3a00" stroke-width="1.5"/><circle cx="32" cy="34" r="22" fill="none" stroke="#ffcc66" stroke-width="0.6" stroke-dasharray="2 3" opacity=".45"/><path d="M32 12v6M28 14h8" stroke="#2a6a18" stroke-width="2.5" stroke-linecap="round"/><ellipse cx="24" cy="26" rx="8" ry="4.5" fill="#fff" opacity=".45" transform="rotate(-35 24 26)"/></svg>`,
-      mango: `<svg class="ic-svg" viewBox="0 0 64 64" aria-hidden="true"><defs><radialGradient id="${u}m" cx="35%" cy="30%"><stop offset="0%" stop-color="#ffe9a0"/><stop offset="40%" stop-color="#ffc020"/><stop offset="100%" stop-color="#d07800"/></radialGradient></defs><path d="M22 48c-8-10-6-26 6-34 10-7 22-4 26 8 4 12-2 28-14 34-8 4-14 2-18-8z" fill="url(#${u}m)" stroke="#8a5000" stroke-width="1.5"/><path d="M40 14c4-6 10-8 14-6" stroke="#3a7a20" stroke-width="2.5" fill="none" stroke-linecap="round"/><ellipse cx="30" cy="28" rx="7" ry="3.5" fill="#fff" opacity=".4" transform="rotate(-40 30 28)"/></svg>`,
-      bell: `<svg class="ic-svg" viewBox="0 0 64 64" aria-hidden="true"><defs><linearGradient id="${u}b" x1="0" y1="0" x2="0" y2="1"><stop offset="0%" stop-color="#ffe566"/><stop offset="45%" stop-color="#f0c000"/><stop offset="100%" stop-color="#a87800"/></linearGradient></defs><path d="M32 8c-2 0-4 2-4 5v2c-10 3-16 12-16 24h40c0-12-6-21-16-24v-2c0-3-2-5-4-5z" fill="url(#${u}b)" stroke="#6a4a00" stroke-width="1.4"/><ellipse cx="32" cy="40" rx="22" ry="5" fill="#c9a000" stroke="#6a4a00" stroke-width="1"/><circle cx="32" cy="48" r="4" fill="#8a6000" stroke="#4a3000" stroke-width="1"/><ellipse cx="24" cy="22" rx="6" ry="3" fill="#fff" opacity=".5" transform="rotate(-25 24 22)"/></svg>`,
-      melon: `<svg class="ic-svg" viewBox="0 0 64 64" aria-hidden="true"><defs><radialGradient id="${u}w" cx="40%" cy="35%"><stop offset="0%" stop-color="#ff8a9a"/><stop offset="55%" stop-color="#e01840"/><stop offset="100%" stop-color="#7a0020"/></radialGradient></defs><path d="M10 40c0-16 12-28 28-28 4 0 8 1 12 3-2 18-14 32-30 36-6-2-10-6-10-11z" fill="url(#${u}w)" stroke="#5a0018" stroke-width="1.4"/><path d="M50 15c6 4 10 12 10 22 0 8-4 14-10 18" fill="#3cb84a" stroke="#1a6a20" stroke-width="1.3"/><path d="M50 15c-1 8-1 18 0 28" fill="none" stroke="#2a8a30" stroke-width="2"/><circle cx="22" cy="30" r="1.6" fill="#3a1800"/><circle cx="30" cy="38" r="1.4" fill="#3a1800"/><circle cx="26" cy="46" r="1.3" fill="#3a1800"/><circle cx="34" cy="28" r="1.2" fill="#3a1800"/><ellipse cx="22" cy="24" rx="6" ry="3" fill="#fff" opacity=".35" transform="rotate(-30 22 24)"/></svg>`,
-      star: `<svg class="ic-svg" viewBox="0 0 64 64" aria-hidden="true"><defs><radialGradient id="${u}s" cx="40%" cy="30%"><stop offset="0%" stop-color="#fff6a8"/><stop offset="40%" stop-color="#ffd200"/><stop offset="100%" stop-color="#c48800"/></radialGradient></defs><path d="M32 6l6.5 18.5H58l-15 11.5 5.5 19L32 43l-16.5 12 5.5-19L6 24.5h19.5z" fill="url(#${u}s)" stroke="#8a5a00" stroke-width="1.5" stroke-linejoin="round"/><path d="M32 14l3.5 10H46" fill="none" stroke="#fff" stroke-width="2" opacity=".45" stroke-linecap="round"/></svg>`,
+      apple: `<svg class="ic-svg" viewBox="0 0 64 64" aria-hidden="true"><defs><radialGradient id="${u}a" cx="32%" cy="28%"><stop offset="0%" stop-color="#ffb0b0"/><stop offset="35%" stop-color="#e82020"/><stop offset="78%" stop-color="#a00808"/><stop offset="100%" stop-color="#4a0000"/></radialGradient><linearGradient id="${u}ag" x1="0" y1="0" x2="0" y2="1"><stop offset="0%" stop-color="#fff" stop-opacity=".55"/><stop offset="40%" stop-color="#fff" stop-opacity="0"/></linearGradient></defs><ellipse cx="32" cy="37" rx="21" ry="22.5" fill="url(#${u}a)" stroke="#3a0000" stroke-width="2.2"/><path d="M32 16c1-7 8-11 14-10" stroke="#2a5a10" stroke-width="3.2" fill="none" stroke-linecap="round"/><ellipse cx="40" cy="9" rx="8" ry="4" fill="#58c038" stroke="#1e5a12" stroke-width="1.4" transform="rotate(28 40 9)"/><ellipse cx="23" cy="28" rx="8" ry="4.5" fill="url(#${u}ag)" transform="rotate(-32 23 28)"/><ellipse cx="38" cy="44" rx="10" ry="5" fill="#000" opacity=".12"/></svg>`,
+      orange: `<svg class="ic-svg" viewBox="0 0 64 64" aria-hidden="true"><defs><radialGradient id="${u}o" cx="30%" cy="26%"><stop offset="0%" stop-color="#ffe8b0"/><stop offset="38%" stop-color="#ff9a14"/><stop offset="80%" stop-color="#d06000"/><stop offset="100%" stop-color="#8a3800"/></radialGradient></defs><circle cx="32" cy="35" r="22.5" fill="url(#${u}o)" stroke="#6a2a00" stroke-width="2.2"/><circle cx="32" cy="35" r="22.5" fill="none" stroke="#ffcc66" stroke-width=".7" stroke-dasharray="1.8 2.6" opacity=".55"/><path d="M32 13v7M27 15h10" stroke="#2a6a14" stroke-width="2.8" stroke-linecap="round"/><ellipse cx="38" cy="12" rx="5" ry="2.4" fill="#4cb828" stroke="#1e5a12" stroke-width="1" transform="rotate(18 38 12)"/><ellipse cx="23" cy="27" rx="9" ry="5" fill="#fff" opacity=".42" transform="rotate(-38 23 27)"/></svg>`,
+      mango: `<svg class="ic-svg" viewBox="0 0 64 64" aria-hidden="true"><defs><radialGradient id="${u}m" cx="34%" cy="28%"><stop offset="0%" stop-color="#fff0b0"/><stop offset="40%" stop-color="#ffc018"/><stop offset="85%" stop-color="#c87800"/><stop offset="100%" stop-color="#8a4800"/></radialGradient></defs><path d="M20 49c-9-11-6-28 7-36 11-7 24-3 28 10 4 13-3 29-16 35-9 4-15 1-19-9z" fill="url(#${u}m)" stroke="#6a3a00" stroke-width="2.2"/><path d="M41 13c5-7 12-9 16-6" stroke="#2a6a14" stroke-width="2.8" fill="none" stroke-linecap="round"/><ellipse cx="48" cy="10" rx="6" ry="2.8" fill="#4cb828" stroke="#1e5a12" stroke-width="1" transform="rotate(-18 48 10)"/><ellipse cx="29" cy="28" rx="8" ry="4" fill="#fff" opacity=".4" transform="rotate(-42 29 28)"/></svg>`,
+      bell: `<svg class="ic-svg" viewBox="0 0 64 64" aria-hidden="true"><defs><linearGradient id="${u}b" x1="0" y1="0" x2="0" y2="1"><stop offset="0%" stop-color="#fff2a0"/><stop offset="35%" stop-color="#ffd000"/><stop offset="70%" stop-color="#d0a000"/><stop offset="100%" stop-color="#8a6000"/></linearGradient><linearGradient id="${u}bg" x1="0" y1="0" x2="1" y2="0"><stop offset="0%" stop-color="#fff" stop-opacity=".5"/><stop offset="55%" stop-color="#fff" stop-opacity="0"/></linearGradient></defs><path d="M32 7c-2.4 0-4.4 2.2-4.4 5.2v2.2C16.8 17.4 11 27 11 39.5h42C53 27 47.2 17.4 36.4 14.4v-2.2C36.4 9.2 34.4 7 32 7z" fill="url(#${u}b)" stroke="#5a3a00" stroke-width="2"/><ellipse cx="32" cy="41" rx="23" ry="5.5" fill="#c89800" stroke="#5a3a00" stroke-width="1.4"/><circle cx="32" cy="50" r="4.4" fill="#7a5000" stroke="#3a2800" stroke-width="1.3"/><path d="M18 22c4-8 10-12 14-12" fill="none" stroke="url(#${u}bg)" stroke-width="4" stroke-linecap="round"/></svg>`,
+      melon: `<svg class="ic-svg" viewBox="0 0 64 64" aria-hidden="true"><defs><radialGradient id="${u}w" cx="38%" cy="32%"><stop offset="0%" stop-color="#ffb0bc"/><stop offset="45%" stop-color="#e01840"/><stop offset="100%" stop-color="#6a0018"/></radialGradient><linearGradient id="${u}wr" x1="0" y1="0" x2="1" y2="1"><stop offset="0%" stop-color="#7ae050"/><stop offset="55%" stop-color="#2ea028"/><stop offset="100%" stop-color="#146018"/></linearGradient></defs><path d="M9 41c0-17 13-30 30-30 4 0 8 1 12 3.2C49 32 36 47 19 52c-6-2.2-10-6.5-10-11z" fill="url(#${u}w)" stroke="#4a0010" stroke-width="2"/><path d="M51 14.2c6.5 4.2 11 13 11 23.5 0 8.5-4.2 15-11 19.2" fill="url(#${u}wr)" stroke="#0e4a14" stroke-width="1.8"/><path d="M51 14c-1 9-1 20 0 30" fill="none" stroke="#1e7a28" stroke-width="2.4"/><circle cx="22" cy="31" r="1.7" fill="#2a1000"/><circle cx="30" cy="39" r="1.5" fill="#2a1000"/><circle cx="26" cy="47" r="1.4" fill="#2a1000"/><circle cx="34" cy="29" r="1.3" fill="#2a1000"/><ellipse cx="21" cy="25" rx="7" ry="3.2" fill="#fff" opacity=".38" transform="rotate(-28 21 25)"/></svg>`,
+      star: `<svg class="ic-svg" viewBox="0 0 64 64" aria-hidden="true"><defs><radialGradient id="${u}s" cx="38%" cy="28%"><stop offset="0%" stop-color="#fff8c0"/><stop offset="35%" stop-color="#ffd400"/><stop offset="80%" stop-color="#d09000"/><stop offset="100%" stop-color="#8a5800"/></radialGradient></defs><path d="M32 5l7 19.5H60L44.5 37l5.8 20L32 45.2 13.7 57l5.8-20L4 24.5h21z" fill="url(#${u}s)" stroke="#6a4000" stroke-width="2.1" stroke-linejoin="round"/><path d="M32 14l4 11H48" fill="none" stroke="#fff" stroke-width="2.4" opacity=".5" stroke-linecap="round"/><path d="M32 22l2.2 6H41" fill="none" stroke="#fff6a0" stroke-width="1.4" opacity=".7" stroke-linecap="round"/></svg>`,
     };
     return SVGS[symId] || '';
   }
@@ -957,7 +958,7 @@
   function showOnceBanner(variant, remaining) {
     if (!onceBanner) return;
     onceBannerTag.textContent = ONCE_VARIANT_LABEL[variant] || 'ONCE MORE';
-    onceBannerCount.textContent = remaining > 0 ? `再跑 ${remaining} 次` : '結束';
+    onceBannerCount.textContent = remaining > 0 ? `×${remaining}` : '結束';
     onceBanner.hidden = remaining <= 0;
     onceBanner.classList.toggle('pulse', remaining > 0);
   }
@@ -976,8 +977,8 @@
   }
 
   // --- 防呆: availability rules. Each returns a reason string (blocked) or null.
-  const BUSY_MSG = '轉動中・請稍候';
-  const NO_CREDIT = 'CREDIT 不足・請開分';
+  const BUSY_MSG = '轉動中';
+  const NO_CREDIT = 'CREDIT 不足';
   const avail = () => state.credit + state.win;          // WIN auto-collects before betting
   const paidRefund = () => (state.betsPaid ? sum(state.bets) : 0);
   const lastPattern = () => (sum(state.lastPlayedBets) > 0 ? state.lastPlayedBets : state.bets);
@@ -987,8 +988,8 @@
     start() {
       if (state.busy) return BUSY_MSG;
       const total = sum(state.bets);
-      if (total <= 0) return '請先押注再開始';
-      if (!state.betsPaid && avail() < total) return `CREDIT 不足（需 ${total}）・請清除或開分`;
+      if (total <= 0) return '請先押注';
+      if (!state.betsPaid && avail() < total) return `需 ${total}・請清押或開分`;
       return null;
     },
     clear() {
@@ -1011,31 +1012,31 @@
     dbl() {
       if (state.busy) return BUSY_MSG;
       const total = sum(state.bets);
-      if (total <= 0) return '請先押注再加倍';
+      if (total <= 0) return '請先押注';
       const dbl = doubledTotal();
       if (dbl <= total) return '押注已達上限';
       if (state.betsPaid) { if (avail() < 1) return NO_CREDIT; }
-      else if (avail() < dbl) return `CREDIT 不足（加倍需 ${dbl}）`;
+      else if (avail() < dbl) return `加倍需 ${dbl}`;
       return null;
     },
     rebet() {
       if (state.busy) return BUSY_MSG;
       const need = sum(lastPattern());
       if (need <= 0) return '沒有上一局押注';
-      if (avail() + paidRefund() < need) return `CREDIT 不足（續押需 ${need}）`;
+      if (avail() + paidRefund() < need) return `續押需 ${need}`;
       return null;
     },
     auto() {
       if (state.auto) return null; // always allowed to switch off
       if (state.busy) return BUSY_MSG;
       const need = sum(lastPattern());
-      if (need <= 0) return '請先押注再自動';
-      if (!(state.betsPaid && sum(state.bets) > 0) && avail() + paidRefund() < need) return `CREDIT 不足（需 ${need}）・無法自動`;
+      if (need <= 0) return '請先押注';
+      if (!(state.betsPaid && sum(state.bets) > 0) && avail() + paidRefund() < need) return `自動需 ${need}`;
       return null;
     },
     collect() {
       if (state.busy) return BUSY_MSG;
-      if (state.win <= 0) return '沒有 WIN 可得分';
+      if (state.win <= 0) return '沒有 WIN';
       return null;
     },
     gamble() {
@@ -1105,7 +1106,10 @@
     btn.start.classList.toggle('flash', !startWhy && !hasWin && !state.auto);
     btn.auto.classList.toggle('on', state.auto);
     btn.auto.classList.toggle('flash', state.auto);
-    btn.auto.textContent = state.auto ? '自動中' : '自動';
+    const autoLab = $('autoLab');
+    if (autoLab) autoLab.textContent = state.auto ? '自動中' : '自動';
+    else btn.auto.textContent = state.auto ? '自動中' : '自動';
+    btn.auto.setAttribute('aria-label', state.auto ? '自動中' : '自動');
     btn.sound.classList.toggle('off', !Sound.on);
     btn.sound.setAttribute('aria-pressed', String(Sound.on));
   }
@@ -1146,7 +1150,7 @@
     const take = Math.min(state.win, room);
     state.credit += take;
     state.win -= take;
-    if (state.win > 0) toast('CREDIT 已達上限・剩餘 WIN 未收入', 'warn');
+    if (state.win > 0) toast('CREDIT 已滿・WIN 未收', 'warn');
     else state.win = 0;
     Sound.coin();
     clearHighlights();
@@ -1186,9 +1190,9 @@
     state.bets[i] += add;
     state.credit -= add;
     Sound.bet();
-    setMsg(`已押 ${sum(state.bets)}・按開始`);
+    setMsg(`已押 ${sum(state.bets)}`);
     if (add < unit && add < room && state.credit === 0) {
-      toast(`CREDIT 不足，只押上 ${add}`, 'warn');
+      toast(`只押 ${add}`, 'warn');
     }
     render();
     save();
@@ -1216,7 +1220,7 @@
     if (added) {
       Sound.seq([784, 988, 1175], 0.05, 'triangle', 0.07);
       setMsg(`全押 ${sum(state.bets)}`);
-      if (state.credit === 0 && added < unit * SYMBOLS.length) toast('CREDIT 不足，部分押注', 'warn');
+      if (state.credit === 0 && added < unit * SYMBOLS.length) toast('CREDIT 不足', 'warn');
     } else deny('無法加注');
     render();
     save();
@@ -2121,7 +2125,7 @@
     const total = sum(state.bets);
     if (!state.betsPaid) {
       if (state.credit < total) {
-        deny(`CREDIT 不足（需 ${total}）・請清除或開分`);
+        deny(`需 ${total}・請清押或開分`);
         stopAuto();
         render();
         return;
@@ -2413,12 +2417,12 @@
       if (holdCount > 0 && randomFloat() < 0.35) FX.holdsSet(holdCount - 1);
     }
     if (state.credit === 0 && state.win === 0) {
-      setMsg('分數用完・開分或⚙️重設', 'bad');
-      toast('CREDIT 用完・請開分', 'bad');
+      setMsg('CREDIT 用完・請開分', 'bad');
+      toast('CREDIT 用完', 'bad');
       stopAuto('CREDIT 不足・自動已停');
     } else if (state.auto && state.credit + state.win < sum(state.lastPlayedBets)) {
       // auto-off as soon as the next round can't be afforded
-      stopAuto(`CREDIT 不足（需 ${sum(state.lastPlayedBets)}）・自動已停`);
+      stopAuto(`需 ${sum(state.lastPlayedBets)}・自動停`);
     }
     render();
     save();
@@ -2447,7 +2451,7 @@
     }
     state.credit = Math.min(CREDIT_CAP, startCredit + take);
     state.win = amount - take;
-    if (state.win > 0) toast('CREDIT 已達上限・剩餘 WIN 未收入', 'warn');
+    if (state.win > 0) toast('CREDIT 已滿・WIN 未收', 'warn');
     else setMsg(`得分 +${take}`);
     state.busy = false;
     render();
@@ -2534,17 +2538,17 @@
     const pattern = lastPattern();
     const need = sum(pattern);
     if (need <= 0) {
-      stopAuto('無押注・自動已停');
+      stopAuto('無押注・自動停');
       return;
     }
     const ready = state.betsPaid && sum(state.bets) > 0;
     if (!ready) {
       if (avail() + paidRefund() < need) {
-        stopAuto(`CREDIT 不足（需 ${need}）・自動已停`);
+        stopAuto(`需 ${need}・自動停`);
         return;
       }
       if (!applyBetPattern(pattern, { quiet: true })) {
-        stopAuto('無法續押・自動已停');
+        stopAuto('無法續押・自動停');
         return;
       }
     }
@@ -2575,12 +2579,12 @@
     state.betsPaid = true;
     const need = sum(pattern);
     if (need <= 0) {
-      if (!quiet) deny('沒有上一局押注');
+      if (!quiet) deny('沒有上局押注');
       render();
       return false;
     }
     if (state.credit < need) {
-      if (!quiet) deny(`CREDIT 不足（需 ${need}）`);
+      if (!quiet) deny(`需 ${need}`);
       render();
       return false;
     }
@@ -2737,7 +2741,8 @@
 
   MODE_KEYS.forEach((k) => {
     const lab = document.createElement('label');
-    lab.innerHTML = `<input type="checkbox" data-mode="${k}"> <span>${MODE_LABELS[k]}</span>`;
+    const hint = (MODE_HINTS && MODE_HINTS[k]) ? `<small class="mode-hint">${MODE_HINTS[k]}</small>` : '';
+    lab.innerHTML = `<input type="checkbox" data-mode="${k}"> <span class="mode-text"><span class="mode-name">${MODE_LABELS[k]}</span>${hint}</span>`;
     modeList.appendChild(lab);
   });
 
@@ -2800,7 +2805,7 @@
       s.weights[k] = v;
     }
     if (fruitWeight(s) <= 0) {
-      errors.push('水果停燈權重不可全為 0（已還原預設）');
+      errors.push('水果權重不可全 0（已還原）');
       s.weights = { ...DEFAULTS.weights };
       s.preset = 'custom';
     }
@@ -2917,9 +2922,25 @@
     else settingsDlg.setAttribute('open', '');
   }
 
+  const SEEN_HELP_KEY = 'xiaomali.seenHelp.v1';
+  function markSeenHelp() {
+    try { localStorage.setItem(SEEN_HELP_KEY, '1'); } catch (_) {}
+    const tip = $('firstTip');
+    if (tip) tip.hidden = true;
+  }
   function openHelp() {
+    markSeenHelp();
     if (typeof helpDlg.showModal === 'function') helpDlg.showModal();
     else helpDlg.setAttribute('open', '');
+  }
+  helpDlg?.addEventListener('close', markSeenHelp);
+  function maybeFirstRunTip() {
+    try { if (localStorage.getItem(SEEN_HELP_KEY)) return; } catch (_) { return; }
+    const tip = $('firstTip');
+    if (!tip) return;
+    tip.hidden = false;
+    $('firstTipOk')?.addEventListener('click', () => { markSeenHelp(); Sound.bet(); }, { once: true });
+    $('firstTipHelp')?.addEventListener('click', () => { openHelp(); Sound.bet(); }, { once: true });
   }
 
   presetRow.addEventListener('click', (e) => {
@@ -2960,7 +2981,7 @@
     if (fruitWeight(cand) <= 0) {
       inp.value = String(prev);
       if (span) span.textContent = Number(prev).toFixed(1);
-      deny('水果停燈權重不可全為 0', { vfd: false });
+      deny('水果權重不可全 0', { vfd: false });
       updateSettingsAlert(['至少保留一種水果權重 > 0']);
       return false;
     }
@@ -3277,11 +3298,12 @@
   load();
   diceLed.set('-');
   setLight(state.pos);
-  if (!state.betsPaid && sum(state.bets) > 0) setMsg('按開始續玩，或重押');
+  if (!state.betsPaid && sum(state.bets) > 0) setMsg('按開始續玩');
   render();
   fitCabinet();
   requestAnimationFrame(() => { fitCabinet(); idleReels(); });
   if (settingsNotice) setTimeout(() => toast(settingsNotice, 'warn', 3200), 400);
+  setTimeout(maybeFirstRunTip, 500);
 
   window.__xiaomali = {
     state, settings, TRACK, SYMBOLS, pickTarget, resetCredit, Music, Sound, E, fitCabinet,

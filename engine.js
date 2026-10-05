@@ -106,15 +106,15 @@
   ];
   const MODE_LABELS = {
     once: 'ONCE MORE',
-    onceMulti: '連跑（再跑 2–4 次）',
-    onceBig: '大 ONCE MORE（≥3 次）',
+    onceMulti: '連跑',
+    onceBig: '大 ONCE MORE',
     song: '送燈',
     train: '開火車',
     sanyuan: '三元四喜',
     jp: 'JP 彩金',
     slotBonus: '三輪 Bonus',
-    fever: 'FEVER 舞台',
-    bingo: '賓果任務',
+    fever: 'FEVER',
+    bingo: '賓果',
     luckyWheel: '幸運轉輪',
     gacha: '轉蛋',
     sicbo: '骰寶',
@@ -125,7 +125,31 @@
     skip: '跳格',
     doubleRun: '雙燈',
     fakeStop: '假停',
-    superRun: '超跑（連停 3–8）',
+    superRun: '超跑',
+  };
+  /** One-line Traditional Chinese hints for settings mode toggles. */
+  const MODE_HINTS = {
+    once: '免費再跑',
+    onceMulti: '再跑 2–4 次',
+    onceBig: '再跑 ≥3 次',
+    song: '中彩多點燈',
+    train: '連燈前進',
+    sanyuan: '大／小三元或四喜',
+    jp: '大 BAR＋押 BAR',
+    slotBonus: '特殊燈→三轉盤',
+    fever: '大獎連跑舞台',
+    bingo: '上方 3×3 任務',
+    luckyWheel: '特殊燈→轉輪',
+    gacha: '抽稀有度倍率',
+    sicbo: '大小／豹子',
+    pachinko: '彈珠落袋',
+    ballDraw: '對號抽球',
+    roulette: '0–12 電子輪',
+    reverse: '跑燈反向',
+    skip: '跳格前進',
+    doubleRun: '同時兩燈',
+    fakeStop: '假停再跑',
+    superRun: '連停 3–8 格',
   };
 
   /** Probabilities for optional light FX / stage entries (× bonusRate / onceRate where noted). */
@@ -896,7 +920,7 @@
 
   const api = {
     SYMBOLS, SYM_INDEX, TRACK, N, MAX_ONCE_MORE_CHAIN, ONCE_GRANT, WEIGHT_KEYS, WEIGHT_LABELS,
-    BONUS, JP, BIG_BAR_TILE, MODE_KEYS, MODE_LABELS, PRESETS, DEFAULT_SETTINGS,
+    BONUS, JP, BIG_BAR_TILE, MODE_KEYS, MODE_LABELS, MODE_HINTS, PRESETS, DEFAULT_SETTINGS,
     LIGHT_FX, SUPER_RUN, SLOT_BONUS, FEVER_STAGE, BINGO_CELLS, BINGO_LINES, BINGO_LINE_MULT,
     STAGE_KEYS, STAGE_ENTRY, WHEEL_SEGS, GACHA_TIERS, SICBO_PAY, PACHINKO_POCKETS, BALL_DRAW, ROULETTE_N, ROULETTE_PAY,
     normalizeSettings, applyPreset, effectiveWeights, landingOdds, pickWeighted,
