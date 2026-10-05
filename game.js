@@ -196,20 +196,130 @@
         });
       });
     },
+    /** Layered tone: optional detune twin + soft attack (original synth, no samples). */
+    tone(freq, dur = 0.12, type = 'square', vol = 0.05, when = 0, { detune = 0, attack = 0.008, slideTo = 0 } = {}) {
+      this.whenReady(() => {
+        const ctx = this.ctx;
+        const v = vol * this.sfxScale();
+        if (v <= 0 || !freq) return;
+        const t = ctx.currentTime + when;
+        const mk = (f, det) => {
+          const o = ctx.createOscillator();
+          const g = ctx.createGain();
+          o.type = type;
+          o.frequency.setValueAtTime(f, t);
+          if (slideTo > 0) o.frequency.exponentialRampToValueAtTime(Math.max(20, slideTo), t + dur);
+          if (det) o.detune.setValueAtTime(det, t);
+          g.gain.setValueAtTime(0.0001, t);
+          g.gain.exponentialRampToValueAtTime(Math.max(v, 0.0001), t + Math.max(0.004, attack));
+          g.gain.exponentialRampToValueAtTime(0.0001, t + Math.max(dur, 0.02));
+          o.connect(g).connect(ctx.destination);
+          o.start(t);
+          o.stop(t + dur + 0.03);
+        };
+        mk(freq, 0);
+        if (detune) mk(freq, detune);
+      });
+    },
+    chord(freqs, dur = 0.18, type = 'square', vol = 0.035, when = 0) {
+      freqs.forEach((f, i) => this.tone(f, dur, type, vol * (1 - i * 0.08), when, { detune: i ? 7 : 0 }));
+    },
+    /** Filtered noise crash / sparkle (procedural, original). */
+    noiseBurst(dur = 0.18, vol = 0.04, when = 0, { freq = 2400, type = 'bandpass', Q = 1.2 } = {}) {
+      this.whenReady(() => {
+        const ctx = this.ctx;
+        const v = vol * this.sfxScale();
+        if (v <= 0) return;
+        const t = ctx.currentTime + when;
+        const len = Math.max(1, Math.floor(ctx.sampleRate * Math.max(dur, 0.04)));
+        const buf = ctx.createBuffer(1, len, ctx.sampleRate);
+        const data = buf.getChannelData(0);
+        for (let i = 0; i < len; i++) data[i] = Math.random() * 2 - 1;
+        const src = ctx.createBufferSource();
+        src.buffer = buf;
+        const f = ctx.createBiquadFilter();
+        f.type = type;
+        f.frequency.setValueAtTime(freq, t);
+        f.Q.value = Q;
+        const g = ctx.createGain();
+        g.gain.setValueAtTime(Math.max(v, 0.0001), t);
+        g.gain.exponentialRampToValueAtTime(0.0001, t + dur);
+        src.connect(f).connect(g).connect(ctx.destination);
+        src.start(t);
+        src.stop(t + dur + 0.02);
+      });
+    },
+    /** Impactful fanfare scaled by tier 0..5 (tiny→JP). Original arcade-style synth. */
+    celebrate(tier = 1, kind = 'win') {
+      const t = Math.max(0, Math.min(5, tier | 0));
+      if (kind === 'jp' || t >= 5) {
+        this.noiseBurst(0.22, 0.06, 0, { freq: 900, type: 'lowpass', Q: 0.7 });
+        this.chord([262, 330, 392, 523], 0.28, 'sawtooth', 0.04, 0.02);
+        this.seq([523, 659, 784, 1047, 1319, 1568, 2093, 2637], 0.07, 'square', 0.055);
+        this.chord([1047, 1319, 1568, 2093], 0.45, 'triangle', 0.04, 0.55);
+        this.tone(2093, 0.55, 'square', 0.035, 0.7, { detune: 12 });
+        this.noiseBurst(0.35, 0.045, 0.75, { freq: 3200, type: 'highpass', Q: 0.8 });
+        return;
+      }
+      if (kind === 'fever' || t >= 4) {
+        this.noiseBurst(0.16, 0.05, 0, { freq: 1800, type: 'bandpass', Q: 0.9 });
+        this.seq([392, 523, 659, 784, 988, 1175, 1319, 1568, 1976], 0.055, 'square', 0.05);
+        this.chord([784, 988, 1175, 1568], 0.32, 'sawtooth', 0.032, 0.35);
+        this.tone(1568, 0.4, 'triangle', 0.04, 0.5, { detune: -9, slideTo: 2093 });
+        this.noiseBurst(0.28, 0.04, 0.55, { freq: 4000, type: 'highpass', Q: 1 });
+        return;
+      }
+      if (t >= 3) {
+        this.noiseBurst(0.12, 0.04, 0, { freq: 2200, type: 'bandpass', Q: 1.1 });
+        this.seq([523, 659, 784, 1047, 1319, 1568, 1319, 1568, 2093], 0.065, 'square', 0.05);
+        this.chord([659, 831, 988], 0.22, 'triangle', 0.035, 0.4);
+        this.tone(2093, 0.28, 'square', 0.03, 0.55, { detune: 8 });
+        return;
+      }
+      if (t >= 2) {
+        this.seq([523, 659, 784, 1047, 1319, 1047, 1319], 0.07, 'square', 0.048);
+        this.chord([523, 659, 784], 0.2, 'triangle', 0.03, 0.28);
+        this.noiseBurst(0.1, 0.028, 0.35, { freq: 2800, type: 'highpass', Q: 1.2 });
+        return;
+      }
+      if (t >= 1) {
+        this.seq([523, 659, 784, 1047, 784, 1047], 0.075, 'square', 0.048);
+        this.chord([523, 784], 0.16, 'triangle', 0.028, 0.2);
+        return;
+      }
+      this.chord([784, 988, 1175], 0.14, 'triangle', 0.04, 0);
+      this.tone(1568, 0.1, 'square', 0.03, 0.08);
+    },
     tick()  { this.beep(1320, 0.025, 'square', 0.03); },
     bet()   { this.beep(880, 0.04, 'triangle', 0.08); },
     error() { this.seq([220, 165], 0.12, 'sawtooth', 0.04); },
-    win()   { this.seq([523, 659, 784, 1047, 784, 1047], 0.08, 'square', 0.05); },
-    big()   { this.seq([523, 659, 784, 1047, 1319, 1568, 1319, 1568, 2093], 0.07, 'square', 0.05); },
+    win()   { this.celebrate(1, 'win'); },
+    big()   { this.celebrate(3, 'win'); },
     lose()  { this.seq([392, 330, 262], 0.14, 'triangle', 0.06); },
-    once()  { this.seq([784, 988, 1175, 1568, 0, 1568], 0.07, 'square', 0.05); },
+    once()  {
+      this.seq([784, 988, 1175, 1568, 0, 1568], 0.07, 'square', 0.05);
+      this.noiseBurst(0.08, 0.025, 0.12, { freq: 3500, type: 'highpass', Q: 1 });
+    },
     coin()  { this.beep(1568, 0.03, 'square', 0.03); },
-    lucky() { this.seq([659, 784, 988, 1319, 988, 1319, 1568, 1976], 0.06, 'square', 0.05); },
-    jp()    { this.seq([523, 784, 1047, 1568, 2093, 1568, 2093, 2637], 0.08, 'square', 0.055); },
-    slot()  { this.seq([440, 554, 659, 880, 0, 880, 1175], 0.07, 'square', 0.05); },
-    fever() { this.seq([523, 784, 1047, 784, 1047, 1319, 1568, 2093], 0.065, 'square', 0.055); },
-    bingo() { this.seq([659, 784, 988, 1319], 0.08, 'triangle', 0.05); },
-    super() { this.seq([392, 523, 659, 784, 988, 1175, 1319, 1568], 0.05, 'square', 0.045); },
+    lucky() {
+      this.seq([659, 784, 988, 1319, 988, 1319, 1568, 1976], 0.055, 'square', 0.05);
+      this.chord([659, 831, 988], 0.2, 'triangle', 0.03, 0.25);
+      this.noiseBurst(0.12, 0.03, 0.3, { freq: 3000, type: 'bandpass', Q: 1 });
+    },
+    jp()    { this.celebrate(5, 'jp'); },
+    slot()  {
+      this.seq([440, 554, 659, 880, 0, 880, 1175], 0.07, 'square', 0.05);
+      this.noiseBurst(0.09, 0.022, 0.4, { freq: 2000, type: 'bandpass', Q: 1.3 });
+    },
+    fever() { this.celebrate(4, 'fever'); },
+    bingo() {
+      this.seq([659, 784, 988, 1319, 1568], 0.075, 'triangle', 0.05);
+      this.chord([659, 988, 1319], 0.22, 'square', 0.028, 0.2);
+    },
+    super() {
+      this.seq([392, 523, 659, 784, 988, 1175, 1319, 1568], 0.048, 'square', 0.045);
+      this.noiseBurst(0.14, 0.035, 0.2, { freq: 1600, type: 'bandpass', Q: 0.9 });
+    },
   };
 
   const MUSIC_TRACKS = {
@@ -272,6 +382,20 @@
     applyVolume() {
       if (!this.gain || !Sound.ctx) return;
       try { this.gain.gain.setTargetAtTime(this.bgmScale(), Sound.ctx.currentTime, 0.05); } catch { /* */ }
+    },
+    /** Duck BGM under a win sting so fanfares punch through (ms, depth 0–1). */
+    duck(ms = 700, depth = 0.22) {
+      if (!this.gain || !Sound.ctx || this.track === 'off') return;
+      const t = Sound.ctx.currentTime;
+      const base = this.bgmScale();
+      const low = Math.max(0.02, base * Math.max(0.05, Math.min(1, depth)));
+      const dur = Math.max(0.2, ms / 1000);
+      try {
+        this.gain.gain.cancelScheduledValues(t);
+        this.gain.gain.setValueAtTime(Math.max(this.gain.gain.value, 0.0001), t);
+        this.gain.gain.linearRampToValueAtTime(low, t + 0.04);
+        this.gain.gain.linearRampToValueAtTime(base, t + dur);
+      } catch { /* */ }
     },
     start() {
       if (this.timer || !Sound.ctx) return;
@@ -486,7 +610,8 @@
   const FX = {
     clear() {
       if (!cabinetEl) return;
-      cabinetEl.classList.remove('fx-spin', 'fx-win', 'fx-reach', 'fx-expect', 'fx-fever');
+      cabinetEl.classList.remove('fx-spin', 'fx-win', 'fx-reach', 'fx-expect', 'fx-fever',
+        'haptic-bump', 'haptic-bump-big');
     },
     set(...modes) {
       this.clear();
@@ -495,11 +620,18 @@
     spin() { this.set('spin'); this.holdsSpin(); },
     expect() { this.set('expect', 'reach'); },
     reach() { this.set('reach'); },
-    win() {
+    win(tier = 1) {
       this.set('win');
       this.holdsFlash(true);
-      const lit = document.querySelector('.tile.lit, .tile.win') || $('center');
-      flourishSparkles(12, lit);
+      const t = Math.max(0, Math.min(5, tier | 0));
+      cabinetEl?.classList.remove('haptic-bump', 'haptic-bump-big');
+      // force reflow so CSS animation restarts
+      void cabinetEl?.offsetWidth;
+      cabinetEl?.classList.add(t >= 3 ? 'haptic-bump-big' : 'haptic-bump');
+      if (t >= 1 && typeof flourishSparkles === 'function') {
+        const lit = document.querySelector('.tile.lit, .tile.win') || $('center');
+        flourishSparkles(8 + t * 4, lit);
+      }
     },
     idle() {
       this.clear();
@@ -1245,10 +1377,48 @@
     }, 900);
   }
 
+  function reduceMotion() {
+    return window.matchMedia('(prefers-reduced-motion: reduce)').matches;
+  }
+
+  /** Public Vibration API only (no private CoreHaptics). No-op if unsupported / reduced. */
+  function hapticVibrate(tier = 1) {
+    try {
+      if (typeof navigator === 'undefined' || typeof navigator.vibrate !== 'function') return;
+      if (reduceMotion()) {
+        navigator.vibrate(8);
+        return;
+      }
+      const t = Math.max(0, Math.min(5, tier | 0));
+      const patterns = [
+        [10],
+        [16],
+        [20, 36, 20],
+        [28, 36, 28, 36, 48],
+        [36, 28, 36, 28, 55, 36, 70],
+        [48, 28, 48, 28, 48, 28, 90, 45, 110],
+      ];
+      navigator.vibrate(patterns[t]);
+    } catch { /* ignore */ }
+  }
+
+  /** Win intensity 0..5 from credit gained + multiplier (or forced kind). */
+  function winTierFrom(amount = 0, mult = 0, kind = 'win') {
+    if (kind === 'jp') return 5;
+    if (kind === 'fever') return Math.max(4, amount >= 200 ? 5 : 4);
+    const a = Math.max(0, amount | 0);
+    const m = Math.max(0, mult | 0);
+    if (a >= 500 || m >= 100) return 4;
+    if (a >= 200 || m >= 40) return 3;
+    if (a >= 80 || m >= 20) return 2;
+    if (a >= 20 || m >= 10) return 1;
+    return 0;
+  }
+
   /** Coin-pusher style cascade (visual only). */
   function flourishCoins(n = 12) {
     const host = $('flourishLayer');
-    if (!host || window.matchMedia('(prefers-reduced-motion: reduce)').matches) return;
+    if (!host || reduceMotion()) return;
     for (let i = 0; i < n; i++) {
       const c = document.createElement('i');
       c.className = 'coin-fall';
@@ -1263,7 +1433,7 @@
   /** Tiny e-horse dash across the marquee during FEVER (visual only). */
   function flourishHorse() {
     const host = $('flourishLayer');
-    if (!host || window.matchMedia('(prefers-reduced-motion: reduce)').matches) return;
+    if (!host || reduceMotion()) return;
     const h = document.createElement('div');
     h.className = 'horse-dash';
     h.textContent = '馬';
@@ -1274,7 +1444,7 @@
   /** Win sparkles around the lit tile / center (original SVG, visual only). */
   function flourishSparkles(n = 10, originEl = null) {
     const host = $('flourishLayer');
-    if (!host || window.matchMedia('(prefers-reduced-motion: reduce)').matches) return;
+    if (!host || reduceMotion()) return;
     const cab = cabinetEl || host;
     const cr = cab.getBoundingClientRect();
     let ox = cr.width * 0.5, oy = cr.height * 0.42;
@@ -1299,17 +1469,124 @@
     }
   }
 
-  /** FEVER / READY burst behind the banner. */
+  /** Screen flash overlay (CSS only — never Camera / torch). */
+  function flourishScreenFlash(tier = 1) {
+    const host = $('flourishLayer');
+    if (!host || reduceMotion()) return;
+    const t = Math.max(0, Math.min(5, tier | 0));
+    const flash = document.createElement('div');
+    flash.className = 'screen-flash tier-' + t;
+    host.appendChild(flash);
+    setTimeout(() => flash.remove(), 650 + t * 40);
+  }
+
+  /** Multi-light cascade outward from winning tile. */
+  function flourishCascade(center, tier = 1) {
+    if (reduceMotion() || !tileEls || center < 0 || center >= N) return;
+    const span = Math.min(Math.floor(N / 2), 2 + Math.max(0, tier | 0));
+    tileEls[center].classList.add('cascade-core');
+    setTimeout(() => tileEls[center]?.classList.remove('cascade-core'), 420 + tier * 40);
+    for (let d = 1; d <= span; d++) {
+      const delay = d * 48;
+      const a = (center + d) % N;
+      const b = (center - d + N) % N;
+      setTimeout(() => {
+        tileEls[a]?.classList.add('cascade');
+        tileEls[b]?.classList.add('cascade');
+        setTimeout(() => {
+          tileEls[a]?.classList.remove('cascade');
+          tileEls[b]?.classList.remove('cascade');
+        }, 260);
+      }, delay);
+    }
+  }
+
+  /** Particle burst: sparkles + confetti dots + rays, scaled by tier. */
+  function flourishParticles(tier = 1, originEl = null) {
+    const host = $('flourishLayer');
+    if (!host || reduceMotion()) return;
+    const t = Math.max(0, Math.min(5, tier | 0));
+    flourishSparkles(8 + t * 6, originEl);
+    const cab = cabinetEl || host;
+    const cr = cab.getBoundingClientRect();
+    let ox = cr.width * 0.5, oy = cr.height * 0.42;
+    if (originEl) {
+      const r = originEl.getBoundingClientRect();
+      ox = r.left + r.width / 2 - cr.left;
+      oy = r.top + r.height / 2 - cr.top;
+    }
+    const dots = 6 + t * 5;
+    for (let i = 0; i < dots; i++) {
+      const d = document.createElement('i');
+      d.className = 'particle-dot';
+      const ang = (Math.PI * 2 * i) / dots + Math.random() * 0.5;
+      const dist = (0.12 + Math.random() * 0.62) * Math.min(cr.width, cr.height);
+      d.style.left = ox + 'px';
+      d.style.top = oy + 'px';
+      d.style.setProperty('--dx', Math.cos(ang) * dist + 'px');
+      d.style.setProperty('--dy', Math.sin(ang) * dist + 'px');
+      d.style.setProperty('--hue', String(28 + Math.floor(Math.random() * 50)));
+      d.style.animationDelay = (Math.random() * 0.12) + 's';
+      host.appendChild(d);
+      setTimeout(() => d.remove(), 1000);
+    }
+    if (t >= 2) {
+      const rays = 6 + t * 2;
+      for (let i = 0; i < rays; i++) {
+        const ray = document.createElement('i');
+        ray.className = 'particle-ray';
+        ray.style.left = ox + 'px';
+        ray.style.top = oy + 'px';
+        ray.style.setProperty('--rot', ((360 * i) / rays) + 'deg');
+        ray.style.animationDelay = (i * 0.02) + 's';
+        host.appendChild(ray);
+        setTimeout(() => ray.remove(), 900);
+      }
+    }
+  }
+
+  /** FEVER / READY burst behind the banner (richer multi-ring). */
   function flourishFeverSplash(kind = 'fever') {
     const host = $('flourishLayer');
-    if (!host || window.matchMedia('(prefers-reduced-motion: reduce)').matches) return;
+    if (!host || reduceMotion()) return;
     const splash = document.createElement('div');
     splash.className = 'fever-splash' + (kind === 'ready' ? ' ready' : '');
-    const ring = document.createElement('div');
-    ring.className = 'fever-ring';
     host.appendChild(splash);
-    host.appendChild(ring);
-    setTimeout(() => { splash.remove(); ring.remove(); }, 1400);
+    const rings = kind === 'fever' ? 3 : 2;
+    for (let i = 0; i < rings; i++) {
+      const ring = document.createElement('div');
+      ring.className = 'fever-ring' + (i ? ' delayed' : '');
+      ring.style.animationDelay = (i * 0.12) + 's';
+      host.appendChild(ring);
+      setTimeout(() => ring.remove(), 1500 + i * 120);
+    }
+    setTimeout(() => splash.remove(), 1500);
+  }
+
+  /**
+   * Unified hit celebration: audio sting + BGM duck + flash + cascade +
+   * particles + FEVER splash + Vibration API + cabinet haptic bounce.
+   * Scales by win size. Audio respects Sound.on (silent/mute); no Camera API.
+   */
+  function celebrateHit({ amount = 0, mult = 0, kind = 'win', originEl = null, target = -1, splash = true } = {}) {
+    const tier = winTierFrom(amount, mult, kind);
+    const origin = originEl || (target >= 0 ? tileEls[target] : null)
+      || document.querySelector('.tile.lit, .tile.win') || $('center');
+    Sound.celebrate(tier, kind === 'jp' ? 'jp' : kind === 'fever' ? 'fever' : 'win');
+    Music.duck(450 + tier * 160, Math.max(0.12, 0.38 - tier * 0.04));
+    hapticVibrate(tier);
+    FX.win(tier);
+    flourishScreenFlash(tier);
+    flourishParticles(tier, origin);
+    if (target >= 0) flourishCascade(target, tier);
+    if (splash && tier >= 2) {
+      const k = kind === 'fever' || tier >= 4 ? 'fever' : 'ready';
+      if (tier >= 3) FX.flashFever(k, 900 + tier * 200);
+      else flourishFeverSplash(k);
+    }
+    if (tier >= 3) flourishCoins(6 + tier * 3);
+    if (tier >= 4) flourishHorse();
+    return tier;
   }
 
   /** Pachislot-style staggered reel stop (stop-button feel). */
@@ -1353,10 +1630,14 @@
     });
     await sleep(350);
     if (step.gained > 0) {
-      Sound.win();
+      celebrateHit({
+        amount: step.gained,
+        mult: (step.match || 1) * 10,
+        kind: step.match >= 3 ? 'fever' : 'win',
+        originEl: $('center'),
+      });
       setMsg(`三輪 ${step.match} 連 +${step.gained}`, 'hot');
       await animateWin(state.win, state.win + step.gained);
-      if (step.match >= 3) flourishCoins(10);
     } else {
       setMsg('三輪・沒中', 'bad');
       Sound.lose();
@@ -1416,15 +1697,13 @@
         roundWin += step.gained;
         tileEls[step.target].classList.add('win');
         setKeyHit(betKeys[step.si], true);
-        FX.win();
-        if (step.mult >= 40) {
-          Sound.big();
-          FX.flashFever('fever', 1400);
-          flourishCoins(8);
-        } else {
-          Sound.win();
-          if (step.mult >= 20) FX.flashFever('ready', 900);
-        }
+        celebrateHit({
+          amount: step.gained,
+          mult: step.mult || 0,
+          kind: 'win',
+          target: step.target,
+          originEl: tileEls[step.target],
+        });
         const small = TRACK[step.target].small ? '小' : '';
         const prefix = fromSuper ? '超跑・' : '';
         setMsg(`${prefix}${sym.name}${small} ${state.bets[step.si]}×${step.mult}=${step.gained}`, 'hot');
@@ -1446,8 +1725,11 @@
         FX.spin();
         await Promise.all([runLight(step.target, { expect: false, fx: step.fx }), spinReels('once', Math.max(900, dur - 400))]);
         tileEls[step.target].classList.add('win');
-        FX.win();
+        FX.win(1);
         Sound.once();
+        hapticVibrate(1);
+        flourishCascade(step.target, 1);
+        flourishScreenFlash(1);
         if (step.remaining <= 0) {
           setMsg(step.capped ? '再跑已達上限' : `${label}`, 'hot');
           await sleep(700);
@@ -1477,6 +1759,8 @@
         if (step.double) {
           setMsg('雙燈！', 'hot');
           Sound.lucky();
+          hapticVibrate(2);
+          flourishScreenFlash(2);
           await sleep(280);
           // quick hop to second lamp (no full re-spin)
           state.pos = step.double.target;
@@ -1499,6 +1783,9 @@
 
       if (step.type === 'super') {
         Sound.super();
+        Music.duck(900, 0.2);
+        hapticVibrate(3);
+        flourishFeverSplash('ready');
         FX.flashFever('ready', 1000);
         setMsg(`超跑 ${step.count} 連停！`, 'hot');
         showOnceBanner('multi', step.count);
@@ -1512,7 +1799,11 @@
           await sleep(220);
         }
         hideOnceBanner();
-        if (step.gained > 0) flourishCoins(14);
+        if (step.gained > 0) {
+          flourishCoins(10);
+          flourishScreenFlash(3);
+          hapticVibrate(3);
+        }
         await sleep(300);
         continue;
       }
@@ -1524,9 +1815,8 @@
       }
 
       if (step.type === 'fever') {
-        Sound.fever();
+        celebrateHit({ amount: 200, mult: 40, kind: 'fever', originEl: $('center'), splash: true });
         FX.showFever('fever');
-        flourishHorse();
         setMsg(`FEVER ×${step.count}`, 'hot');
         for (let i = 0; i < step.runs.length; i++) {
           const fr = step.runs[i];
@@ -1539,7 +1829,11 @@
           await sleep(200);
         }
         FX.hideFever();
-        if (step.gained > 0) flourishCoins(16);
+        if (step.gained > 0) {
+          flourishCoins(12);
+          flourishScreenFlash(4);
+          hapticVibrate(4);
+        }
         await sleep(300);
         continue;
       }
@@ -1548,15 +1842,18 @@
         renderBingo();
         if (step.cell >= 0) flashBingoCell(step.cell);
         if (step.lines && step.lines.length) {
-          Sound.bingo();
-          FX.flashFever('ready', 900);
+          celebrateHit({
+            amount: step.gained || 30,
+            mult: 15 * step.lines.length,
+            kind: 'win',
+            originEl: $('bingoBoard'),
+          });
           for (const line of step.lines) flashBingoLine(line);
           setMsg(`賓果連線 ×${step.lines.length}`, 'hot');
           if (step.gained > 0) {
             roundWin += step.gained;
             await animateWin(state.win, state.win + step.gained);
             setMsg(`賓果 +${step.gained}`, 'hot');
-            flourishCoins(6);
           }
           await sleep(500);
         } else {
@@ -1567,13 +1864,17 @@
       }
 
       if (step.type === 'bonus') {
-        Sound.lucky();
-        FX.win();
-        FX.flashFever('ready', 1000);
+        celebrateHit({
+          amount: step.gained || 40,
+          mult: 25,
+          kind: 'win',
+          originEl: $('center'),
+        });
         setMsg(`中彩・${step.name}`, 'hot');
         for (const bt of step.tiles) {
           tileEls[bt.i].classList.add('win', 'lit2');
           if (bt.si >= 0 && bt.gained > 0) setKeyHit(betKeys[bt.si], true);
+          flourishCascade(bt.i, 1);
           await sleep(220);
         }
         if (step.gained > 0) {
@@ -1588,14 +1889,15 @@
       }
 
       if (step.type === 'jp') {
-        Sound.jp();
         $('jpRow')?.classList.add('jp-hit');
         $('jpMini')?.classList.add('is-hit');
-        FX.win();
-        FX.flashFever('fever', 2000);
+        celebrateHit({
+          amount: step.amount,
+          mult: 100,
+          kind: 'jp',
+          originEl: $('jpRow') || $('center'),
+        });
         FX.holdsSet(4);
-        flourishHorse();
-        flourishCoins(18);
         setMsg(`JP！+${step.amount}`, 'hot');
         roundWin += step.amount;
         await animateWin(state.win, state.win + step.amount);
@@ -1615,8 +1917,14 @@
     state.betsPaid = false;
     state.busy = false;
     if (roundWin > 0) {
-      FX.win();
-      if (roundWin >= 100) FX.flashFever('fever', 1200);
+      const endTier = winTierFrom(roundWin, 0);
+      FX.win(endTier);
+      hapticVibrate(Math.min(endTier, 3));
+      if (roundWin >= 100) {
+        flourishFeverSplash('fever');
+        FX.flashFever('fever', 1200);
+        flourishScreenFlash(endTier);
+      }
       FX.holdsSet(Math.min(4, holdCount + 1));
     } else {
       FX.idle();

@@ -45,7 +45,12 @@ Credit/win/sound/jp/lastBets/bingo: `xiaomali.v1`.
 
 ## Cabinet FX (mostly visual)
 Frame LED rails, side lamps, 假保留燈, FEVER/READY, coin cascade / horse dash flourishes.
-Classes on `#cabinet`: `fx-spin` / `fx-reach` / `fx-expect` / `fx-win` / `fx-fever`.
+Classes on `#cabinet`: `fx-spin` / `fx-reach` / `fx-expect` / `fx-win` / `fx-fever`
+(+ brief `haptic-bump` / `haptic-bump-big` CSS bounce on hits).
+Win hits call `celebrateHit()` → tiered Web Audio fanfare (original synth, `Sound.on`
+gates mute/silent), BGM duck, screen flash (CSS only — **no Camera**), multi-light
+cascade, particle burst, FEVER splash, and public `navigator.vibrate` patterns.
+Respects `prefers-reduced-motion` (skips heavy motion; tiny vibrate only).
 Bingo marks and stage pays are real (fake credit); flourishes are not.
 
 ## UI 防呆 (guards)
