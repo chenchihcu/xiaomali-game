@@ -917,6 +917,10 @@
       jpRow.hidden = !settings.modes.jp;
       $('jpVal').textContent = String(Math.floor(state.jp));
     }
+    const jpMini = $('jpMini');
+    const jpMiniVal = $('jpMiniVal');
+    if (jpMiniVal) jpMiniVal.textContent = String(Math.floor(state.jp));
+    if (jpMini) jpMini.classList.toggle('off', !settings.modes.jp);
     renderBingo();
     winLed.set(state.win);
     creditLed.set(state.credit);
@@ -957,6 +961,7 @@
     $('lblSmall').classList.remove('on');
     $('lblBig').classList.remove('on');
     $('jpRow')?.classList.remove('jp-hit');
+    $('jpMini')?.classList.remove('is-hit');
     reelStrips.forEach((r) => r.parent.classList.remove('landed', 'spinning'));
     hideOnceBanner();
   }
@@ -1172,15 +1177,46 @@
     return bits.length ? bits.join('・') : '';
   }
 
+  function countBingoLines(board) {
+    let n = 0;
+    for (const line of BINGO_LINES) {
+      if (line.every((i) => board[i])) n += 1;
+    }
+    return n;
+  }
+
   function renderBingo() {
     const root = $('bingoBoard');
     if (!root) return;
     const was = root.hidden;
-    root.hidden = !settings.modes.bingo;
+    const bingoOn = !!settings.modes.bingo;
+    root.hidden = !bingoOn;
     root.querySelectorAll('.bingo-cell').forEach((el, i) => {
       el.classList.toggle('on', !!state.bingo[i]);
       el.classList.toggle('flash', false);
     });
+
+    const marked = state.bingo.reduce((n, v) => n + (v ? 1 : 0), 0);
+    const lines = countBingoLines(state.bingo);
+    const missionBar = $('missionBar');
+    const missionFill = $('missionFill');
+    const missionCnt = $('missionCnt');
+    const bingoWrap = $('bingoWrap');
+    const topPlaque = $('topPlaque');
+    if (missionBar) missionBar.hidden = !bingoOn;
+    if (missionFill) missionFill.style.width = `${Math.round((marked / 9) * 100)}%`;
+    if (missionCnt) missionCnt.textContent = `${marked}/9`;
+    if (bingoWrap) bingoWrap.classList.toggle('is-plaque', !bingoOn);
+    if (topPlaque) topPlaque.hidden = bingoOn;
+
+    const lineMini = $('lineMini');
+    const lineMiniVal = $('lineMiniVal');
+    if (lineMiniVal) lineMiniVal.textContent = String(lines);
+    if (lineMini) {
+      lineMini.classList.toggle('off', !bingoOn);
+      lineMini.classList.toggle('is-hit', bingoOn && lines > 0);
+    }
+
     if (was !== root.hidden && typeof scheduleFit === 'function') scheduleFit();
   }
 
@@ -1550,6 +1586,7 @@
       if (step.type === 'jp') {
         Sound.jp();
         $('jpRow')?.classList.add('jp-hit');
+        $('jpMini')?.classList.add('is-hit');
         FX.win();
         FX.flashFever('fever', 2000);
         FX.holdsSet(4);

@@ -53,15 +53,66 @@
       </header>
 
       <div class="topper" id="topper">
-        <div class="hold-strip" id="holdStrip" aria-hidden="true" title="保留燈">
-          <span class="hold-lamp" data-h="0"></span>
-          <span class="hold-lamp" data-h="1"></span>
-          <span class="hold-lamp" data-h="2"></span>
-          <span class="hold-lamp" data-h="3"></span>
+        <aside class="top-wing top-wing-l" aria-hidden="true">
+          <div class="wing-panel">
+            <i class="wing-art wing-art-cherry"></i>
+            <div class="mini-meter jp-mini" id="jpMini" title="JP 彩池">
+              <span class="mini-lab">JP</span>
+              <span class="mini-val" id="jpMiniVal">200</span>
+            </div>
+            <div class="wing-lamps" id="wingLampsL">
+              <span class="wing-lamp" data-w="0"></span>
+              <span class="wing-lamp" data-w="1"></span>
+              <span class="wing-lamp" data-w="2"></span>
+            </div>
+            <span class="wing-caption">CHERRY</span>
+          </div>
+        </aside>
+
+        <div class="top-core">
+          <div class="hold-rail">
+            <span class="hold-plate">HOLD</span>
+            <div class="hold-strip" id="holdStrip" aria-hidden="true" title="保留燈">
+              <span class="hold-lamp" data-h="0"><i></i></span>
+              <span class="hold-lamp" data-h="1"><i></i></span>
+              <span class="hold-lamp" data-h="2"><i></i></span>
+              <span class="hold-lamp" data-h="3"><i></i></span>
+            </div>
+            <span class="hold-plate hold-plate-r">KEEP</span>
+          </div>
+          <div class="bingo-wrap" id="bingoWrap">
+            <div class="bingo-board" id="bingoBoard" aria-label="賓果任務" hidden>
+              <!-- cells filled by game.js -->
+            </div>
+            <div class="mission-bar" id="missionBar" hidden>
+              <span class="mission-lab">MISSION</span>
+              <div class="mission-track"><i class="mission-fill" id="missionFill"></i></div>
+              <span class="mission-cnt" id="missionCnt">0/9</span>
+            </div>
+            <div class="top-plaque" id="topPlaque" aria-hidden="true">
+              <span class="plaque-badge">★</span>
+              <span class="plaque-title">LITTLE MARY</span>
+              <span class="plaque-sub">跑燈・Bonus・Jackpot</span>
+              <span class="plaque-badge">★</span>
+            </div>
+          </div>
         </div>
-        <div class="bingo-board" id="bingoBoard" aria-label="賓果任務" hidden>
-          <!-- cells filled by game.js -->
-        </div>
+
+        <aside class="top-wing top-wing-r" aria-hidden="true">
+          <div class="wing-panel">
+            <i class="wing-art wing-art-bell"></i>
+            <div class="mini-meter line-mini" id="lineMini" title="賓果連線">
+              <span class="mini-lab">LINE</span>
+              <span class="mini-val" id="lineMiniVal">0</span>
+            </div>
+            <div class="wing-lamps" id="wingLampsR">
+              <span class="wing-lamp" data-w="0"></span>
+              <span class="wing-lamp" data-w="1"></span>
+              <span class="wing-lamp" data-w="2"></span>
+            </div>
+            <span class="wing-caption">BELL</span>
+          </div>
+        </aside>
       </div>
 
       <div class="flourish-layer" id="flourishLayer" aria-hidden="true"></div>

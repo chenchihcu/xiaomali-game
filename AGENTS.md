@@ -11,7 +11,7 @@ Repo: https://github.com/chenchihcu/xiaomali-game
 ## Structure
 | File | Role |
 |---|---|
-| `index.html` | Real-cabinet layout: `.cabinet` → `.marquee` → `.topper` (painted art + hold + bingo) → `#flourishLayer` → `.glass` (`#board` track; `#center` = JP + **3 reels** + dice + `#onceBanner` + VFD) → `#betpanel` → `.deck` → disclaimer. Settings/help. Scripts: `engine.js` then `game.js` (`defer`). |
+| `index.html` | Real-cabinet layout: `.cabinet` → `.marquee` → `.topper` (L/R painted wings with cherry/bell art + JP/LINE mini meters + wing lamps; center HOLD strip + bingo + MISSION bar) → `#flourishLayer` → `.glass` (`#board` track; `#center` = JP + **3 reels** + dice + `#onceBanner` + VFD) → `#betpanel` → `.deck` → disclaimer. Settings/help. Scripts: `engine.js` then `game.js` (`defer`). |
 | `styles.css` | `--u` = 1/100 of `--W`. `--W` fitted by `fitCabinet()` to safe viewport (iPhone 16 Pro Max 430×932 first). Textured wood/metal/felt + original painted art (SVG). Portrait-first; `fit-1`/`fit-2` density. |
 | `engine.js` | Pure logic → `XiaomaliEngine`. `resolveRound(bets, settings, rng, jpPot, { bingoBoard })` → steps: `once` / `land` (+`fx`,`double`) / `bonus` / `jp` / `super` / `slot` / `fever` / `bingo`. Cap `MAX_ONCE_MORE_CHAIN`. |
 | `game.js` | UI: light FX (reverse/skip/fake), reels + slot stop-feel, FEVER/bingo, flourishes, settings. Animates engine steps only. |
