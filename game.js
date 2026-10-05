@@ -530,6 +530,11 @@
 
   let settings = E.normalizeSettings(null);
 
+  /** While a round animates, persist WIN/bingo as of round-start so a mid-spin
+   *  refresh refunds the stake WITHOUT keeping partial round wins / bingo marks
+   *  (visibilitychange / pagehide call save() while busy). */
+  let roundPersist = null; // { win, bingo, jp } | null
+
   function loadSettings() {
     try {
       const d = JSON.parse(localStorage.getItem(SETTINGS_KEY) || 'null');
@@ -577,15 +582,20 @@
       // Always fold paid stakes into saved CREDIT. Mid-spin refresh used to
       // drop the stake (busy ⇒ no refund) while reloading bets as unpaid.
       const refund = state.betsPaid ? sum(state.bets) : 0;
+      // Freeze WIN/bingo at round-start while animating — otherwise refresh
+      // kept partial wins AND refunded the stake (free credit).
+      const win = roundPersist ? roundPersist.win : state.win;
+      const bingo = roundPersist ? roundPersist.bingo : state.bingo;
+      const jp = roundPersist ? roundPersist.jp : state.jp;
       localStorage.setItem(STORAGE_KEY, JSON.stringify({
         credit: state.credit + refund,
-        win: state.win,
+        win,
         pos: state.pos,
         sound: Sound.on,
         lastBets: state.bets,
         lastPlayedBets: state.lastPlayedBets,
-        jp: state.jp,
-        bingo: state.bingo,
+        jp,
+        bingo,
       }));
     } catch { /* */ }
   }
@@ -649,6 +659,8 @@
     reach() { this.set('reach'); },
     win(tier = 1) {
       this.set('win');
+      // Restore persistent holds (holdsSpin is visual-only and may differ).
+      holdLamps.forEach((el, i) => { el.classList.toggle('on', i < holdCount); });
       this.holdsFlash(true);
       const t = Math.max(0, Math.min(5, tier | 0));
       cabinetEl?.classList.remove('haptic-bump', 'haptic-bump-big');
@@ -673,9 +685,13 @@
       });
     },
     holdsSpin() {
-      // light 1–3 lamps randomly during a spin (假保留)
+      // Visual only during a spin — do NOT clobber persistent holdCount.
+      // (Old holdsSet(n) made end-of-round holdCount±1 climb from random 1–3.)
       const n = 1 + Math.floor(randomFloat() * 3);
-      this.holdsSet(n);
+      holdLamps.forEach((el, i) => {
+        el.classList.toggle('on', i < n);
+        el.classList.remove('flash');
+      });
     },
     holdsFlash(on) {
       holdLamps.forEach((el) => el.classList.toggle('flash', !!on && el.classList.contains('on')));
@@ -2174,10 +2190,13 @@
     }
     state.lastPlayedBets = state.bets.slice();
     state.busy = true;
+    // Snapshot for mid-spin persist + exception rollback (see roundPersist / save).
+    roundPersist = { win: state.win, bingo: state.bingo.slice(), jp: state.jp };
     FX.spin();
     render();
     save();
 
+    let roundOk = false;
     try {
     const potBefore = settings.modes.jp ? state.jp : 0;
     const result = E.resolveRound(state.bets, settings, randomFloat, potBefore, { bingoBoard: state.bingo });
@@ -2470,6 +2489,7 @@
       stopAuto(`需 ${sum(state.lastPlayedBets)}・自動停`);
     }
     if (state.auto) queueAuto();
+    roundOk = true;
     } finally {
       hideOnceBanner();
       closeStageOverlay();
@@ -2478,7 +2498,20 @@
       try {
         reelStrips.forEach((r) => r.parent.classList.remove('landed', 'spinning'));
       } catch (_) { /* boot race */ }
-      try { FX.clear(); } catch (_) { /* */ }
+      if (!roundOk && roundPersist) {
+        // Aborted mid-round: roll back animated WIN / bingo before persist.
+        state.win = roundPersist.win;
+        state.bingo = roundPersist.bingo.slice();
+        state.jp = roundPersist.jp;
+        try { FX.idle(); } catch (_) { /* */ }
+      } else {
+        // Success: drop stuck spin/expect/fever but keep end-of-round fx-win pulse
+        // (FX.clear() here used to wipe FX.win() set just above).
+        try {
+          cabinetEl?.classList.remove('fx-spin', 'fx-reach', 'fx-expect', 'fx-fever');
+        } catch (_) { /* */ }
+      }
+      roundPersist = null;
       state.busy = false;
       render();
       save();

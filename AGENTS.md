@@ -113,8 +113,10 @@ node sim.js 50000          # RTP / hit / LUCKY / JP rates per preset
 - No copyrighted characters/logos/music samples — Emoji + CSS/SVG + procedural audio only.
 - Keep 娛樂用／虛擬分數 disclaimer (footer, dialogs, README).
 - Touch targets ≥ 44px; bet keys `pointerdown` + hold-repeat. Post-round unpaid preview keeps the whole pattern when bumping one fruit (no wipe).
-- Persist: `save()` always folds paid stakes into stored CREDIT (mid-spin refresh must not eat the bet). Bingo UI applies per-step `step.board` (not the final board up front).
+- Persist: `save()` always folds paid stakes into stored CREDIT (mid-spin refresh must not eat the bet). While a round animates, `roundPersist` freezes stored WIN/bingo at round-start so refresh cannot keep partial wins and the stake refund together. Bingo UI applies per-step `step.board` (not the final board up front).
 - Settings: `onceRate` slider stays live when `superRun` is on (it scales 超跑 even if 連跑／大 ONCE are off).
+- End-of-round FX: `start()` `finally` strips stuck `fx-spin`/`reach`/`expect`/`fever` only — do not `FX.clear()` after `FX.win()` or the win pulse vanishes.
+- Hold lamps: `holdsSpin()` is visual-only; never write `holdCount` except via `holdsSet` at round end / idle.
 
 ## Changing odds
 1. Edit `engine.js` `TRACK[].w` / `PRESETS` / `BONUS.*.chance` / stage chances (`SUPER_RUN`, `SLOT_BONUS`, `FEVER_STAGE`, `LIGHT_FX.doubleRun`) / `JP`.
