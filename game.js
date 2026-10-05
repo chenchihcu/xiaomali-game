@@ -2,95 +2,51 @@
  * No build step, no dependencies. All money is fake play credit.
  *
  * Sections:
- *   1. Config (symbols, track layout, odds)
+ *   1. Config (data/odds from engine.js)
  *   2. Seven-segment LED renderer
- *   3. Sound (Web Audio beeps)
- *   4. Game state + persistence
- *   5. DOM build + render
+ *   3. Sound (Web Audio beeps) + Music (procedural BGM loops)
+ *   4. Game state + settings + persistence
+ *   5. DOM build + render (+ center 3-reel panel)
  *   6. Actions (bet / clear / all / start / collect / big-small)
- *   7. Input wiring (touch, mouse, keyboard)
+ *   7. Settings UI
+ *   8. Input wiring
  */
 (() => {
   'use strict';
 
-  // ---------------------------------------------------------------------------
-  // 1. Config
-  // ---------------------------------------------------------------------------
+  const E = window.XiaomaliEngine;
+  if (!E) {
+    console.error('engine.js must load before game.js');
+    return;
+  }
+  const {
+    SYMBOLS, SYM_INDEX, TRACK, N, MAX_ONCE_MORE_CHAIN, JP,
+    MODE_KEYS, MODE_LABELS, PRESETS,
+  } = E;
 
-  /** Bet symbols, left → right on the bet panel. `mult` = full-size payout. */
-  const SYMBOLS = [
-    { id: 'apple',  name: '蘋果',  mult: 5,   icon: '🍎' },
-    { id: 'orange', name: '柳橙',  mult: 10,  icon: '🍊' },
-    { id: 'mango',  name: '芒果',  mult: 10,  icon: '🥭' },
-    { id: 'bell',   name: '鈴鐺',  mult: 20,  icon: '🔔' },
-    { id: 'melon',  name: '西瓜',  mult: 20,  icon: '🍉' },
-    { id: 'star',   name: '星星',  mult: 30,  icon: '⭐' },
-    { id: 'seven',  name: '77',    mult: 40,  icon: null },
-    { id: 'bar',    name: 'BAR',   mult: 100, icon: null },
-  ];
-  const SYM_INDEX = Object.fromEntries(SYMBOLS.map((s, i) => [s.id, i]));
-
-  /**
-   * 24 track tiles, clockwise starting from the top-left corner.
-   *   s     symbol id, or 'once' for ONCE MORE
-   *   small true → small icon that pays `pay` × bet instead of the full multiplier
-   *   w     relative weight (probability the light stops here)
-   * Weights are tuned so each symbol returns roughly 90% of what is bet on it,
-   * and ONCE MORE (~8%) adds a free re-spin. Tweak here to change difficulty.
-   */
-  const TRACK = [
-    // top row (left → right)
-    { s: 'orange', w: 3 },
-    { s: 'bell',   w: 3 },
-    { s: 'bar',    small: true, pay: 50, w: 0.8 },
-    { s: 'bar',    w: 0.5 },
-    { s: 'apple',  w: 3 },
-    { s: 'melon',  small: true, pay: 3, w: 10 },
-    { s: 'mango',  w: 3 },
-    // right column (top → bottom)
-    { s: 'melon',  w: 3 },
-    { s: 'apple',  w: 3 },
-    { s: 'once',   w: 4.175 },
-    { s: 'orange', small: true, pay: 3, w: 10 },
-    { s: 'star',   w: 2.4 },
-    { s: 'mango',  small: true, pay: 3, w: 10 },
-    // bottom row (right → left)
-    { s: 'seven',  w: 1.95 },
-    { s: 'apple',  w: 3 },
-    { s: 'bell',   small: true, pay: 3, w: 10 },
-    { s: 'seven',  small: true, pay: 3, w: 4 },
-    { s: 'apple',  w: 3 },
-    { s: 'orange', w: 3 },
-    // left column (bottom → top)
-    { s: 'apple',  w: 3 },
-    { s: 'star',   small: true, pay: 3, w: 6 },
-    { s: 'once',   w: 4.175 },
-    { s: 'mango',  w: 3 },
-    { s: 'apple',  w: 3 },
-  ];
-  const N = TRACK.length; // 24
-
-  /** grid [row, col] (1-based for CSS grid) for each track index */
   const TRACK_POS = (() => {
     const p = [];
-    for (let c = 0; c < 7; c++) p.push([1, c + 1]);        // top
-    for (let r = 1; r < 7; r++) p.push([r + 1, 7]);        // right
-    for (let c = 5; c >= 0; c--) p.push([7, c + 1]);       // bottom
-    for (let r = 5; r >= 1; r--) p.push([r + 1, 1]);       // left
+    for (let c = 0; c < 7; c++) p.push([1, c + 1]);
+    for (let r = 1; r < 7; r++) p.push([r + 1, 7]);
+    for (let c = 5; c >= 0; c--) p.push([7, c + 1]);
+    for (let r = 5; r >= 1; r--) p.push([r + 1, 1]);
     return p;
   })();
 
   const START_CREDIT = 1000;
   const MAX_BET_PER_SYMBOL = 99;
-  const MAX_ONCE_MORE_CHAIN = 5;
   const STORAGE_KEY = 'xiaomali.v1';
+  const SETTINGS_KEY = 'xiaomali.settings.v1';
+
+  // Reel strip cycles these ids (no ONCE MORE on side reels; middle may show it).
+  const REEL_IDS = SYMBOLS.map((s) => s.id);
 
   // ---------------------------------------------------------------------------
-  // 2. Seven-segment LED renderer (inline SVG, no fonts needed)
+  // 2. Seven-segment LED
   // ---------------------------------------------------------------------------
 
   const SEG_PATHS = (() => {
-    const t = 1.7; // segment thickness
+    const t = 1.7;
     const h = (x1, x2, y) =>
       `${x1},${y} ${x1 + t / 2},${y - t / 2} ${x2 - t / 2},${y - t / 2} ${x2},${y} ${x2 - t / 2},${y + t / 2} ${x1 + t / 2},${y + t / 2}`;
     const v = (x, y1, y2) =>
@@ -134,10 +90,9 @@
     }
     let last = null;
     return {
-      /** show a number (right-aligned, no leading zeros) or a raw string */
       set(value, { pad = ' ' } = {}) {
         let str = typeof value === 'number' ? String(Math.max(0, Math.floor(value))) : String(value);
-        if (str.length > digits) str = str.slice(-digits); // overflow: show last digits
+        if (str.length > digits) str = str.slice(-digits);
         str = str.padStart(digits, pad);
         if (str === last) return;
         last = str;
@@ -150,7 +105,7 @@
   }
 
   // ---------------------------------------------------------------------------
-  // 3. Sound — tiny Web Audio synth. iOS requires a user gesture to unlock.
+  // 3. Sound + Music
   // ---------------------------------------------------------------------------
 
   const Sound = {
@@ -163,6 +118,7 @@
         try { this.ctx = new AC(); } catch { return; }
       }
       if (this.ctx.state === 'suspended') this.ctx.resume();
+      Music.update();
     },
     beep(freq, dur = 0.05, type = 'square', vol = 0.04, when = 0) {
       if (!this.on || !this.ctx) return;
@@ -188,6 +144,149 @@
     lose()  { this.seq([392, 330, 262], 0.14, 'triangle', 0.06); },
     once()  { this.seq([784, 988, 1175, 1568, 0, 1568], 0.07, 'square', 0.05); },
     coin()  { this.beep(1568, 0.03, 'square', 0.03); },
+    lucky() { this.seq([659, 784, 988, 1319, 988, 1319, 1568, 1976], 0.06, 'square', 0.05); },
+    jp()    { this.seq([523, 784, 1047, 1568, 2093, 1568, 2093, 2637], 0.08, 'square', 0.055); },
+  };
+
+  const MUSIC_TRACKS = {
+    off: { name: '安靜' },
+    arcade: {
+      name: '經典街機', bpm: 138, leadWave: 'square', bassWave: 'triangle', leadVol: 0.022, bassVol: 0.05,
+      lead: [72,0,76,0,79,0,76,0, 77,0,74,0,71,0,74,0, 72,0,76,0,79,0,84,0, 83,0,79,0,74,0,0,0],
+      bass: [48,0,0,0,55,0,0,0, 50,0,0,0,55,0,0,0, 48,0,0,0,55,0,0,0, 43,0,0,0,47,0,0,0],
+      drums: 'h.h.h.h.h.h.h.h.h.h.h.h.h.h.h.h.',
+    },
+    breezy: {
+      name: '輕快', bpm: 116, leadWave: 'triangle', bassWave: 'sine', leadVol: 0.05, bassVol: 0.06,
+      lead: [67,0,69,71,0,74,0,71, 69,0,67,0,64,0,67,0, 67,0,69,71,0,74,76,0, 74,0,71,0,69,0,0,0],
+      bass: [43,0,0,50,0,0,47,0, 45,0,0,52,0,0,48,0, 43,0,0,50,0,0,47,0, 50,0,0,45,0,0,50,0],
+      drums: 'k...h...k...h...k...h...k.h.h...',
+    },
+    festive: {
+      name: '歡慶', bpm: 152, leadWave: 'square', bassWave: 'triangle', leadVol: 0.022, bassVol: 0.055,
+      lead: [72,72,0,72,76,0,79,0, 84,0,79,0,76,0,72,0, 74,74,0,74,77,0,81,0, 79,0,76,0,79,0,0,0],
+      bass: [48,0,55,0,48,0,55,0, 48,0,55,0,48,0,55,0, 50,0,57,0,50,0,57,0, 55,0,47,0,55,0,43,0],
+      drums: 'k.h.s.h.k.h.s.h.k.h.s.h.k.k.s.s.',
+    },
+    retro: {
+      name: '復古', bpm: 108, leadWave: 'square', bassWave: 'square', leadVol: 0.016, bassVol: 0.022,
+      lead: [69,72,76,81,76,72,69,72, 65,69,72,77,72,69,65,69, 60,64,67,72,67,64,60,64, 67,71,74,79,74,71,67,71],
+      bass: [45,0,0,0,45,0,0,0, 41,0,0,0,41,0,0,0, 36,0,0,0,36,0,0,0, 43,0,0,0,43,0,0,0],
+      drums: 'k.......s.......k...k...s.......',
+    },
+    neon: {
+      name: '霓虹', bpm: 128, leadWave: 'sawtooth', bassWave: 'triangle', leadVol: 0.014, bassVol: 0.05,
+      lead: [76,0,79,0,83,0,79,0, 81,0,76,0,72,0,76,0, 74,0,77,0,81,0,84,0, 83,0,79,0,74,0,0,0],
+      bass: [40,0,0,47,0,0,43,0, 45,0,0,52,0,0,48,0, 40,0,0,47,0,0,43,0, 38,0,0,45,0,0,50,0],
+      drums: 'k.h.k.h.k.h.s.h.k.h.k.h.k.s.h.h.',
+    },
+  };
+  const MUSIC_IDS = Object.keys(MUSIC_TRACKS);
+
+  const Music = {
+    track: 'arcade',
+    timer: null,
+    gain: null,
+    noise: null,
+    step: 0,
+    nextTime: 0,
+    setTrack(id) {
+      if (!MUSIC_TRACKS[id]) return;
+      this.track = id;
+      this.stop();
+      this.update();
+    },
+    update() {
+      const want = Sound.on && Sound.ctx && this.track !== 'off' && !document.hidden;
+      if (want) this.start(); else this.stop();
+    },
+    start() {
+      if (this.timer || !Sound.ctx) return;
+      const ctx = Sound.ctx;
+      this.gain = ctx.createGain();
+      this.gain.gain.value = 1;
+      this.gain.connect(ctx.destination);
+      if (!this.noise) {
+        const len = Math.floor(ctx.sampleRate * 0.2);
+        this.noise = ctx.createBuffer(1, len, ctx.sampleRate);
+        const d = this.noise.getChannelData(0);
+        for (let i = 0; i < len; i++) d[i] = Math.random() * 2 - 1;
+      }
+      this.step = 0;
+      this.nextTime = ctx.currentTime + 0.08;
+      this.timer = setInterval(() => this.tick(), 25);
+    },
+    stop() {
+      clearInterval(this.timer);
+      this.timer = null;
+      if (this.gain && Sound.ctx) {
+        const g = this.gain;
+        const t = Sound.ctx.currentTime;
+        try {
+          g.gain.setValueAtTime(g.gain.value, t);
+          g.gain.linearRampToValueAtTime(0, t + 0.08);
+        } catch { /* ignore */ }
+        setTimeout(() => { try { g.disconnect(); } catch { /* */ } }, 150);
+      }
+      this.gain = null;
+    },
+    tick() {
+      const ctx = Sound.ctx;
+      const T = MUSIC_TRACKS[this.track];
+      if (!ctx || !T || !T.lead || !this.gain) return;
+      const dur = 60 / T.bpm / 4;
+      if (this.nextTime < ctx.currentTime - 0.3) this.nextTime = ctx.currentTime + 0.05;
+      while (this.nextTime < ctx.currentTime + 0.12) {
+        const i = this.step % T.lead.length;
+        this.note(T.lead[i], this.nextTime, dur * 0.9, T.leadWave, T.leadVol);
+        this.note(T.bass[i], this.nextTime, dur * 1.6, T.bassWave, T.bassVol);
+        this.drum(T.drums[i], this.nextTime);
+        this.nextTime += dur;
+        this.step++;
+      }
+    },
+    note(midi, t, dur, type, vol) {
+      if (!midi) return;
+      const ctx = Sound.ctx;
+      const o = ctx.createOscillator();
+      const g = ctx.createGain();
+      o.type = type;
+      o.frequency.setValueAtTime(440 * Math.pow(2, (midi - 69) / 12), t);
+      g.gain.setValueAtTime(0.0001, t);
+      g.gain.exponentialRampToValueAtTime(vol, t + 0.008);
+      g.gain.exponentialRampToValueAtTime(0.0001, t + dur);
+      o.connect(g).connect(this.gain);
+      o.start(t);
+      o.stop(t + dur + 0.02);
+    },
+    drum(kind, t) {
+      if (!kind || kind === '.') return;
+      const ctx = Sound.ctx;
+      const g = ctx.createGain();
+      g.connect(this.gain);
+      if (kind === 'k') {
+        const o = ctx.createOscillator();
+        o.frequency.setValueAtTime(140, t);
+        o.frequency.exponentialRampToValueAtTime(40, t + 0.12);
+        g.gain.setValueAtTime(0.12, t);
+        g.gain.exponentialRampToValueAtTime(0.0001, t + 0.14);
+        o.connect(g);
+        o.start(t);
+        o.stop(t + 0.15);
+        return;
+      }
+      const src = ctx.createBufferSource();
+      src.buffer = this.noise;
+      const f = ctx.createBiquadFilter();
+      f.type = kind === 'h' ? 'highpass' : 'bandpass';
+      f.frequency.value = kind === 'h' ? 7000 : 1800;
+      const len = kind === 'h' ? 0.03 : 0.1;
+      g.gain.setValueAtTime(kind === 'h' ? 0.025 : 0.05, t);
+      g.gain.exponentialRampToValueAtTime(0.0001, t + len);
+      src.connect(f).connect(g);
+      src.start(t);
+      src.stop(t + len + 0.02);
+    },
   };
 
   // ---------------------------------------------------------------------------
@@ -198,12 +297,27 @@
     credit: START_CREDIT,
     win: 0,
     bets: new Array(SYMBOLS.length).fill(0),
-    /** true = bets already deducted from credit for the upcoming spin.
-     *  false = bets shown are last round's ("stale"); Start will re-buy them. */
     betsPaid: true,
-    pos: 0,          // current light position
-    busy: false,     // true while spinning / gambling / collecting
+    pos: 0,
+    busy: false,
+    jp: JP.seed,
   };
+
+  let settings = E.normalizeSettings(null);
+
+  function loadSettings() {
+    try {
+      const d = JSON.parse(localStorage.getItem(SETTINGS_KEY) || 'null');
+      settings = E.normalizeSettings(d);
+      if (d && MUSIC_TRACKS[d.music]) Music.track = d.music;
+    } catch { settings = E.normalizeSettings(null); }
+  }
+
+  function saveSettings() {
+    try {
+      localStorage.setItem(SETTINGS_KEY, JSON.stringify({ ...settings, music: Music.track }));
+    } catch { /* private mode */ }
+  }
 
   function load() {
     try {
@@ -213,17 +327,17 @@
         state.win = Math.max(0, Math.floor(d.win || 0));
         state.pos = (d.pos | 0) % N;
         Sound.on = d.sound !== false;
+        if (Number.isFinite(d.jp) && d.jp >= 0) state.jp = Math.min(JP.max, d.jp);
         if (Array.isArray(d.lastBets) && d.lastBets.length === SYMBOLS.length) {
           state.bets = d.lastBets.map((n) => Math.min(MAX_BET_PER_SYMBOL, Math.max(0, n | 0)));
           state.betsPaid = false;
         }
       }
-    } catch { /* ignore corrupt storage */ }
+    } catch { /* ignore */ }
   }
 
   function save() {
     try {
-      // Paid-but-unspun bets are refunded into credit when saved.
       const refund = state.betsPaid && !state.busy ? sum(state.bets) : 0;
       localStorage.setItem(STORAGE_KEY, JSON.stringify({
         credit: state.credit + refund,
@@ -231,8 +345,9 @@
         pos: state.pos,
         sound: Sound.on,
         lastBets: state.bets,
+        jp: state.jp,
       }));
-    } catch { /* private mode etc. */ }
+    } catch { /* */ }
   }
 
   // ---------------------------------------------------------------------------
@@ -247,14 +362,16 @@
   const btn = {
     start: $('btnStart'), clear: $('btnClear'), all: $('btnAll'),
     collect: $('btnCollect'), small: $('btnSmall'), big: $('btnBig'),
-    sound: $('btnSound'), menu: $('btnMenu'), reset: $('btnReset'),
+    sound: $('btnSound'), settings: $('btnSettings'), reset: $('btnReset'),
+    openHelp: $('btnOpenHelp'),
   };
 
   function iconHTML(symId) {
     if (symId === 'once') return '<span class="ic-once">ONCE<br>MORE</span>';
     if (symId === 'seven') return '<span class="ic-77">77</span>';
     if (symId === 'bar') return '<span class="ic-bar"><i>BAR</i><i>BAR</i><i>BAR</i></span>';
-    return `<span>${SYMBOLS[SYM_INDEX[symId]].icon}</span>`;
+    const s = SYMBOLS[SYM_INDEX[symId]];
+    return s ? `<span>${s.icon}</span>` : '';
   }
 
   const tileEls = TRACK.map((t, i) => {
@@ -284,13 +401,120 @@
   const winLed = makeLed($('winLed'), 6);
   const creditLed = makeLed($('creditLed'), 6);
   const diceLed = makeLed($('diceLed'), 1);
-  $('creditLed').classList.add('green');
 
-  // pay table in help dialog
   $('paytable').innerHTML = SYMBOLS.map((s) =>
     `<tr><td>${iconHTML(s.id)}</td><td>${s.name}</td><td>× ${s.mult}</td></tr>`).join('') +
     '<tr><td>×3</td><td>小圖示（BAR 小圖示為 50）</td><td>× 3 / × 50</td></tr>' +
-    '<tr><td><span class="ic-once" style="font-size:8px">ONCE<br>MORE</span></td><td>免費再跑一次</td><td>FREE</td></tr>';
+    '<tr><td><span class="ic-once" style="font-size:8px">ONCE<br>MORE</span></td><td>免費再跑一次</td><td>FREE</td></tr>' +
+    `<tr><td>JP</td><td>停大 BAR 且押 BAR（滿 ${JP.fullBet} 拿全額）</td><td>彩金</td></tr>` +
+    '<tr><td>★</td><td>送燈／開火車／三元四喜</td><td>中彩</td></tr>';
+
+  // --- 3 fruit reels --------------------------------------------------------
+  const REEL_LOOPS = 8; // repeated strip length multiplier
+  const reelStrips = [0, 1, 2].map((ri) => {
+    const strip = $('reel' + ri);
+    const seq = [];
+    for (let L = 0; L < REEL_LOOPS; L++) {
+      for (const id of REEL_IDS) seq.push(id);
+    }
+    // allow ONCE MORE only on middle reel strip (decorative)
+    if (ri === 1) {
+      for (let L = 0; L < 2; L++) seq.push('once');
+    }
+    strip.innerHTML = seq.map((id) => `<div class="reel-cell">${iconHTML(id)}</div>`).join('');
+    return { el: strip, parent: strip.closest('.reel'), seq, cellH: 0 };
+  });
+
+  function measureReelCells() {
+    const sample = reelStrips[0].el.querySelector('.reel-cell');
+    const h = sample ? sample.getBoundingClientRect().height : 0;
+    reelStrips.forEach((r) => { r.cellH = h || (parseFloat(getComputedStyle(document.documentElement).fontSize) * 2); });
+  }
+
+  function setReelOffset(ri, index, animate) {
+    const r = reelStrips[ri];
+    if (!r.cellH) measureReelCells();
+    const y = -(index * r.cellH);
+    r.el.classList.toggle('settle', !!animate);
+    r.el.style.transform = `translateY(${y}px)`;
+  }
+
+  function findReelIndex(ri, symId, preferNearEnd) {
+    const seq = reelStrips[ri].seq;
+    if (preferNearEnd) {
+      for (let i = seq.length - 1; i >= 0; i--) if (seq[i] === symId) return i;
+    }
+    const start = Math.floor(seq.length * 0.4);
+    for (let i = start; i < seq.length; i++) if (seq[i] === symId) return i;
+    return seq.indexOf(symId);
+  }
+
+  function idleReels() {
+    measureReelCells();
+    const picks = [
+      REEL_IDS[Math.floor(Math.random() * REEL_IDS.length)],
+      REEL_IDS[Math.floor(Math.random() * REEL_IDS.length)],
+      REEL_IDS[Math.floor(Math.random() * REEL_IDS.length)],
+    ];
+    picks.forEach((id, ri) => {
+      reelStrips[ri].parent.classList.remove('spinning', 'landed');
+      setReelOffset(ri, findReelIndex(ri, id, false), false);
+    });
+  }
+
+  /** Spin all three reels; settle middle on `centerId`, sides on random fruits. */
+  async function spinReels(centerId, durationMs) {
+    measureReelCells();
+    const reduced = window.matchMedia('(prefers-reduced-motion: reduce)').matches;
+    const sideL = REEL_IDS[Math.floor(randomFloat() * REEL_IDS.length)];
+    const sideR = REEL_IDS[Math.floor(randomFloat() * REEL_IDS.length)];
+    const targets = [sideL, centerId === 'once' ? 'once' : (SYM_INDEX[centerId] != null ? centerId : REEL_IDS[0]), sideR];
+
+    if (reduced) {
+      targets.forEach((id, ri) => {
+        setReelOffset(ri, findReelIndex(ri, id, true), false);
+        reelStrips[ri].parent.classList.add('landed');
+      });
+      return;
+    }
+
+    reelStrips.forEach((r) => {
+      r.parent.classList.remove('landed');
+      r.parent.classList.add('spinning');
+      r.el.classList.remove('settle');
+    });
+
+    const start = performance.now();
+    const baseSpeed = [2.8, 3.4, 3.0]; // cells per frame-ish via time
+    let raf = 0;
+    await new Promise((resolve) => {
+      const tick = (now) => {
+        const t = now - start;
+        if (t >= durationMs) {
+          cancelAnimationFrame(raf);
+          resolve();
+          return;
+        }
+        reelStrips.forEach((r, ri) => {
+          const cells = (t / 16) * baseSpeed[ri];
+          const idx = Math.floor(cells) % r.seq.length;
+          setReelOffset(ri, idx, false);
+        });
+        raf = requestAnimationFrame(tick);
+      };
+      raf = requestAnimationFrame(tick);
+    });
+
+    // staggered settle
+    for (let ri = 0; ri < 3; ri++) {
+      const idx = findReelIndex(ri, targets[ri], true);
+      setReelOffset(ri, idx, true);
+      reelStrips[ri].parent.classList.remove('spinning');
+      reelStrips[ri].parent.classList.add('landed');
+      Sound.beep(900 + ri * 120, 0.04, 'square', 0.03);
+      await sleep(120);
+    }
+  }
 
   function sum(a) { return a.reduce((x, y) => x + y, 0); }
 
@@ -307,6 +531,11 @@
   }
 
   function render() {
+    const jpRow = $('jpRow');
+    if (jpRow) {
+      jpRow.hidden = !settings.modes.jp;
+      $('jpVal').textContent = String(Math.floor(state.jp));
+    }
     winLed.set(state.win);
     creditLed.set(state.credit);
     betKeys.forEach((k, i) => {
@@ -330,10 +559,12 @@
   const sleep = (ms) => new Promise((r) => setTimeout(r, ms));
 
   function clearHighlights() {
-    tileEls.forEach((el) => el.classList.remove('win'));
+    tileEls.forEach((el) => el.classList.remove('win', 'lit2'));
     betKeys.forEach((k) => k.el.classList.remove('hit'));
     $('lblSmall').classList.remove('on');
     $('lblBig').classList.remove('on');
+    $('jpRow')?.classList.remove('jp-hit');
+    reelStrips.forEach((r) => r.parent.classList.remove('landed', 'spinning'));
   }
 
   // ---------------------------------------------------------------------------
@@ -341,13 +572,7 @@
   // ---------------------------------------------------------------------------
 
   function pickTarget() {
-    const total = TRACK.reduce((a, t) => a + t.w, 0);
-    let r = randomFloat() * total;
-    for (let i = 0; i < N; i++) {
-      r -= TRACK[i].w;
-      if (r < 0) return i;
-    }
-    return N - 1;
+    return E.pickWeighted(E.effectiveWeights(settings), randomFloat);
   }
 
   function randomFloat() {
@@ -359,7 +584,6 @@
     return Math.random();
   }
 
-  /** Move WIN into CREDIT immediately (used implicitly before betting/starting). */
   function collectInstant() {
     if (state.win <= 0) return;
     state.credit += state.win;
@@ -368,7 +592,6 @@
     clearHighlights();
   }
 
-  /** If last round's bets are still on display, wipe them for a fresh bet. */
   function freshBets() {
     if (!state.betsPaid) {
       state.bets.fill(0);
@@ -387,7 +610,7 @@
       return false;
     }
     if (state.credit < 1) {
-      setMsg('分數不足！可在 ☰ 重設分數', 'bad');
+      setMsg('分數不足！可在 ⚙️ 重設分數', 'bad');
       Sound.error();
       render();
       return false;
@@ -432,7 +655,6 @@
     save();
   }
 
-  /** One light run: race → decelerate → stop at target. */
   async function runLight(target) {
     const dist = (target - state.pos + N) % N;
     const laps = 2 + (randomFloat() < 0.5 ? 1 : 0);
@@ -443,9 +665,9 @@
       state.pos = (state.pos + 1) % N;
       const remaining = total - s;
       let delay;
-      if (s <= 6) delay = FAST + (7 - s) * 16;                         // spin-up
-      else if (remaining >= DECEL) delay = FAST;                        // full speed
-      else delay = FAST + Math.pow(DECEL - remaining, 2) * 2;           // slow down
+      if (s <= 6) delay = FAST + (7 - s) * 16;
+      else if (remaining >= DECEL) delay = FAST;
+      else delay = FAST + Math.pow(DECEL - remaining, 2) * 2;
       setLight(state.pos, delay < 60 ? 2 : delay < 120 ? 1 : 0);
       Sound.tick();
       await sleep(delay);
@@ -453,8 +675,25 @@
     setLight(state.pos, 0);
   }
 
+  /** Estimate light-run duration so reels can finish roughly together. */
+  function estimateLightMs(target) {
+    const dist = (target - state.pos + N) % N;
+    const laps = 2;
+    const total = laps * N + dist;
+    const FAST = 28;
+    const DECEL = 15;
+    let ms = 0;
+    for (let s = 1; s <= total; s++) {
+      const remaining = total - s;
+      if (s <= 6) ms += FAST + (7 - s) * 16;
+      else if (remaining >= DECEL) ms += FAST;
+      else ms += FAST + Math.pow(DECEL - remaining, 2) * 2;
+    }
+    return ms;
+  }
+
   async function animateWin(from, to) {
-    const steps = Math.min(30, to - from);
+    const steps = Math.min(30, Math.max(1, to - from));
     for (let k = 1; k <= steps; k++) {
       state.win = Math.round(from + ((to - from) * k) / steps);
       winLed.set(state.win);
@@ -482,62 +721,96 @@
         render();
         return;
       }
-      state.credit -= total; // re-buy last round's bets
+      state.credit -= total;
       state.betsPaid = true;
     }
     state.busy = true;
     render();
     save();
 
-    let chain = 0;
+    const potBefore = settings.modes.jp ? state.jp : 0;
+    const result = E.resolveRound(state.bets, settings, randomFloat, potBefore);
     let roundWin = 0;
-    // eslint-disable-next-line no-constant-condition
-    while (true) {
-      setMsg(chain ? `ONCE MORE 免費再跑！（${chain}）` : '轉動中…', chain ? 'hot' : '');
-      const target = pickTarget();
-      await runLight(target);
-      const t = TRACK[target];
+    let chain = 0;
 
-      if (t.s === 'once') {
-        tileEls[target].classList.add('win');
+    for (const step of result.steps) {
+      if (step.type === 'once') {
+        setMsg(chain ? `ONCE MORE 免費再跑！（${chain}）` : 'ONCE MORE…', 'hot');
+        const dur = estimateLightMs(step.target);
+        await Promise.all([runLight(step.target), spinReels('once', Math.max(900, dur - 400))]);
+        tileEls[step.target].classList.add('win');
         Sound.once();
-        if (chain < MAX_ONCE_MORE_CHAIN) {
-          setMsg('ONCE MORE！同押注免費再跑一次', 'hot');
-          chain++;
-          await sleep(1200);
-          tileEls[target].classList.remove('win');
-          continue;
+        chain++;
+        if (chain > MAX_ONCE_MORE_CHAIN) {
+          setMsg('ONCE MORE 已達上限');
+          break;
         }
-        setMsg('ONCE MORE 已達上限');
-        break;
+        setMsg('ONCE MORE！同押注免費再跑一次', 'hot');
+        await sleep(900);
+        tileEls[step.target].classList.remove('win');
+        continue;
       }
 
-      const si = SYM_INDEX[t.s];
-      const sym = SYMBOLS[si];
-      const b = state.bets[si];
-      const mult = t.small ? t.pay : sym.mult;
-      if (b > 0) {
-        const gained = b * mult;
-        roundWin += gained;
-        tileEls[target].classList.add('win');
-        betKeys[si].el.classList.add('hit');
-        if (mult >= 40) Sound.big(); else Sound.win();
-        setMsg(`${sym.name}${t.small ? '（小）' : ''} ${b} × ${mult} = ${gained}！`, 'hot');
-        await animateWin(state.win, state.win + gained);
-      } else {
-        setMsg(`停在 ${sym.name}${t.small ? '（小）' : ''}，沒押中`, 'bad');
-        Sound.lose();
+      if (step.type === 'land') {
+        setMsg(chain ? `ONCE MORE 後轉動中…` : '轉動中…', chain ? 'hot' : '');
+        const dur = estimateLightMs(step.target);
+        const landId = TRACK[step.target].s;
+        await Promise.all([runLight(step.target), spinReels(landId, Math.max(900, dur - 400))]);
+        const sym = step.si >= 0 ? SYMBOLS[step.si] : null;
+        if (step.gained > 0 && sym) {
+          roundWin += step.gained;
+          tileEls[step.target].classList.add('win');
+          betKeys[step.si].el.classList.add('hit');
+          if (step.mult >= 40) Sound.big(); else Sound.win();
+          setMsg(`${sym.name}${TRACK[step.target].small ? '（小）' : ''} ${state.bets[step.si]} × ${step.mult} = ${step.gained}！`, 'hot');
+          await animateWin(state.win, state.win + step.gained);
+        } else if (sym) {
+          setMsg(`停在 ${sym.name}${TRACK[step.target].small ? '（小）' : ''}，沒押中`, 'bad');
+          Sound.lose();
+        }
+        continue;
       }
-      break;
+
+      if (step.type === 'bonus') {
+        Sound.lucky();
+        setMsg(`中彩！${step.name}`, 'hot');
+        for (const t of step.tiles) {
+          tileEls[t.i].classList.add('win', 'lit2');
+          if (t.si >= 0 && t.gained > 0) betKeys[t.si].el.classList.add('hit');
+          await sleep(220);
+        }
+        if (step.gained > 0) {
+          roundWin += step.gained;
+          await animateWin(state.win, state.win + step.gained);
+          setMsg(`${step.name} 再得 ${step.gained}！`, 'hot');
+        } else {
+          setMsg(`${step.name}（未押中額外燈）`, 'hot');
+        }
+        await sleep(500);
+        continue;
+      }
+
+      if (step.type === 'jp') {
+        Sound.jp();
+        $('jpRow')?.classList.add('jp-hit');
+        setMsg(`JP 彩金！+${step.amount}`, 'hot');
+        roundWin += step.amount;
+        await animateWin(state.win, state.win + step.amount);
+        await sleep(600);
+      }
     }
 
-    if (roundWin > 0 && chain > 0) setMsg(`本局共贏 ${roundWin}！可得分或比大小`, 'hot');
-    else if (roundWin > 0) setMsg(msgEl.textContent + ' 得分或比大小？', 'hot');
+    state.jp = E.nextJpPot(state.jp, total, result.jpWin);
 
-    state.betsPaid = false; // bets stay on display; Start re-buys them
+    if (roundWin > 0) setMsg(`本局共贏 ${roundWin}！可得分或比大小`, 'hot');
+    else if (!msgEl.textContent.includes('沒押中') && !msgEl.textContent.includes('上限')) {
+      /* keep prior lose message */
+    }
+
+    state.betsPaid = false;
     state.busy = false;
     if (state.credit === 0 && state.win === 0) {
-      setMsg('分數用完了，點右上 ☰ 重設分數', 'bad');
+      setMsg('分數用完了，點右上 ⚙️ 重設分數', 'bad');
     }
     render();
     save();
@@ -568,7 +841,6 @@
     save();
   }
 
-  /** 比大小: 1–4 small, 6–9 big, 5 = push. Correct guess doubles WIN, wrong loses it. */
   async function gamble(choice) {
     if (state.busy || state.win <= 0) return;
     state.busy = true;
@@ -613,6 +885,7 @@
     state.win = 0;
     state.bets.fill(0);
     state.betsPaid = true;
+    state.jp = JP.seed;
     clearHighlights();
     diceLed.set('-');
     setMsg('分數已重設為 1000');
@@ -621,15 +894,127 @@
   }
 
   // ---------------------------------------------------------------------------
-  // 7. Input
+  // 7. Settings UI
   // ---------------------------------------------------------------------------
 
-  // Unlock audio on the first gesture (required by iOS Safari).
+  const settingsDlg = $('settingsDialog');
+  const helpDlg = $('helpDialog');
+  const modeList = $('modeList');
+  const musicRow = $('musicRow');
+  const presetRow = $('presetRow');
+  const bonusRateEl = $('bonusRate');
+  const bonusRateVal = $('bonusRateVal');
+  const oddsHint = $('oddsHint');
+
+  MODE_KEYS.forEach((k) => {
+    const lab = document.createElement('label');
+    lab.innerHTML = `<input type="checkbox" data-mode="${k}"> <span>${MODE_LABELS[k]}</span>`;
+    modeList.appendChild(lab);
+  });
+
+  MUSIC_IDS.forEach((id) => {
+    const b = document.createElement('button');
+    b.type = 'button';
+    b.className = 'chip';
+    b.dataset.music = id;
+    b.textContent = MUSIC_TRACKS[id].name;
+    musicRow.appendChild(b);
+  });
+
+  function refreshSettingsUI() {
+    presetRow.querySelectorAll('.chip').forEach((c) => {
+      c.classList.toggle('on', c.dataset.preset === settings.preset);
+    });
+    modeList.querySelectorAll('input[data-mode]').forEach((inp) => {
+      inp.checked = !!settings.modes[inp.dataset.mode];
+    });
+    bonusRateEl.value = String(settings.bonusRate);
+    bonusRateVal.textContent = Number(settings.bonusRate).toFixed(1) + '×';
+    musicRow.querySelectorAll('.chip').forEach((c) => {
+      c.classList.toggle('on', c.dataset.music === Music.track);
+    });
+    // Lightweight RTP hint (2k rounds — fast enough for UI)
+    try {
+      const sim = E.simulate(settings, 2500, Math.random);
+      const pct = (sim.rtp * 100).toFixed(0);
+      oddsHint.textContent = `預估 RTP（全押）約 ${pct}%・中彩 ${(sim.bonusRate * 100).toFixed(1)}%・JP ${(sim.jpRate * 100).toFixed(2)}%（模擬值，娛樂用）`;
+    } catch {
+      oddsHint.textContent = '預估 RTP —';
+    }
+  }
+
+  function openSettings() {
+    refreshSettingsUI();
+    if (typeof settingsDlg.showModal === 'function') settingsDlg.showModal();
+    else settingsDlg.setAttribute('open', '');
+  }
+
+  function openHelp() {
+    if (typeof helpDlg.showModal === 'function') helpDlg.showModal();
+    else helpDlg.setAttribute('open', '');
+  }
+
+  presetRow.addEventListener('click', (e) => {
+    const chip = e.target.closest('[data-preset]');
+    if (!chip) return;
+    settings = E.applyPreset(settings, chip.dataset.preset);
+    saveSettings();
+    refreshSettingsUI();
+    render();
+    Sound.bet();
+  });
+
+  modeList.addEventListener('change', (e) => {
+    const inp = e.target.closest('input[data-mode]');
+    if (!inp) return;
+    settings.modes[inp.dataset.mode] = inp.checked;
+    settings.preset = 'custom';
+    saveSettings();
+    refreshSettingsUI();
+    render();
+  });
+
+  bonusRateEl.addEventListener('input', () => {
+    settings.bonusRate = Number(bonusRateEl.value);
+    settings.preset = 'custom';
+    bonusRateVal.textContent = settings.bonusRate.toFixed(1) + '×';
+  });
+  bonusRateEl.addEventListener('change', () => {
+    settings.bonusRate = Number(bonusRateEl.value);
+    settings.preset = 'custom';
+    saveSettings();
+    refreshSettingsUI();
+  });
+
+  musicRow.addEventListener('click', (e) => {
+    const chip = e.target.closest('[data-music]');
+    if (!chip) return;
+    Sound.unlock();
+    Music.setTrack(chip.dataset.music);
+    saveSettings();
+    refreshSettingsUI();
+    if (Sound.on && Music.track !== 'off') Sound.bet();
+  });
+
+  settingsDlg.addEventListener('close', () => {
+    const v = settingsDlg.returnValue;
+    if (v === 'reset') resetCredit();
+    if (v === 'help') {
+      // reopen help after settings closes
+      setTimeout(openHelp, 0);
+    }
+    saveSettings();
+    render();
+  });
+
+  // ---------------------------------------------------------------------------
+  // 8. Input
+  // ---------------------------------------------------------------------------
+
   const unlock = () => Sound.unlock();
   window.addEventListener('pointerdown', unlock, { passive: true });
   window.addEventListener('keydown', unlock);
 
-  // Bet keys: fire on pointerdown for arcade feel; hold to auto-repeat.
   betKeys.forEach((k, i) => {
     let holdTimer = null;
     let repeatTimer = null;
@@ -652,7 +1037,6 @@
     ['pointerup', 'pointerleave', 'pointercancel', 'lostpointercapture'].forEach((ev) =>
       k.el.addEventListener(ev, stop));
     k.el.addEventListener('contextmenu', (e) => e.preventDefault());
-    // keyboard activation (Enter/Space on focused key) still works via click
     k.el.addEventListener('click', (e) => { if (e.detail === 0) bet(i); });
   });
 
@@ -665,22 +1049,15 @@
   btn.sound.addEventListener('click', () => {
     Sound.on = !Sound.on;
     Sound.unlock();
+    Music.update();
     if (Sound.on) Sound.bet();
     render();
     save();
   });
-
-  const dlg = $('helpDialog');
-  btn.menu.addEventListener('click', () => {
-    if (typeof dlg.showModal === 'function') dlg.showModal();
-    else dlg.setAttribute('open', '');
-  });
-  dlg.addEventListener('close', () => {
-    if (dlg.returnValue === 'reset') resetCredit();
-  });
+  btn.settings.addEventListener('click', openSettings);
 
   window.addEventListener('keydown', (e) => {
-    if (dlg.open || e.metaKey || e.ctrlKey || e.altKey) return;
+    if (settingsDlg.open || helpDlg.open || e.metaKey || e.ctrlKey || e.altKey) return;
     const k = e.key;
     if (k >= '1' && k <= '8') { bet(Number(k) - 1); e.preventDefault(); return; }
     switch (k.toLowerCase()) {
@@ -695,21 +1072,31 @@
     e.preventDefault();
   });
 
-  document.addEventListener('visibilitychange', () => { if (document.hidden) save(); });
+  document.addEventListener('visibilitychange', () => {
+    if (document.hidden) save();
+    Music.update();
+  });
   window.addEventListener('pagehide', save);
+  window.addEventListener('resize', () => {
+    // keep reel offsets correct after layout changes
+    idleReels();
+  });
 
-  // Block pinch/double-tap zoom gestures that iOS sometimes still allows.
   document.addEventListener('gesturestart', (e) => e.preventDefault());
 
   // ---------------------------------------------------------------------------
   // boot
   // ---------------------------------------------------------------------------
+  loadSettings();
   load();
   diceLed.set('-');
   setLight(state.pos);
+  requestAnimationFrame(() => idleReels());
   if (!state.betsPaid && sum(state.bets) > 0) setMsg('按「開始」以上局押注再玩，或重新押注');
   render();
 
-  // Expose a tiny debug hook for maintainers (see AGENTS.md).
-  window.__xiaomali = { state, TRACK, SYMBOLS, pickTarget, resetCredit };
+  window.__xiaomali = {
+    state, settings, TRACK, SYMBOLS, pickTarget, resetCredit, Music, Sound, E,
+    setSettings(s) { settings = E.normalizeSettings(s); saveSettings(); render(); },
+  };
 })();

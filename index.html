@@ -20,11 +20,10 @@
     <header class="topbar">
       <button class="icon-btn" id="btnSound" type="button" aria-label="音效開關">🔊</button>
       <h1 class="logo"><span>小瑪莉</span><small>LITTLE MARY</small></h1>
-      <button class="icon-btn" id="btnMenu" type="button" aria-label="說明與設定">☰</button>
+      <button class="icon-btn" id="btnSettings" type="button" aria-label="設定">⚙️</button>
     </header>
 
     <main class="cabinet">
-      <!-- 24 格跑燈由 game.js 產生並插入 #board -->
       <section class="board" id="board" aria-label="跑燈盤面">
         <div class="center" id="center">
           <div class="marquee">
@@ -32,14 +31,29 @@
             <span class="m-title">小瑪莉</span>
             <span class="m-star">★</span>
           </div>
-          <div class="led-row">
-            <span class="led-label win">WIN</span>
-            <div class="led" id="winLed" data-digits="6"></div>
+
+          <div class="score-row">
+            <div class="led-row compact">
+              <span class="led-label win">WIN</span>
+              <div class="led" id="winLed" data-digits="6"></div>
+            </div>
+            <div class="led-row compact">
+              <span class="led-label credit">CREDIT</span>
+              <div class="led green" id="creditLed" data-digits="6"></div>
+            </div>
           </div>
-          <div class="led-row">
-            <span class="led-label credit">CREDIT</span>
-            <div class="led" id="creditLed" data-digits="6"></div>
+
+          <div class="jp-row" id="jpRow" hidden>
+            <span class="jp-label">JP</span>
+            <span class="jp-val" id="jpVal">200</span>
           </div>
+
+          <div class="reels" id="reels" aria-label="水果轉盤">
+            <div class="reel" data-r="0"><div class="reel-mask"><div class="reel-strip" id="reel0"></div></div></div>
+            <div class="reel" data-r="1"><div class="reel-mask"><div class="reel-strip" id="reel1"></div></div></div>
+            <div class="reel" data-r="2"><div class="reel-mask"><div class="reel-strip" id="reel2"></div></div></div>
+          </div>
+
           <div class="dice-row">
             <span class="ds-label" id="lblSmall">小<br><em>1–4</em></span>
             <div class="led dice" id="diceLed" data-digits="1"></div>
@@ -49,7 +63,6 @@
         </div>
       </section>
 
-      <!-- 8 個押注鍵由 game.js 產生 -->
       <section class="betpanel" id="betpanel" aria-label="押注區"></section>
 
       <section class="controls" aria-label="操作">
@@ -65,28 +78,66 @@
     <footer class="note">娛樂用・虛擬分數・非真實賭博</footer>
   </div>
 
+  <dialog class="sheet" id="settingsDialog">
+    <form method="dialog" id="settingsForm">
+      <h2>設定</h2>
+
+      <section class="set-sec">
+        <h3>難度（影響停燈機率）</h3>
+        <div class="preset-row" id="presetRow" role="group" aria-label="難度">
+          <button type="button" class="chip" data-preset="easy">輕鬆</button>
+          <button type="button" class="chip" data-preset="normal">標準</button>
+          <button type="button" class="chip" data-preset="hard">困難</button>
+        </div>
+        <label class="range-label">中彩頻率
+          <input type="range" id="bonusRate" min="0" max="2" step="0.1" value="1">
+          <span id="bonusRateVal">1.0×</span>
+        </label>
+        <p class="hint" id="oddsHint">預估 RTP（全押）約 —</p>
+      </section>
+
+      <section class="set-sec">
+        <h3>中彩玩法</h3>
+        <div class="mode-list" id="modeList"></div>
+      </section>
+
+      <section class="set-sec">
+        <h3>背景音樂</h3>
+        <div class="music-row" id="musicRow" role="group" aria-label="BGM"></div>
+        <p class="hint">音樂為 Web Audio 程序合成，無版權曲。🔇 總開關也會關閉 BGM。</p>
+      </section>
+
+      <div class="sheet-actions triple">
+        <button class="btn btn-blue" value="help" id="btnOpenHelp" type="submit">玩法</button>
+        <button class="btn btn-yellow" value="reset" id="btnReset" type="submit">重設 1000</button>
+        <button class="btn btn-green" value="close" type="submit">完成</button>
+      </div>
+      <p class="disclaimer">本遊戲僅供娛樂，分數為虛擬點數，不能兌換任何金錢或獎品，非真實賭博。</p>
+    </form>
+  </dialog>
+
   <dialog class="sheet" id="helpDialog">
     <form method="dialog">
       <h2>小瑪莉 玩法</h2>
       <ol>
         <li>點下方水果鍵押注，每點一下押 1 分（按住可連押）。「全押」每種各押 1 分。</li>
-        <li>按「開始」，燈號繞盤面跑動後減速停下。</li>
+        <li>按「開始」，外圈燈號跑動，同時中央三轉盤轉動後停下。</li>
         <li>停在你有押的圖案就贏：押注 × 倍率。小圖示（標 ×3）只付 3 倍，「BAR 50」付 50 倍。</li>
-        <li>停在 <b>ONCE MORE</b>：用同樣押注免費再跑一次。</li>
-        <li>贏分在 WIN。按「得分」轉入 CREDIT，或按「小／大」比大小：<br>
-          亮 1–4 為小、6–9 為大，猜中 WIN 加倍，猜錯歸零，亮 5 為和局（不變）。</li>
-        <li>上一局的押注會保留，直接按「開始」即以相同押注再玩。</li>
+        <li>停在 <b>ONCE MORE</b>：用同樣押注免費再跑一次（可在設定關閉）。</li>
+        <li>中彩（可在設定開關）：<b>送燈</b>額外亮燈計分、<b>開火車</b>連燈、<b>三元四喜</b>成套亮燈、<b>JP</b> 停大 BAR 且有押 BAR 可拿累積彩金。</li>
+        <li>贏分在 WIN。按「得分」轉入 CREDIT，或按「小／大」比大小：亮 1–4 小、6–9 大，猜中加倍、猜錯歸零，亮 5 和局。</li>
+        <li>右上 ⚙️ 可調難度、中彩、背景音樂。分數存在本機瀏覽器。</li>
       </ol>
       <table class="paytable" id="paytable"></table>
       <p class="disclaimer">本遊戲僅供娛樂，分數為虛擬點數，不能兌換任何金錢或獎品，非真實賭博。</p>
       <div class="sheet-actions">
-        <button class="btn btn-blue" value="reset" id="btnReset" type="submit">重設分數 1000</button>
         <button class="btn btn-green" value="close" type="submit">關閉</button>
       </div>
       <p class="keys">鍵盤：1–8 押注、A 全押、C 清除、Space／Enter 開始、S 得分、← 小、→ 大</p>
     </form>
   </dialog>
 
+  <script src="engine.js" defer></script>
   <script src="game.js" defer></script>
 </body>
 </html>
