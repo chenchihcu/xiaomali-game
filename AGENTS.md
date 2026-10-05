@@ -20,11 +20,20 @@ Repo: https://github.com/chenchihcu/xiaomali-game
 ## Settings (localStorage `xiaomali.settings.v1`)
 - `preset`: `easy` \| `normal` \| `hard` \| `custom`
 - `weights`: per-symbol (+ `once`, `small`) 0–3
-- `bonusRate`: scales LUCKY + 連跑／大 ONCE MORE grant chances
+- `bonusRate`: 中彩機率 — scales 送燈／開火車／三元四喜
+- `onceRate`: scales 連跑／大 ONCE MORE grant chances
+- `jpRate`: scales JP pot growth (`JP.rate × jpRate`)
+- `startCredit`: 100–99999 (reset button)
+- `betUnit`: 1–10 credit per bet tap
+- `sfxVol` / `bgmVol`: 0–1
 - `modes`: `{ once, onceMulti, onceBig, song, train, sanyuan, jp }`
 - `music`: `off` \| `arcade` \| `breezy` \| `festive` \| `retro` \| `neon`
 
 Credit/win/sound/jp/lastBets: `xiaomali.v1`.
+
+## Cabinet FX (visual only)
+Frame LED rails, side lamps, 假保留燈 strip, FEVER/READY banner. Classes on `#cabinet`:
+`fx-spin` / `fx-reach` / `fx-expect` / `fx-win` / `fx-fever`. No gameplay effect.
 
 ## Game rules in code
 - Stop = `effectiveWeights` (ONCE MORE weight 0 if `modes.once` off).
@@ -56,4 +65,4 @@ node sim.js 50000          # RTP / hit / LUCKY / JP rates per preset
 ## Changing odds
 1. Edit `engine.js` `TRACK[].w` / `PRESETS` / `BONUS.*.chance` / `JP`.
 2. Run `node sim.js` and aim ~reasonable entertainment RTP (normal ≈ 90–100% all-bet is fine).
-3. Settings UI already exposes presets + bonusRate + mode toggles — prefer those for player-facing knobs.
+3. Settings UI exposes presets + 中彩／連跑／JP rates + weight sliders + volumes — prefer those for player-facing knobs.

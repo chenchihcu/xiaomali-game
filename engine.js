@@ -62,7 +62,7 @@
 
   /**
    * When the light lands on ONCE MORE, roll how many free re-runs to queue.
-   * Chances scale with settings.bonusRate. Toggled via modes.onceMulti / onceBig.
+   * Chances scale with settings.onceRate. Toggled via modes.onceMulti / onceBig.
    *   single → 1 (classic)
    *   multi  → 2–5 sequential free stops that each pay if bet matches (連跑)
    *   big    → 3–5 guaranteed (大 ONCE MORE)
@@ -79,7 +79,7 @@
 
   // ---------------------------------------------------------------------------
   // Bonus modes ("LUCKY" events). Rolled once per round, after the light lands
-  // on a symbol tile. Base chance × settings.bonusRate (only enabled modes).
+  // on a symbol tile. Base chance × settings.bonusRate（中彩機率; only enabled modes).
   // ---------------------------------------------------------------------------
   const BONUS = {
     song:    { name: '送燈',     chance: 0.010 },  // 1–3 extra random lights
@@ -131,10 +131,23 @@
     },
   };
 
+  /** Traditional Chinese labels for weight keys (settings UI). */
+  const WEIGHT_LABELS = {
+    apple: '蘋果', orange: '柳橙', mango: '芒果', bell: '鈴鐺',
+    melon: '西瓜', star: '星星', seven: '77', bar: 'BAR',
+    once: 'ONCE MORE', small: '小圖 ×3',
+  };
+
   const DEFAULT_SETTINGS = {
     preset: 'normal',
     weights: { ...PRESETS.normal.weights },
-    bonusRate: 1,
+    bonusRate: 1,   // 中彩機率：送燈／開火車／三元四喜
+    onceRate: 1,    // 連跑／大 ONCE MORE 觸發加乘
+    jpRate: 1,      // JP 彩池累積倍率
+    startCredit: 1000,
+    betUnit: 1,
+    sfxVol: 1,
+    bgmVol: 1,
     modes: { once: true, onceMulti: true, onceBig: true, song: true, train: true, sanyuan: true, jp: true },
   };
 
@@ -149,6 +162,12 @@
       preset: ['easy', 'normal', 'hard', 'custom'].includes(r.preset) ? r.preset : d.preset,
       weights: Object.fromEntries(WEIGHT_KEYS.map((k) => [k, clamp(w[k], 0, 3, d.weights[k])])),
       bonusRate: clamp(r.bonusRate, 0, 3, d.bonusRate),
+      onceRate: clamp(r.onceRate, 0, 3, d.onceRate),
+      jpRate: clamp(r.jpRate, 0, 3, d.jpRate),
+      startCredit: clamp(r.startCredit, 100, 99999, d.startCredit),
+      betUnit: clamp(r.betUnit, 1, 10, d.betUnit),
+      sfxVol: clamp(r.sfxVol, 0, 1, d.sfxVol),
+      bgmVol: clamp(r.bgmVol, 0, 1, d.bgmVol),
       modes: Object.fromEntries(MODE_KEYS.map((k) => [k, typeof m[k] === 'boolean' ? m[k] : d.modes[k]])),
     };
   }
@@ -156,7 +175,14 @@
   function applyPreset(settings, key) {
     const p = PRESETS[key];
     if (!p) return settings;
-    return { ...settings, preset: key, weights: { ...p.weights }, bonusRate: p.bonusRate };
+    return {
+      ...settings,
+      preset: key,
+      weights: { ...p.weights },
+      bonusRate: p.bonusRate,
+      onceRate: p.bonusRate,
+      jpRate: key === 'easy' ? 1.2 : key === 'hard' ? 0.7 : 1,
+    };
   }
 
   /** Per-tile weights after settings. Falls back to base weights if all are 0. */
@@ -248,13 +274,13 @@
 
   /** Roll free-run grant when landing on an ONCE MORE tile. */
   function rollOnceGrant(settings, rng) {
-    const br = settings.bonusRate || 1;
+    const or = settings.onceRate != null ? settings.onceRate : (settings.bonusRate || 1);
     const g = ONCE_GRANT;
-    if (settings.modes.onceBig && rng() < g.bigChance * br) {
+    if (settings.modes.onceBig && rng() < g.bigChance * or) {
       const span = g.bigMax - g.bigMin + 1;
       return { grant: g.bigMin + Math.floor(rng() * span), variant: 'big' };
     }
-    if (settings.modes.onceMulti && rng() < g.multiChance * br) {
+    if (settings.modes.onceMulti && rng() < g.multiChance * or) {
       const span = g.multiMax - g.multiMin + 1;
       return { grant: g.multiMin + Math.floor(rng() * span), variant: 'multi' };
     }
@@ -349,9 +375,10 @@
     return { steps, win: win + jpWin, jpWin };
   }
 
-  /** Pot after a round: grows by JP.rate × bet; a JP win resets it to the seed. */
-  function nextJpPot(pot, totalBet, jpWin) {
-    const grown = Math.min(JP.max, pot + totalBet * JP.rate);
+  /** Pot after a round: grows by JP.rate × jpRate × bet; a JP win resets it to the seed. */
+  function nextJpPot(pot, totalBet, jpWin, settings) {
+    const rate = JP.rate * (settings && settings.jpRate != null ? settings.jpRate : 1);
+    const grown = Math.min(JP.max, pot + totalBet * rate);
     return jpWin > 0 ? JP.seed : grown;
   }
 
@@ -360,22 +387,24 @@
    * `bets` default = 全押 1 each. Returns { rtp, hitRate (round won more than bet), bonusRate, jpRate }.
    */
   function simulate(settings, rounds = 20000, rng = Math.random, bets = SYMBOLS.map(() => 1)) {
+    const s = settings || DEFAULT_SETTINGS;
     const total = bets.reduce((a, b) => a + b, 0);
+    const grow = JP.rate * (s.jpRate != null ? s.jpRate : 1);
     let paid = 0, won = 0, hits = 0, bonuses = 0, jps = 0, pot = JP.seed;
     for (let n = 0; n < rounds; n++) {
-      pot = Math.min(JP.max, pot + total * JP.rate);
-      const r = resolveRound(bets, settings, rng, settings.modes.jp ? pot : 0);
+      pot = Math.min(JP.max, pot + total * grow);
+      const r = resolveRound(bets, s, rng, s.modes.jp ? pot : 0);
       paid += total;
       won += r.win;
       if (r.win > total) hits++; // net profit this round
-      if (r.steps.some((s) => s.type === 'bonus')) bonuses++;
+      if (r.steps.some((st) => st.type === 'bonus')) bonuses++;
       if (r.jpWin > 0) { jps++; pot = JP.seed; }
     }
     return { rtp: won / paid, hitRate: hits / rounds, bonusRate: bonuses / rounds, jpRate: jps / rounds };
   }
 
   const api = {
-    SYMBOLS, SYM_INDEX, TRACK, N, MAX_ONCE_MORE_CHAIN, ONCE_GRANT, WEIGHT_KEYS,
+    SYMBOLS, SYM_INDEX, TRACK, N, MAX_ONCE_MORE_CHAIN, ONCE_GRANT, WEIGHT_KEYS, WEIGHT_LABELS,
     BONUS, JP, BIG_BAR_TILE, MODE_KEYS, MODE_LABELS, PRESETS, DEFAULT_SETTINGS,
     normalizeSettings, applyPreset, effectiveWeights, landingOdds, pickWeighted,
     tilePay, rollOnceGrant, resolveRound, nextJpPot, simulate,

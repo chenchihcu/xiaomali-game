@@ -101,6 +101,200 @@ button {
 .s-bl { bottom: calc(var(--u) * 0.45); left: calc(var(--u) * 0.45); }
 .s-br { bottom: calc(var(--u) * 0.45); right: calc(var(--u) * 0.45); }
 
+/* ---------- frame LED rails + side lamps (visual only) ---------- */
+.led-rail {
+  position: absolute;
+  display: flex;
+  gap: calc(var(--u) * 0.55);
+  z-index: 4;
+  pointer-events: none;
+}
+.rail-top, .rail-bot {
+  left: calc(var(--u) * 4);
+  right: calc(var(--u) * 4);
+  justify-content: space-between;
+}
+.rail-top { top: calc(var(--u) * 0.55); }
+.rail-bot { bottom: calc(var(--u) * 0.55); }
+.rail-left, .rail-right {
+  top: calc(var(--u) * 4);
+  bottom: calc(var(--u) * 4);
+  flex-direction: column;
+  justify-content: space-between;
+}
+.rail-left { left: calc(var(--u) * 0.55); }
+.rail-right { right: calc(var(--u) * 0.55); }
+.rail-dot {
+  width: calc(var(--u) * 1.05);
+  height: calc(var(--u) * 1.05);
+  border-radius: 50%;
+  background: radial-gradient(circle at 35% 30%, #6a6a70, #2a2a30 70%);
+  box-shadow: inset 0 0 1px #000;
+  opacity: 0.55;
+  flex: 0 0 auto;
+}
+.rail-dot.on {
+  opacity: 1;
+  background: radial-gradient(circle at 35% 30%, #fff9c4, #ffcc33 45%, #e09000 100%);
+  box-shadow: 0 0 calc(var(--u) * 0.9) rgba(255, 200, 40, 0.85), inset 0 0 1px #fff;
+}
+.cabinet.fx-spin .rail-dot { animation: railChase 0.55s linear infinite; }
+.cabinet.fx-spin .rail-dot:nth-child(odd) { animation-delay: 0.12s; }
+.cabinet.fx-win .rail-dot {
+  animation: railWin 0.28s steps(2, jump-none) infinite;
+  background: radial-gradient(circle at 35% 30%, #fff, #7dff9a 40%, #00c853 100%);
+  box-shadow: 0 0 calc(var(--u) * 1) rgba(80, 255, 140, 0.9);
+  opacity: 1;
+}
+.cabinet.fx-reach .rail-dot,
+.cabinet.fx-expect .rail-dot {
+  animation: railReach 0.22s steps(2, jump-none) infinite;
+  background: radial-gradient(circle at 35% 30%, #fff, #ff5252 40%, #c62828 100%);
+  box-shadow: 0 0 calc(var(--u) * 1.1) rgba(255, 60, 60, 0.95);
+  opacity: 1;
+}
+@keyframes railChase {
+  0%, 100% { opacity: 0.35; filter: brightness(0.7); }
+  50% { opacity: 1; filter: brightness(1.35); }
+}
+@keyframes railWin {
+  from { filter: brightness(0.75); }
+  to { filter: brightness(1.4); }
+}
+@keyframes railReach {
+  from { filter: brightness(0.6); }
+  to { filter: brightness(1.55); }
+}
+
+.side-lamp {
+  position: absolute;
+  width: calc(var(--u) * 2.4);
+  height: calc(var(--u) * 2.4);
+  border-radius: 50%;
+  z-index: 3;
+  pointer-events: none;
+  background:
+    radial-gradient(circle at 35% 30%, rgba(255, 230, 180, 0.35), transparent 55%),
+    radial-gradient(circle at 50% 50%, #5a3a18 0%, #2a1408 70%);
+  box-shadow:
+    inset 0 0 0 calc(var(--u) * 0.18) #1a0c04,
+    0 0 calc(var(--u) * 0.4) rgba(0, 0, 0, 0.5);
+  opacity: 0.7;
+}
+.sl-tl { top: calc(var(--u) * 2.8); left: calc(var(--u) * 2.2); }
+.sl-tr { top: calc(var(--u) * 2.8); right: calc(var(--u) * 2.2); }
+.sl-bl { bottom: calc(var(--u) * 2.8); left: calc(var(--u) * 2.2); }
+.sl-br { bottom: calc(var(--u) * 2.8); right: calc(var(--u) * 2.2); }
+.cabinet.fx-spin .side-lamp,
+.cabinet.fx-win .side-lamp {
+  opacity: 1;
+  background:
+    radial-gradient(circle at 35% 30%, #fff6c8, #ffb300 40%, #a05a00 100%);
+  box-shadow:
+    0 0 calc(var(--u) * 2.2) rgba(255, 180, 40, 0.75),
+    inset 0 0 0 calc(var(--u) * 0.18) #5a2a00;
+}
+.cabinet.fx-reach .side-lamp,
+.cabinet.fx-expect .side-lamp,
+.cabinet.fx-fever .side-lamp {
+  opacity: 1;
+  background:
+    radial-gradient(circle at 35% 30%, #ffe0e0, #ff1744 42%, #8b0000 100%);
+  box-shadow:
+    0 0 calc(var(--u) * 2.6) rgba(255, 40, 60, 0.85),
+    inset 0 0 0 calc(var(--u) * 0.18) #4a0000;
+  animation: sidePulse 0.35s ease-in-out infinite alternate;
+}
+@keyframes sidePulse {
+  from { filter: brightness(0.85); }
+  to { filter: brightness(1.35); }
+}
+
+.cabinet.fx-expect {
+  box-shadow:
+    inset 0 0 0 calc(var(--u) * 0.35) #2a1206,
+    inset 0 calc(var(--u) * 0.6) calc(var(--u) * 0.6) rgba(255, 200, 140, 0.30),
+    inset 0 calc(var(--u) * -1) calc(var(--u) * 1.4) rgba(0, 0, 0, 0.55),
+    0 0 calc(var(--u) * 3) rgba(255, 30, 40, 0.55),
+    0 calc(var(--u) * 1.6) calc(var(--u) * 5) rgba(0, 0, 0, 0.85);
+}
+
+/* ---------- hold / reserve lamps (假保留燈) ---------- */
+.hold-strip {
+  display: flex;
+  justify-content: center;
+  gap: calc(var(--u) * 2.2);
+  padding: calc(var(--u) * 0.4) 0 calc(var(--u) * 0.2);
+  pointer-events: none;
+}
+.hold-lamp {
+  width: calc(var(--u) * 3.2);
+  height: calc(var(--u) * 3.2);
+  border-radius: 50%;
+  background:
+    radial-gradient(circle at 35% 28%, #7a7a82, #2e2e34 62%, #111 100%);
+  box-shadow:
+    inset 0 0 0 calc(var(--u) * 0.22) #0a0a0c,
+    inset 0 calc(var(--u) * -0.3) calc(var(--u) * 0.4) rgba(0, 0, 0, 0.5),
+    0 0 0 calc(var(--u) * 0.15) #5a3a1a;
+  opacity: 0.55;
+}
+.hold-lamp.on {
+  opacity: 1;
+  background:
+    radial-gradient(circle at 35% 28%, #fff8d0, #ffd54f 38%, #f9a825 70%, #b36b00 100%);
+  box-shadow:
+    0 0 calc(var(--u) * 1.6) rgba(255, 200, 40, 0.85),
+    inset 0 0 0 calc(var(--u) * 0.22) #6a4000,
+    0 0 0 calc(var(--u) * 0.15) #8a5a20;
+}
+.hold-lamp.flash {
+  animation: holdFlash 0.25s steps(2, jump-none) infinite;
+}
+@keyframes holdFlash {
+  from { filter: brightness(0.7); }
+  to { filter: brightness(1.45); }
+}
+
+/* ---------- FEVER / READY banner ---------- */
+.fever-banner {
+  position: absolute;
+  z-index: 8;
+  left: 50%;
+  top: 42%;
+  transform: translate(-50%, -50%);
+  padding: calc(var(--u) * 1.2) calc(var(--u) * 3.2);
+  border-radius: calc(var(--u) * 1);
+  background: linear-gradient(180deg, #ffe082 0%, #ff6f00 45%, #bf360c 100%);
+  border: calc(var(--u) * 0.35) solid #fff8e1;
+  box-shadow:
+    0 0 calc(var(--u) * 3) rgba(255, 80, 0, 0.85),
+    inset 0 calc(var(--u) * 0.4) 0 rgba(255, 255, 255, 0.35);
+  pointer-events: none;
+  animation: feverPop 0.9s ease-in-out infinite alternate;
+}
+.fever-banner[hidden] { display: none !important; }
+.fever-banner.ready {
+  background: linear-gradient(180deg, #ff8a80 0%, #d50000 50%, #7f0000 100%);
+  border-color: #ffcdd2;
+}
+.fever-banner.fever {
+  background: linear-gradient(180deg, #ffff8d 0%, #ffab00 40%, #ff6d00 100%);
+}
+.fever-tag {
+  display: block;
+  font-weight: 900;
+  font-size: calc(var(--u) * 4.2);
+  letter-spacing: 0.12em;
+  color: #fff;
+  text-shadow: 0 2px 0 #5a1a00, 0 0 12px rgba(255, 255, 255, 0.6);
+  line-height: 1;
+}
+@keyframes feverPop {
+  from { transform: translate(-50%, -50%) scale(0.96); filter: brightness(0.95); }
+  to { transform: translate(-50%, -50%) scale(1.05); filter: brightness(1.15); }
+}
+
 /* ---------- marquee: WIN / CREDIT meters ---------- */
 .marquee {
   display: grid;
@@ -851,6 +1045,8 @@ button {
 .sheet {
   width: min(92vw, 460px);
   max-height: 86vh;
+  overflow-y: auto;
+  -webkit-overflow-scrolling: touch;
   border: 3px solid var(--gold);
   border-radius: 18px;
   background: linear-gradient(180deg, #2a2a30 0%, #151518 100%);
@@ -926,14 +1122,31 @@ button {
 .mode-list input { width: 18px; height: 18px; accent-color: #ffcc33; }
 .range-label {
   display: grid;
-  grid-template-columns: auto 1fr auto;
+  grid-template-columns: 5.5em 1fr 3.2em;
   align-items: center;
-  gap: 10px;
-  margin-top: 10px;
+  gap: 8px;
+  margin-top: 8px;
   font-size: 13px;
 }
 .range-label input[type="range"] { width: 100%; accent-color: #ffcc33; }
-.hint { font-size: 12px; color: rgba(255, 255, 255, 0.55); margin: 8px 0 0; line-height: 1.4; }
+.range-label > span:last-child {
+  text-align: right;
+  font-variant-numeric: tabular-nums;
+  color: #ffe45c;
+  font-size: 12px;
+}
+.weight-list {
+  display: grid;
+  gap: 2px;
+}
+.weight-list .range-label {
+  margin-top: 4px;
+  grid-template-columns: 4.8em 1fr 2.6em;
+  font-size: 12px;
+  min-height: 32px;
+}
+.hint { font-size: 12px; color: rgba(255, 255, 255, 0.55); margin: 6px 0 0; line-height: 1.4; }
+.set-sec .hint + .range-label { margin-top: 8px; }
 .sheet-actions.triple { grid-template-columns: 1fr 1fr 1fr; }
 .sheet-actions.triple .btn { font-size: 14px; }
 
@@ -943,5 +1156,6 @@ button {
 }
 
 @media (prefers-reduced-motion: reduce) {
-  .msg.hot, .once-banner.pulse, .btn.flash::before { animation: none; }
+  .msg.hot, .once-banner.pulse, .btn.flash::before,
+  .rail-dot, .side-lamp, .hold-lamp.flash, .fever-banner { animation: none !important; }
 }

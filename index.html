@@ -20,6 +20,16 @@
     <div class="cabinet" id="cabinet">
       <i class="screw s-tl"></i><i class="screw s-tr"></i><i class="screw s-bl"></i><i class="screw s-br"></i>
 
+      <!-- decorative frame LEDs / side lamps (visual only) -->
+      <div class="led-rail rail-top" id="railTop" aria-hidden="true"></div>
+      <div class="led-rail rail-bot" id="railBot" aria-hidden="true"></div>
+      <div class="led-rail rail-left" id="railLeft" aria-hidden="true"></div>
+      <div class="led-rail rail-right" id="railRight" aria-hidden="true"></div>
+      <div class="side-lamp sl-tl" aria-hidden="true"></div>
+      <div class="side-lamp sl-tr" aria-hidden="true"></div>
+      <div class="side-lamp sl-bl" aria-hidden="true"></div>
+      <div class="side-lamp sl-br" aria-hidden="true"></div>
+
       <header class="marquee">
         <button class="knob" id="btnSound" type="button" aria-label="音效" aria-pressed="true">
           <svg class="k-on" viewBox="0 0 24 24" aria-hidden="true"><path d="M4 9h4l5-4v14l-5-4H4z"/><path d="M16 8.5a5 5 0 0 1 0 7M18.5 6a8.5 8.5 0 0 1 0 12" fill="none" stroke-width="2" stroke-linecap="round"/></svg>
@@ -38,7 +48,17 @@
         </button>
       </header>
 
+      <div class="hold-strip" id="holdStrip" aria-hidden="true" title="保留燈">
+        <span class="hold-lamp" data-h="0"></span>
+        <span class="hold-lamp" data-h="1"></span>
+        <span class="hold-lamp" data-h="2"></span>
+        <span class="hold-lamp" data-h="3"></span>
+      </div>
+
       <section class="glass" aria-label="機台面板">
+        <div class="fever-banner" id="feverBanner" hidden aria-hidden="true">
+          <span class="fever-tag" id="feverTag">READY</span>
+        </div>
         <section class="board" id="board" aria-label="跑燈盤面">
           <div class="center" id="center">
             <div class="jp-row" id="jpRow" hidden>
@@ -119,16 +139,60 @@
           <button type="button" class="chip" data-preset="normal">標準</button>
           <button type="button" class="chip" data-preset="hard">困難</button>
         </div>
-        <label class="range-label">中彩頻率
+        <p class="hint" id="oddsHint">RTP約 —</p>
+      </section>
+
+      <section class="set-sec">
+        <h3>機率</h3>
+        <label class="range-label">中彩機率
           <input type="range" id="bonusRate" min="0" max="2" step="0.1" value="1">
           <span id="bonusRateVal">1.0×</span>
         </label>
-        <p class="hint" id="oddsHint">RTP約 —</p>
+        <p class="hint">送燈／開火車／三元四喜</p>
+        <label class="range-label">連跑機率
+          <input type="range" id="onceRate" min="0" max="2" step="0.1" value="1">
+          <span id="onceRateVal">1.0×</span>
+        </label>
+        <p class="hint">連跑／大 ONCE MORE</p>
+        <label class="range-label">JP 累積
+          <input type="range" id="jpRate" min="0" max="2" step="0.1" value="1">
+          <span id="jpRateVal">1.0×</span>
+        </label>
+      </section>
+
+      <section class="set-sec">
+        <h3>停燈權重</h3>
+        <div class="weight-list" id="weightList"></div>
+        <p class="hint">0＝幾乎不停・3＝較常停</p>
       </section>
 
       <section class="set-sec">
         <h3>玩法開關</h3>
         <div class="mode-list" id="modeList"></div>
+      </section>
+
+      <section class="set-sec">
+        <h3>分數／押注</h3>
+        <label class="range-label">起始 CREDIT
+          <input type="range" id="startCredit" min="100" max="5000" step="100" value="1000">
+          <span id="startCreditVal">1000</span>
+        </label>
+        <label class="range-label">單次押注
+          <input type="range" id="betUnit" min="1" max="10" step="1" value="1">
+          <span id="betUnitVal">1</span>
+        </label>
+      </section>
+
+      <section class="set-sec">
+        <h3>音量</h3>
+        <label class="range-label">音效
+          <input type="range" id="sfxVol" min="0" max="1" step="0.05" value="1">
+          <span id="sfxVolVal">100%</span>
+        </label>
+        <label class="range-label">BGM
+          <input type="range" id="bgmVol" min="0" max="1" step="0.05" value="1">
+          <span id="bgmVolVal">100%</span>
+        </label>
       </section>
 
       <section class="set-sec">
@@ -139,7 +203,7 @@
 
       <div class="sheet-actions triple">
         <button class="btn btn-arcade btn-blue" value="help" id="btnOpenHelp" type="submit">玩法</button>
-        <button class="btn btn-arcade btn-yellow" value="reset" id="btnReset" type="submit">重設 1000</button>
+        <button class="btn btn-arcade btn-yellow" value="reset" id="btnReset" type="submit">重設分數</button>
         <button class="btn btn-arcade btn-green" value="close" type="submit">完成</button>
       </div>
       <p class="disclaimer">娛樂用・虛擬分數・非賭博</p>
@@ -157,7 +221,7 @@
         <li>中彩：送燈、開火車、三元四喜；JP＝停大 BAR 且押 BAR。</li>
         <li>WIN 可「得分」或比大小（1–4 小、6–9 大；5 和）。</li>
         <li>「開分」虛擬加分（點 +100／按住 +500）；「洗分」WIN→CREDIT 後清零。</li>
-        <li>⚙️ 調難度／玩法／音樂。分數存本機。</li>
+        <li>⚙️ 調難度、中彩／連跑／JP 機率、停燈權重、押注單位、音量。分數存本機。</li>
       </ol>
       <table class="paytable" id="paytable"></table>
       <p class="disclaimer">娛樂用・虛擬分數・非賭博</p>

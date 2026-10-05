@@ -22,7 +22,7 @@
   }
   const {
     SYMBOLS, SYM_INDEX, TRACK, N, MAX_ONCE_MORE_CHAIN, JP,
-    MODE_KEYS, MODE_LABELS, PRESETS,
+    MODE_KEYS, MODE_LABELS, PRESETS, WEIGHT_KEYS, WEIGHT_LABELS,
   } = E;
 
   const TRACK_POS = (() => {
@@ -154,15 +154,21 @@
       if (!this.ctx) this.unlock().then(go);
       else go();
     },
+    sfxScale() {
+      return (typeof settings !== 'undefined' && settings && Number.isFinite(settings.sfxVol))
+        ? Math.max(0, Math.min(1, settings.sfxVol)) : 1;
+    },
     beep(freq, dur = 0.05, type = 'square', vol = 0.04, when = 0) {
       this.whenReady(() => {
         const ctx = this.ctx;
+        const v = vol * this.sfxScale();
+        if (v <= 0) return;
         const t = ctx.currentTime + when;
         const o = ctx.createOscillator();
         const g = ctx.createGain();
         o.type = type;
         o.frequency.setValueAtTime(freq, t);
-        g.gain.setValueAtTime(Math.max(vol, 0.0001), t);
+        g.gain.setValueAtTime(Math.max(v, 0.0001), t);
         g.gain.exponentialRampToValueAtTime(0.0001, t + Math.max(dur, 0.01));
         o.connect(g).connect(ctx.destination);
         o.start(t);
@@ -171,6 +177,8 @@
     },
     seq(notes, step = 0.09, type = 'square', vol = 0.05) {
       this.whenReady(() => {
+        const v = vol * this.sfxScale();
+        if (v <= 0) return;
         notes.forEach((f, i) => {
           if (!f) return;
           const t = this.ctx.currentTime + i * step;
@@ -178,7 +186,7 @@
           const g = this.ctx.createGain();
           o.type = type;
           o.frequency.setValueAtTime(f, t);
-          g.gain.setValueAtTime(Math.max(vol, 0.0001), t);
+          g.gain.setValueAtTime(Math.max(v, 0.0001), t);
           g.gain.exponentialRampToValueAtTime(0.0001, t + step * 0.9);
           o.connect(g).connect(this.ctx.destination);
           o.start(t);
@@ -251,11 +259,19 @@
         && this.track !== 'off' && !document.hidden;
       if (want) this.start(); else this.stop();
     },
+    bgmScale() {
+      return (typeof settings !== 'undefined' && settings && Number.isFinite(settings.bgmVol))
+        ? Math.max(0, Math.min(1, settings.bgmVol)) : 1;
+    },
+    applyVolume() {
+      if (!this.gain || !Sound.ctx) return;
+      try { this.gain.gain.setTargetAtTime(this.bgmScale(), Sound.ctx.currentTime, 0.05); } catch { /* */ }
+    },
     start() {
       if (this.timer || !Sound.ctx) return;
       const ctx = Sound.ctx;
       this.gain = ctx.createGain();
-      this.gain.gain.value = 1;
+      this.gain.gain.value = this.bgmScale();
       this.gain.connect(ctx.destination);
       if (!this.noise) {
         const len = Math.floor(ctx.sampleRate * 0.2);
@@ -427,6 +443,86 @@
     sound: $('btnSound'), settings: $('btnSettings'), reset: $('btnReset'),
     openHelp: $('btnOpenHelp'),
   };
+
+  // ---------------------------------------------------------------------------
+  // Cabinet light FX (visual only — pachinko-inspired rails / hold / fever)
+  // ---------------------------------------------------------------------------
+  const cabinetEl = $('cabinet');
+  const holdLamps = Array.from(document.querySelectorAll('#holdStrip .hold-lamp'));
+  const feverBanner = $('feverBanner');
+  const feverTag = $('feverTag');
+  let feverTimer = null;
+  let holdCount = 0;
+
+  function buildRails() {
+    const specs = [
+      ['railTop', 14], ['railBot', 14], ['railLeft', 18], ['railRight', 18],
+    ];
+    for (const [id, n] of specs) {
+      const el = $(id);
+      if (!el || el.childElementCount) continue;
+      for (let i = 0; i < n; i++) {
+        const d = document.createElement('i');
+        d.className = 'rail-dot';
+        el.appendChild(d);
+      }
+    }
+  }
+
+  const FX = {
+    clear() {
+      if (!cabinetEl) return;
+      cabinetEl.classList.remove('fx-spin', 'fx-win', 'fx-reach', 'fx-expect', 'fx-fever');
+    },
+    set(...modes) {
+      this.clear();
+      for (const m of modes) cabinetEl?.classList.add('fx-' + m);
+    },
+    spin() { this.set('spin'); this.holdsSpin(); },
+    expect() { this.set('expect', 'reach'); },
+    reach() { this.set('reach'); },
+    win() { this.set('win'); this.holdsFlash(true); },
+    idle() {
+      this.clear();
+      this.holdsFlash(false);
+      this.hideFever();
+      this.holdsSet(holdCount);
+    },
+    holdsSet(n) {
+      holdCount = Math.max(0, Math.min(holdLamps.length, n | 0));
+      holdLamps.forEach((el, i) => {
+        el.classList.toggle('on', i < holdCount);
+      });
+    },
+    holdsSpin() {
+      // light 1–3 lamps randomly during a spin (假保留)
+      const n = 1 + Math.floor(randomFloat() * 3);
+      this.holdsSet(n);
+    },
+    holdsFlash(on) {
+      holdLamps.forEach((el) => el.classList.toggle('flash', !!on && el.classList.contains('on')));
+    },
+    showFever(kind) {
+      if (!feverBanner) return;
+      clearTimeout(feverTimer);
+      feverBanner.hidden = false;
+      feverBanner.classList.toggle('ready', kind === 'ready');
+      feverBanner.classList.toggle('fever', kind === 'fever');
+      if (feverTag) feverTag.textContent = kind === 'fever' ? 'FEVER' : 'READY';
+      cabinetEl?.classList.add('fx-fever');
+    },
+    hideFever() {
+      clearTimeout(feverTimer);
+      if (feverBanner) feverBanner.hidden = true;
+      cabinetEl?.classList.remove('fx-fever');
+    },
+    flashFever(kind, ms = 1600) {
+      this.showFever(kind);
+      feverTimer = setTimeout(() => this.hideFever(), ms);
+    },
+  };
+  buildRails();
+  FX.holdsSet(0);
 
   /** Glossy CSS/SVG fruit icons (no flat emoji). Unique gradient ids per instance. */
   let _icUid = 0;
@@ -712,25 +808,32 @@
     }
   }
 
+  function betUnit() {
+    return Math.max(1, Math.min(10, Math.floor(settings.betUnit || 1)));
+  }
+
   function bet(i) {
     if (state.busy) return false;
     if (state.auto) stopAuto();
     collectInstant();
     clearHighlights();
     freshBets();
+    const unit = betUnit();
     if (state.bets[i] >= MAX_BET_PER_SYMBOL) {
       setMsg(`${SYMBOLS[i].name} 上限 ${MAX_BET_PER_SYMBOL}`, 'bad');
       render();
       return false;
     }
-    if (state.credit < 1) {
+    const room = MAX_BET_PER_SYMBOL - state.bets[i];
+    const add = Math.min(unit, room, state.credit);
+    if (add < 1) {
       setMsg('分數不足・⚙️ 可重設', 'bad');
       Sound.error();
       render();
       return false;
     }
-    state.bets[i]++;
-    state.credit--;
+    state.bets[i] += add;
+    state.credit -= add;
     Sound.bet();
     setMsg(`已押 ${sum(state.bets)}・按開始`);
     render();
@@ -743,13 +846,17 @@
     collectInstant();
     clearHighlights();
     freshBets();
+    const unit = betUnit();
     let added = 0;
     for (let i = 0; i < SYMBOLS.length; i++) {
       if (state.credit < 1) break;
       if (state.bets[i] >= MAX_BET_PER_SYMBOL) continue;
-      state.bets[i]++;
-      state.credit--;
-      added++;
+      const room = MAX_BET_PER_SYMBOL - state.bets[i];
+      const add = Math.min(unit, room, state.credit);
+      if (add < 1) break;
+      state.bets[i] += add;
+      state.credit -= add;
+      added += add;
     }
     if (added) { Sound.seq([784, 988, 1175], 0.05, 'triangle', 0.07); setMsg(`全押 ${sum(state.bets)}`); }
     else { Sound.error(); setMsg('無法加注', 'bad'); }
@@ -769,12 +876,13 @@
     save();
   }
 
-  async function runLight(target) {
+  async function runLight(target, { expect = false } = {}) {
     const dist = (target - state.pos + N) % N;
     const laps = 2 + (randomFloat() < 0.5 ? 1 : 0);
     const total = laps * N + dist;
     const FAST = 28;
     const DECEL = 15;
+    let expectOn = false;
     for (let s = 1; s <= total; s++) {
       state.pos = (state.pos + 1) % N;
       const remaining = total - s;
@@ -782,6 +890,14 @@
       if (s <= 6) delay = FAST + (7 - s) * 16;
       else if (remaining >= DECEL) delay = FAST;
       else delay = FAST + Math.pow(DECEL - remaining, 2) * 2;
+      // Red high-expectation flash during late decelerate when stop will pay
+      if (expect && remaining < DECEL && !expectOn) {
+        FX.expect();
+        expectOn = true;
+      } else if (!expect && remaining < 6 && remaining >= 0 && !expectOn) {
+        FX.reach();
+        expectOn = true;
+      }
       setLight(state.pos, delay < 60 ? 2 : delay < 120 ? 1 : 0);
       Sound.tick();
       await sleep(delay);
@@ -841,6 +957,7 @@
     }
     state.lastPlayedBets = state.bets.slice();
     state.busy = true;
+    FX.spin();
     render();
     save();
 
@@ -856,8 +973,10 @@
         showOnceBanner(step.variant, step.remaining);
         setMsg(step.remaining > 0 ? `${label}…` : `${label}・上限`, 'hot');
         const dur = estimateLightMs(step.target);
-        await Promise.all([runLight(step.target), spinReels('once', Math.max(900, dur - 400))]);
+        FX.spin();
+        await Promise.all([runLight(step.target, { expect: false }), spinReels('once', Math.max(900, dur - 400))]);
         tileEls[step.target].classList.add('win');
+        FX.win();
         Sound.once();
         if (step.remaining <= 0) {
           setMsg(step.capped ? '再跑已達上限' : `${label}`, 'hot');
@@ -879,19 +998,29 @@
         if (inOnceRun) showOnceBanner(onceVariant, step.runsLeft + 1);
         const dur = estimateLightMs(step.target);
         const landId = TRACK[step.target].s;
-        await Promise.all([runLight(step.target), spinReels(landId, Math.max(900, dur - 400))]);
+        const willPay = step.gained > 0;
+        FX.spin();
+        await Promise.all([runLight(step.target, { expect: willPay }), spinReels(landId, Math.max(900, dur - 400))]);
         const sym = step.si >= 0 ? SYMBOLS[step.si] : null;
         if (step.gained > 0 && sym) {
           roundWin += step.gained;
           tileEls[step.target].classList.add('win');
           setKeyHit(betKeys[step.si], true);
-          if (step.mult >= 40) Sound.big(); else Sound.win();
+          FX.win();
+          if (step.mult >= 40) {
+            Sound.big();
+            FX.flashFever('fever', 1400);
+          } else {
+            Sound.win();
+            if (step.mult >= 20) FX.flashFever('ready', 900);
+          }
           const small = TRACK[step.target].small ? '小' : '';
           setMsg(`${sym.name}${small} ${state.bets[step.si]}×${step.mult}=${step.gained}`, 'hot');
           await animateWin(state.win, state.win + step.gained);
         } else if (sym) {
           setMsg(`${sym.name}${TRACK[step.target].small ? '小' : ''}・沒中`, 'bad');
           Sound.lose();
+          FX.idle();
         }
         if (step.runsLeft > 0) {
           showOnceBanner(onceVariant, step.runsLeft);
@@ -907,6 +1036,8 @@
 
       if (step.type === 'bonus') {
         Sound.lucky();
+        FX.win();
+        FX.flashFever('ready', 1000);
         setMsg(`中彩・${step.name}`, 'hot');
         for (const bt of step.tiles) {
           tileEls[bt.i].classList.add('win', 'lit2');
@@ -927,6 +1058,9 @@
       if (step.type === 'jp') {
         Sound.jp();
         $('jpRow')?.classList.add('jp-hit');
+        FX.win();
+        FX.flashFever('fever', 2000);
+        FX.holdsSet(4);
         setMsg(`JP！+${step.amount}`, 'hot');
         roundWin += step.amount;
         await animateWin(state.win, state.win + step.amount);
@@ -935,7 +1069,7 @@
     }
     hideOnceBanner();
 
-    state.jp = E.nextJpPot(state.jp, total, result.jpWin);
+    state.jp = E.nextJpPot(state.jp, total, result.jpWin, settings);
 
     if (roundWin > 0) setMsg(`本局 +${roundWin}・得分或比大小`, 'hot');
     else if (!msgEl.textContent.includes('沒中') && !msgEl.textContent.includes('上限')) {
@@ -944,6 +1078,15 @@
 
     state.betsPaid = false;
     state.busy = false;
+    if (roundWin > 0) {
+      FX.win();
+      if (roundWin >= 100) FX.flashFever('fever', 1200);
+      // bump fake hold lamps on a paying round
+      FX.holdsSet(Math.min(4, holdCount + 1));
+    } else {
+      FX.idle();
+      if (holdCount > 0 && randomFloat() < 0.35) FX.holdsSet(holdCount - 1);
+    }
     if (state.credit === 0 && state.win === 0) {
       setMsg('分數用完・開分或⚙️重設', 'bad');
       stopAuto('分數不足');
@@ -1194,17 +1337,22 @@
     save();
   }
 
+  function startCreditAmount() {
+    return Math.max(100, Math.min(99999, Math.floor(settings.startCredit || START_CREDIT)));
+  }
+
   function resetCredit() {
     if (state.busy) return;
     stopAuto();
-    state.credit = START_CREDIT;
+    const amt = startCreditAmount();
+    state.credit = amt;
     state.win = 0;
     state.bets.fill(0);
     state.betsPaid = true;
     state.jp = JP.seed;
     clearHighlights();
     diceLed.set('-');
-    setMsg('已重設 1000');
+    setMsg(`已重設 ${amt}`);
     render();
     save();
   }
@@ -1216,16 +1364,33 @@
   const settingsDlg = $('settingsDialog');
   const helpDlg = $('helpDialog');
   const modeList = $('modeList');
+  const weightList = $('weightList');
   const musicRow = $('musicRow');
   const presetRow = $('presetRow');
-  const bonusRateEl = $('bonusRate');
-  const bonusRateVal = $('bonusRateVal');
   const oddsHint = $('oddsHint');
+  const rangeEls = {
+    bonusRate: [$('bonusRate'), $('bonusRateVal'), (v) => v.toFixed(1) + '×'],
+    onceRate: [$('onceRate'), $('onceRateVal'), (v) => v.toFixed(1) + '×'],
+    jpRate: [$('jpRate'), $('jpRateVal'), (v) => v.toFixed(1) + '×'],
+    startCredit: [$('startCredit'), $('startCreditVal'), (v) => String(Math.round(v))],
+    betUnit: [$('betUnit'), $('betUnitVal'), (v) => String(Math.round(v))],
+    sfxVol: [$('sfxVol'), $('sfxVolVal'), (v) => Math.round(v * 100) + '%'],
+    bgmVol: [$('bgmVol'), $('bgmVolVal'), (v) => Math.round(v * 100) + '%'],
+  };
 
   MODE_KEYS.forEach((k) => {
     const lab = document.createElement('label');
     lab.innerHTML = `<input type="checkbox" data-mode="${k}"> <span>${MODE_LABELS[k]}</span>`;
     modeList.appendChild(lab);
+  });
+
+  WEIGHT_KEYS.forEach((k) => {
+    const lab = document.createElement('label');
+    lab.className = 'range-label';
+    lab.innerHTML = `${WEIGHT_LABELS[k] || k}
+      <input type="range" data-weight="${k}" min="0" max="3" step="0.1" value="1">
+      <span data-weight-val="${k}">1.0</span>`;
+    weightList.appendChild(lab);
   });
 
   MUSIC_IDS.forEach((id) => {
@@ -1237,6 +1402,8 @@
     musicRow.appendChild(b);
   });
 
+  function markCustom() { settings.preset = 'custom'; }
+
   function refreshSettingsUI() {
     presetRow.querySelectorAll('.chip').forEach((c) => {
       c.classList.toggle('on', c.dataset.preset === settings.preset);
@@ -1244,12 +1411,21 @@
     modeList.querySelectorAll('input[data-mode]').forEach((inp) => {
       inp.checked = !!settings.modes[inp.dataset.mode];
     });
-    bonusRateEl.value = String(settings.bonusRate);
-    bonusRateVal.textContent = Number(settings.bonusRate).toFixed(1) + '×';
+    weightList.querySelectorAll('input[data-weight]').forEach((inp) => {
+      const k = inp.dataset.weight;
+      const v = settings.weights[k] ?? 1;
+      inp.value = String(v);
+      const span = weightList.querySelector(`[data-weight-val="${k}"]`);
+      if (span) span.textContent = Number(v).toFixed(1);
+    });
+    for (const [key, [el, valEl, fmt]] of Object.entries(rangeEls)) {
+      if (!el) continue;
+      el.value = String(settings[key]);
+      valEl.textContent = fmt(Number(settings[key]));
+    }
     musicRow.querySelectorAll('.chip').forEach((c) => {
       c.classList.toggle('on', c.dataset.music === Music.track);
     });
-    // Lightweight RTP hint (2k rounds — fast enough for UI)
     try {
       const sim = E.simulate(settings, 2500, Math.random);
       const pct = (sim.rtp * 100).toFixed(0);
@@ -1276,6 +1452,7 @@
     settings = E.applyPreset(settings, chip.dataset.preset);
     saveSettings();
     refreshSettingsUI();
+    Music.applyVolume();
     render();
     Sound.bet();
   });
@@ -1284,23 +1461,46 @@
     const inp = e.target.closest('input[data-mode]');
     if (!inp) return;
     settings.modes[inp.dataset.mode] = inp.checked;
-    settings.preset = 'custom';
+    markCustom();
     saveSettings();
     refreshSettingsUI();
     render();
   });
 
-  bonusRateEl.addEventListener('input', () => {
-    settings.bonusRate = Number(bonusRateEl.value);
-    settings.preset = 'custom';
-    bonusRateVal.textContent = settings.bonusRate.toFixed(1) + '×';
+  weightList.addEventListener('input', (e) => {
+    const inp = e.target.closest('input[data-weight]');
+    if (!inp) return;
+    const k = inp.dataset.weight;
+    settings.weights[k] = Number(inp.value);
+    markCustom();
+    const span = weightList.querySelector(`[data-weight-val="${k}"]`);
+    if (span) span.textContent = Number(inp.value).toFixed(1);
   });
-  bonusRateEl.addEventListener('change', () => {
-    settings.bonusRate = Number(bonusRateEl.value);
-    settings.preset = 'custom';
+  weightList.addEventListener('change', (e) => {
+    const inp = e.target.closest('input[data-weight]');
+    if (!inp) return;
+    settings.weights[inp.dataset.weight] = Number(inp.value);
+    markCustom();
     saveSettings();
     refreshSettingsUI();
   });
+
+  for (const [key, [el, valEl, fmt]] of Object.entries(rangeEls)) {
+    if (!el) continue;
+    el.addEventListener('input', () => {
+      settings[key] = Number(el.value);
+      if (key === 'bonusRate' || key === 'onceRate' || key === 'jpRate') markCustom();
+      valEl.textContent = fmt(Number(el.value));
+      if (key === 'sfxVol' || key === 'bgmVol') Music.applyVolume();
+    });
+    el.addEventListener('change', () => {
+      settings[key] = Number(el.value);
+      if (key === 'bonusRate' || key === 'onceRate' || key === 'jpRate') markCustom();
+      saveSettings();
+      refreshSettingsUI();
+      Music.applyVolume();
+    });
+  }
 
   musicRow.addEventListener('click', (e) => {
     const chip = e.target.closest('[data-music]');
