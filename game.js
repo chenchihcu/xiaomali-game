@@ -366,7 +366,8 @@
   const $ = (id) => document.getElementById(id);
   const board = $('board');
   const center = $('center');
-  const betpanel = $('betpanel');
+  const betpanel = $('betpanel');   // payout display row (mult + LED) under the track
+  const betKeysRow = $('betKeys');  // physical bet buttons on the control deck
   const msgEl = $('msg');
   const btn = {
     start: $('btnStart'), clear: $('btnClear'), all: $('btnAll'),
@@ -397,8 +398,12 @@
 
   const tileEls = TRACK.map((t, i) => {
     const el = document.createElement('div');
-    el.className = 'tile' + (t.small ? ' small' : '') + (t.s === 'once' ? ' once' : '');
     const [r, c] = TRACK_POS[i];
+    // side class positions the inner-edge lamp bulb (like a real cabinet)
+    const side = r === 1 ? (c === 1 ? 'tl' : c === 7 ? 'tr' : 't')
+      : r === 7 ? (c === 1 ? 'bl' : c === 7 ? 'br' : 'b')
+      : c === 7 ? 'r' : 'l';
+    el.className = 'tile side-' + side + (t.small ? ' small' : '') + (t.s === 'once' ? ' once' : '');
     el.style.gridRow = r;
     el.style.gridColumn = c;
     el.innerHTML = `<span class="ic">${iconHTML(t.s)}</span>` +
@@ -410,14 +415,21 @@
   });
 
   const betKeys = SYMBOLS.map((s, i) => {
+    // payout cell (display only): multiplier header + 2-digit bet LED
+    const cell = document.createElement('div');
+    cell.className = 'paycell';
+    cell.innerHTML = `<span class="mult">${s.mult}</span><span class="led"></span>`;
+    betpanel.appendChild(cell);
+    // physical bet key with the fruit printed on its cap
     const b = document.createElement('button');
     b.type = 'button';
     b.className = 'betkey';
     b.setAttribute('aria-label', `押 ${s.name}（${s.mult} 倍）`);
-    b.innerHTML = `<span class="mult">${s.mult}</span><span class="bicon">${iconHTML(s.id)}</span><span class="led"></span>`;
-    betpanel.appendChild(b);
-    return { el: b, led: makeLed(b.querySelector('.led'), 2) };
+    b.innerHTML = `<span class="bicon">${iconHTML(s.id)}</span>`;
+    betKeysRow.appendChild(b);
+    return { el: b, cell, led: makeLed(cell.querySelector('.led'), 2) };
   });
+  const setKeyHit = (k, on) => { k.el.classList.toggle('hit', on); k.cell.classList.toggle('hit', on); };
 
   const winLed = makeLed($('winLed'), 6);
   const creditLed = makeLed($('creditLed'), 6);
@@ -579,7 +591,7 @@
     creditLed.set(state.credit);
     betKeys.forEach((k, i) => {
       k.led.set(state.bets[i] || 0, { pad: ' ' });
-      k.el.classList.toggle('stale', !state.betsPaid && state.bets[i] > 0);
+      k.cell.classList.toggle('stale', !state.betsPaid && state.bets[i] > 0);
     });
     const idle = !state.busy;
     const hasWin = state.win > 0;
@@ -602,14 +614,15 @@
     btn.auto.classList.toggle('on', state.auto);
     btn.auto.classList.toggle('flash', state.auto);
     btn.auto.textContent = state.auto ? '自動中' : '自動';
-    btn.sound.textContent = Sound.on ? '🔊' : '🔇';
+    btn.sound.classList.toggle('off', !Sound.on);
+    btn.sound.setAttribute('aria-pressed', String(Sound.on));
   }
 
   const sleep = (ms) => new Promise((r) => setTimeout(r, ms));
 
   function clearHighlights() {
     tileEls.forEach((el) => el.classList.remove('win', 'lit2'));
-    betKeys.forEach((k) => k.el.classList.remove('hit'));
+    betKeys.forEach((k) => setKeyHit(k, false));
     $('lblSmall').classList.remove('on');
     $('lblBig').classList.remove('on');
     $('jpRow')?.classList.remove('jp-hit');
@@ -820,7 +833,7 @@
         if (step.gained > 0 && sym) {
           roundWin += step.gained;
           tileEls[step.target].classList.add('win');
-          betKeys[step.si].el.classList.add('hit');
+          setKeyHit(betKeys[step.si], true);
           if (step.mult >= 40) Sound.big(); else Sound.win();
           const small = TRACK[step.target].small ? '小' : '';
           setMsg(`${sym.name}${small} ${state.bets[step.si]}×${step.mult}=${step.gained}`, 'hot');
@@ -846,7 +859,7 @@
         setMsg(`中彩・${step.name}`, 'hot');
         for (const bt of step.tiles) {
           tileEls[bt.i].classList.add('win', 'lit2');
-          if (bt.si >= 0 && bt.gained > 0) betKeys[bt.si].el.classList.add('hit');
+          if (bt.si >= 0 && bt.gained > 0) setKeyHit(betKeys[bt.si], true);
           await sleep(220);
         }
         if (step.gained > 0) {

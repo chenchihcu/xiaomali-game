@@ -10,8 +10,8 @@ Repo: https://github.com/chenchihcu/xiaomali-game
 ## Structure
 | File | Role |
 |---|---|
-| `index.html` | Top bar, `#board` 7×7, center = WIN/CREDIT + JP + **3 reels** + dice + `#onceBanner` + msg, bets, controls, settings/help dialogs. Scripts: `engine.js` then `game.js` (`defer`). |
-| `styles.css` | `--u` = 1/100 of `--W`. Portrait-first. Reels / JP / once-banner / settings. |
+| `index.html` | Real-cabinet layout: `.cabinet` (wood) → `.marquee` (🔊 knob, WIN/CREDIT meters, ⚙ knob) → `.glass` (`#board` 7×7 track; `#center` machine window = JP + **3 reels** + dice + `#onceBanner` + VFD `#msg`; `#betpanel` payout strip = mult + bet LED) → `.deck` (CREDIT/WIN/BET plate groups, `#betKeys` 8 fruit keycaps, 清除/全押/自動/開始) → disclaimer plate. Settings/help dialogs. Scripts: `engine.js` then `game.js` (`defer`). |
+| `styles.css` | `--u` = 1/100 of `--W`; cabinet height ≈ 1.80×W. Portrait-first. Tiles get `side-*` class for inner-edge lamp bulbs. |
 | `engine.js` | Pure logic → `XiaomaliEngine`. `resolveRound` queues free runs on ONCE MORE (`once` / `onceMulti` 連跑 / `onceBig`), then bonus + JP. Cap `MAX_ONCE_MORE_CHAIN`. |
 | `game.js` | UI: light run, reels, sound/BGM, settings, **「再跑 N 次」** banner. Animates `E.resolveRound` steps only. |
 | `sim.js` | `node sim.js [rounds]` balance check (not loaded in browser). |
@@ -33,7 +33,8 @@ Credit/win/sound/jp/lastBets: `xiaomali.v1`.
 - Bonus: `song` / `train` / `sanyuan`. JP: big BAR + BAR bet.
 - Big/small: 1–4 / 6–9 / 5 push. Center reels are cosmetic; outer track pays.
 - Prefer short Traditional Chinese UI copy on portrait.
-- Controls: skeuomorphic `.btn.btn-arcade` (metal rim / plastic face / pressed). Extra row: 開分／洗分／加倍／續押／自動.
+- Layout follows real 小瑪莉 cabinets (WIN/CREDIT on top marquee, payout strip under track, button deck at bottom). Don't reintroduce app-style top bars.
+- Controls: `.btn` = illuminated arcade push-button (chrome bezel, lit cap via `::before`, unlit when disabled). Bet keys = white keycaps on the deck; LEDs live in the payout strip (`betKeys[i].cell`).
 - Track / bet icons: CSS/SVG glossy fruit (unique gradient ids in `iconHTML`), not emoji.
 
 ## How to test

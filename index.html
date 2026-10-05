@@ -7,7 +7,7 @@
   <meta name="mobile-web-app-capable" content="yes">
   <meta name="apple-mobile-web-app-status-bar-style" content="black-translucent">
   <meta name="apple-mobile-web-app-title" content="小瑪莉">
-  <meta name="theme-color" content="#1b0631">
+  <meta name="theme-color" content="#0d0806">
   <meta name="description" content="小瑪莉水果機 — 純前端網頁小遊戲（虛擬分數，娛樂用）">
   <title>小瑪莉 Little Mary</title>
   <link rel="icon" href="icon.svg" type="image/svg+xml">
@@ -17,72 +17,95 @@
 </head>
 <body>
   <div class="app" id="app">
-    <header class="topbar">
-      <button class="icon-btn" id="btnSound" type="button" aria-label="音效開關">🔊</button>
-      <h1 class="logo"><span>小瑪莉</span><small>LITTLE MARY</small></h1>
-      <button class="icon-btn" id="btnSettings" type="button" aria-label="設定">⚙️</button>
-    </header>
+    <div class="cabinet" id="cabinet">
+      <i class="screw s-tl"></i><i class="screw s-tr"></i><i class="screw s-bl"></i><i class="screw s-br"></i>
 
-    <main class="cabinet">
-      <section class="board" id="board" aria-label="跑燈盤面">
-        <div class="center" id="center">
-          <div class="score-row">
-            <div class="led-row compact">
-              <span class="led-label win">WIN</span>
-              <div class="led" id="winLed" data-digits="6"></div>
+      <header class="marquee">
+        <button class="knob" id="btnSound" type="button" aria-label="音效" aria-pressed="true">
+          <svg class="k-on" viewBox="0 0 24 24" aria-hidden="true"><path d="M4 9h4l5-4v14l-5-4H4z"/><path d="M16 8.5a5 5 0 0 1 0 7M18.5 6a8.5 8.5 0 0 1 0 12" fill="none" stroke-width="2" stroke-linecap="round"/></svg>
+          <svg class="k-off" viewBox="0 0 24 24" aria-hidden="true"><path d="M4 9h4l5-4v14l-5-4H4z"/><path d="M16.5 9.5l5 5M21.5 9.5l-5 5" fill="none" stroke-width="2" stroke-linecap="round"/></svg>
+        </button>
+        <div class="meter meter-win">
+          <span class="meter-plate">WIN</span>
+          <div class="led" id="winLed" data-digits="6"></div>
+        </div>
+        <div class="meter meter-credit">
+          <span class="meter-plate">CREDIT</span>
+          <div class="led" id="creditLed" data-digits="6"></div>
+        </div>
+        <button class="knob" id="btnSettings" type="button" aria-label="設定">
+          <svg viewBox="0 0 24 24" aria-hidden="true"><path d="M10.3 2h3.4l.5 2.6 1.9.8 2.2-1.5 2.4 2.4-1.5 2.2.8 1.9 2.6.5v3.4l-2.6.5-.8 1.9 1.5 2.2-2.4 2.4-2.2-1.5-1.9.8-.5 2.6h-3.4l-.5-2.6-1.9-.8-2.2 1.5-2.4-2.4 1.5-2.2-.8-1.9L2 13.7v-3.4l2.6-.5.8-1.9-1.5-2.2 2.4-2.4 2.2 1.5 1.9-.8zM12 8.6a3.4 3.4 0 1 0 0 6.8 3.4 3.4 0 0 0 0-6.8z" fill-rule="evenodd"/></svg>
+        </button>
+      </header>
+
+      <section class="glass" aria-label="機台面板">
+        <section class="board" id="board" aria-label="跑燈盤面">
+          <div class="center" id="center">
+            <div class="jp-row" id="jpRow" hidden>
+              <span class="jp-label">JP</span>
+              <span class="jp-val" id="jpVal">200</span>
             </div>
-            <div class="led-row compact">
-              <span class="led-label credit">CREDIT</span>
-              <div class="led green" id="creditLed" data-digits="6"></div>
+
+            <div class="reels" id="reels" aria-label="水果轉盤">
+              <div class="reel" data-r="0"><div class="reel-mask"><div class="reel-strip" id="reel0"></div></div></div>
+              <div class="reel" data-r="1"><div class="reel-mask"><div class="reel-strip" id="reel1"></div></div></div>
+              <div class="reel" data-r="2"><div class="reel-mask"><div class="reel-strip" id="reel2"></div></div></div>
+            </div>
+
+            <div class="dice-row">
+              <span class="ds-label" id="lblSmall">小<em>1–4</em></span>
+              <div class="led dice" id="diceLed" data-digits="1"></div>
+              <span class="ds-label" id="lblBig">大<em>6–9</em></span>
+            </div>
+            <div class="once-banner" id="onceBanner" hidden>
+              <span class="once-banner-tag" id="onceBannerTag">ONCE MORE</span>
+              <span class="once-banner-count" id="onceBannerCount">再跑 0 次</span>
+            </div>
+            <div class="msg" id="msg" role="status" aria-live="polite">點水果押注，再按開始</div>
+          </div>
+        </section>
+
+        <section class="payout" id="betpanel" aria-label="倍率與押注"></section>
+      </section>
+
+      <section class="deck" aria-label="操作面板">
+        <div class="deck-func">
+          <div class="pgroup" role="group" aria-label="分數">
+            <span class="plate">CREDIT</span>
+            <div class="pkeys">
+              <button class="btn btn-teal" id="btnOpen" type="button">開分</button>
+              <button class="btn btn-slate" id="btnWash" type="button">洗分</button>
             </div>
           </div>
+          <div class="pgroup pgroup-win" role="group" aria-label="比倍">
+            <span class="plate">WIN</span>
+            <div class="pkeys">
+              <button class="btn btn-purple" id="btnSmall" type="button">小<small>1–4</small></button>
+              <button class="btn btn-orange" id="btnCollect" type="button">得分</button>
+              <button class="btn btn-purple" id="btnBig" type="button">大<small>6–9</small></button>
+            </div>
+          </div>
+          <div class="pgroup" role="group" aria-label="押注">
+            <span class="plate">BET</span>
+            <div class="pkeys">
+              <button class="btn btn-pink" id="btnDouble" type="button">加倍</button>
+              <button class="btn btn-cyan" id="btnRebet" type="button">續押</button>
+            </div>
+          </div>
+        </div>
 
-          <div class="jp-row" id="jpRow" hidden>
-            <span class="jp-label">JP</span>
-            <span class="jp-val" id="jpVal">200</span>
-          </div>
+        <div class="deck-bets" id="betKeys" role="group" aria-label="押注鍵"></div>
 
-          <div class="reels" id="reels" aria-label="水果轉盤">
-            <div class="reel" data-r="0"><div class="reel-mask"><div class="reel-strip" id="reel0"></div></div></div>
-            <div class="reel" data-r="1"><div class="reel-mask"><div class="reel-strip" id="reel1"></div></div></div>
-            <div class="reel" data-r="2"><div class="reel-mask"><div class="reel-strip" id="reel2"></div></div></div>
-          </div>
-
-          <div class="dice-row">
-            <span class="ds-label" id="lblSmall">小<br><em>1–4</em></span>
-            <div class="led dice" id="diceLed" data-digits="1"></div>
-            <span class="ds-label" id="lblBig">大<br><em>6–9</em></span>
-          </div>
-          <div class="once-banner" id="onceBanner" hidden>
-            <span class="once-banner-tag" id="onceBannerTag">ONCE MORE</span>
-            <span class="once-banner-count" id="onceBannerCount">再跑 0 次</span>
-          </div>
-          <div class="msg" id="msg" role="status" aria-live="polite">點水果押注，再按開始</div>
+        <div class="deck-main" role="group" aria-label="主要操作">
+          <button class="btn btn-blue" id="btnClear" type="button">清除</button>
+          <button class="btn btn-yellow" id="btnAll" type="button">全押</button>
+          <button class="btn btn-red" id="btnAuto" type="button">自動</button>
+          <button class="btn btn-green btn-start" id="btnStart" type="button">開始</button>
         </div>
       </section>
 
-      <section class="betpanel" id="betpanel" aria-label="押注區"></section>
-
-      <section class="controls" aria-label="操作">
-        <div class="controls-extra" role="group" aria-label="機台功能">
-          <button class="btn btn-arcade btn-teal btn-sm" id="btnOpen" type="button">開分<small>+100</small></button>
-          <button class="btn btn-arcade btn-slate btn-sm" id="btnWash" type="button">洗分</button>
-          <button class="btn btn-arcade btn-pink btn-sm" id="btnDouble" type="button">加倍</button>
-          <button class="btn btn-arcade btn-cyan btn-sm" id="btnRebet" type="button">續押</button>
-          <button class="btn btn-arcade btn-red btn-sm" id="btnAuto" type="button">自動</button>
-        </div>
-        <div class="controls-main" role="group" aria-label="主要操作">
-          <button class="btn btn-arcade btn-purple" id="btnSmall" type="button">小<small>1–4</small></button>
-          <button class="btn btn-arcade btn-orange" id="btnCollect" type="button">得分</button>
-          <button class="btn btn-arcade btn-purple" id="btnBig" type="button">大<small>6–9</small></button>
-          <button class="btn btn-arcade btn-blue" id="btnClear" type="button">清除</button>
-          <button class="btn btn-arcade btn-yellow" id="btnAll" type="button">全押</button>
-          <button class="btn btn-arcade btn-green" id="btnStart" type="button">開始</button>
-        </div>
-      </section>
-    </main>
-
-    <footer class="note">娛樂用・虛擬分數・非真實賭博</footer>
+      <footer class="note">娛樂用・虛擬分數・非真實賭博</footer>
+    </div>
   </div>
 
   <dialog class="sheet" id="settingsDialog">

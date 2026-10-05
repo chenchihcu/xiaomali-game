@@ -95,7 +95,7 @@ python3 -m http.server 8000
 
 ```
 index.html     頁面骨架（含設定／玩法 dialog、中央三轉盤）
-styles.css     直式街機版面（Safe Area、轉盤、設定）
+styles.css     直式實體機台版面（木框機殼、上方 WIN/CREDIT、跑燈盤、倍率列、按鍵台）
 engine.js      純邏輯：盤面權重、設定、中彩、JP、RTP 模擬（無 DOM）
 game.js        UI：跑燈、轉盤、音效／BGM、設定面板、押注與比大小
 sim.js         Node 平衡檢查：node sim.js [rounds]
