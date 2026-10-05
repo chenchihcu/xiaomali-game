@@ -642,7 +642,7 @@
     return null;
   }
 
-    /** Mark bingo cell for a landed symbol; return completed lines (clears those cells). */
+  /** Mark bingo cell for a landed symbol; return completed lines (clears those cells). */
   function applyBingoMark(board, symId, totalBet, rng) {
     if (!board || board.length !== 9) board = new Array(9).fill(false);
     const next = board.slice();
@@ -717,9 +717,11 @@
       if (stageOpens >= STAGE_ENTRY.maxPerRound) return false;
       const anyOn = STAGE_KEYS.some((k) => s.modes[k]);
       if (!anyOn) return false;
-      const rate = STAGE_ENTRY.chance * (s.bonusRate || 1) * (force ? 1.35 : 1);
-      if (!force && rng() >= rate) return false;
-      if (force && rng() >= rate) return false;
+      // force=true: guaranteed entry (still capped by maxPerRound). Otherwise roll.
+      if (!force) {
+        const rate = STAGE_ENTRY.chance * (s.bonusRate || 1);
+        if (rng() >= rate) return false;
+      }
       const kind = pickStageKind(s, rng);
       if (!kind) return false;
       const stage = resolveStage(kind, bets, totalBet, rng);

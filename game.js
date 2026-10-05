@@ -1107,8 +1107,8 @@
     btn.auto.classList.toggle('on', state.auto);
     btn.auto.classList.toggle('flash', state.auto);
     const autoLab = $('autoLab');
+    // Never set btn.auto.textContent — that wipes the SVG icon children.
     if (autoLab) autoLab.textContent = state.auto ? '自動中' : '自動';
-    else btn.auto.textContent = state.auto ? '自動中' : '自動';
     btn.auto.setAttribute('aria-label', state.auto ? '自動中' : '自動');
     btn.sound.classList.toggle('off', !Sound.on);
     btn.sound.setAttribute('aria-pressed', String(Sound.on));
@@ -3075,31 +3075,6 @@
   window.addEventListener('pointerdown', unlock, { passive: true });
   window.addEventListener('keydown', unlock);
 
-  betKeys.forEach((k, i) => {
-    let holdTimer = null;
-    let repeatTimer = null;
-    const stop = () => {
-      clearTimeout(holdTimer);
-      clearInterval(repeatTimer);
-      holdTimer = repeatTimer = null;
-      k.el.classList.remove('pressed');
-    };
-    k.el.addEventListener('pointerdown', (e) => {
-      if (e.button !== undefined && e.button !== 0) return;
-      e.preventDefault();
-      Sound.unlock();
-      k.el.classList.add('pressed');
-      if (!bet(i)) return stop();
-      holdTimer = setTimeout(() => {
-        repeatTimer = setInterval(() => { if (!bet(i)) stop(); }, 90);
-      }, 380);
-    });
-    ['pointerup', 'pointerleave', 'pointercancel', 'lostpointercapture'].forEach((ev) =>
-      k.el.addEventListener(ev, stop));
-    k.el.addEventListener('contextmenu', (e) => e.preventDefault());
-    k.el.addEventListener('click', (e) => { if (e.detail === 0) { stopAuto(); bet(i); } });
-  });
-
   // 防呆: per-action cooldown swallows double-taps / ghost clicks / key+click
   // duplicates (e.g. Space on a focused 開始 button fires both).
   const lastTap = new Map();
@@ -3108,9 +3083,58 @@
       const now = performance.now();
       if (now - (lastTap.get(key) || 0) < cooldown) return;
       lastTap.set(key, now);
-      fn(...args);
+      return fn(...args);
     };
   }
+
+  /**
+   * Reliable deck control binding for iOS Safari:
+   * - pointerdown: pressed + setPointerCapture (hitbox stays with finger)
+   * - pointerup: fire action (preventDefault suppresses synthetic click)
+   * - pointercancel / lost capture: cancel, do NOT fire
+   * - click detail===0: keyboard / accessibility activation
+   * Greyed (.off) controls still fire so why.* can toast the reason.
+   */
+  function bindTap(el, action, { key = null, cooldown = 280 } = {}) {
+    if (!el) return;
+    const run = key ? guarded(key, action, cooldown) : guarded(`tap:${el.id || Math.random()}`, action, cooldown);
+    let armed = false;
+    let pointerId = null;
+    const disarm = () => {
+      armed = false;
+      pointerId = null;
+      el.classList.remove('pressed');
+    };
+    el.addEventListener('pointerdown', (e) => {
+      if (e.button !== undefined && e.button !== 0) return;
+      // Ignore secondary pointers while one is armed (multi-touch ghost).
+      if (armed) return;
+      armed = true;
+      pointerId = e.pointerId;
+      el.classList.add('pressed');
+      try { el.setPointerCapture(e.pointerId); } catch (_) { /* older WebKit */ }
+      // Kill 300ms ghost click / double-fire with the pointerup path.
+      e.preventDefault();
+      Sound.unlock();
+    });
+    el.addEventListener('pointerup', (e) => {
+      if (!armed || (pointerId != null && e.pointerId !== pointerId)) return;
+      disarm();
+      run();
+    });
+    el.addEventListener('pointercancel', (e) => {
+      if (pointerId != null && e.pointerId !== pointerId) return;
+      disarm(); // OS cancel — do not fire
+    });
+    // Do not listen for lostpointercapture: on some WebKit builds it fires
+    // before pointerup when capture is released and would swallow the tap.
+    el.addEventListener('click', (e) => {
+      // Keyboard / VoiceOver synthesize click with detail === 0.
+      if (e.detail === 0) run();
+    });
+    el.addEventListener('contextmenu', (e) => e.preventDefault());
+  }
+
   const A = {
     start: guarded('start', () => { if (state.auto && !state.busy) stopAuto(); start(); }, 450),
     clear: guarded('clear', () => { stopAuto(); clearBets(); }),
@@ -3125,48 +3149,17 @@
     open: guarded('open', () => { stopAuto(); openCredit(OPEN_CREDIT_TAP); }, 120),
   };
 
-  btn.start.addEventListener('click', A.start);
-  btn.clear.addEventListener('click', A.clear);
-  btn.all.addEventListener('click', A.all);
-  btn.collect.addEventListener('click', A.collect);
-  btn.small.addEventListener('click', A.small);
-  btn.big.addEventListener('click', A.big);
-  btn.rebet.addEventListener('click', A.rebet);
-  btn.dbl.addEventListener('click', A.dbl);
-  btn.auto.addEventListener('click', A.auto);
-  btn.wash.addEventListener('click', A.wash);
-
-  // 開分: tap +100, hold +500
-  (() => {
-    let holdTimer = null;
-    let held = false;
-    const clear = () => { clearTimeout(holdTimer); holdTimer = null; };
-    btn.open.addEventListener('pointerdown', (e) => {
-      if (e.button !== undefined && e.button !== 0) return;
-      e.preventDefault();
-      held = false;
-      const reason = why.open();
-      if (reason) { deny(reason); return; }
-      stopAuto();
-      holdTimer = setTimeout(() => {
-        held = true;
-        openCredit(OPEN_CREDIT_HOLD);
-      }, 420);
-    });
-    const up = () => {
-      if (holdTimer) {
-        clear();
-        if (!held) openCredit(OPEN_CREDIT_TAP);
-      }
-      held = false;
-    };
-    ['pointerup', 'pointerleave', 'pointercancel', 'lostpointercapture'].forEach((ev) =>
-      btn.open.addEventListener(ev, up));
-    btn.open.addEventListener('contextmenu', (e) => e.preventDefault());
-    btn.open.addEventListener('click', (e) => { if (e.detail === 0) A.open(); }); // keyboard
-  })();
-
-  btn.sound.addEventListener('click', () => {
+  bindTap(btn.start, A.start);
+  bindTap(btn.clear, A.clear);
+  bindTap(btn.all, A.all);
+  bindTap(btn.collect, A.collect);
+  bindTap(btn.small, A.small);
+  bindTap(btn.big, A.big);
+  bindTap(btn.rebet, A.rebet);
+  bindTap(btn.dbl, A.dbl);
+  bindTap(btn.auto, A.auto);
+  bindTap(btn.wash, A.wash);
+  bindTap(btn.sound, () => {
     Sound.on = !Sound.on;
     Sound.unlock().then(() => {
       Music.update();
@@ -3174,8 +3167,95 @@
     });
     render();
     save();
+  }, { key: 'sound', cooldown: 220 });
+  bindTap(btn.settings, () => openSettings(), { key: 'settings', cooldown: 300 });
+
+  // Fruit bet keys: tap + hold-to-repeat (capture keeps repeat alive if finger slides)
+  betKeys.forEach((k, i) => {
+    let holdTimer = null;
+    let repeatTimer = null;
+    let pointerId = null;
+    const stop = () => {
+      clearTimeout(holdTimer);
+      clearInterval(repeatTimer);
+      holdTimer = repeatTimer = null;
+      pointerId = null;
+      k.el.classList.remove('pressed');
+    };
+    k.el.addEventListener('pointerdown', (e) => {
+      if (e.button !== undefined && e.button !== 0) return;
+      if (pointerId != null) return;
+      e.preventDefault();
+      Sound.unlock();
+      pointerId = e.pointerId;
+      k.el.classList.add('pressed');
+      try { k.el.setPointerCapture(e.pointerId); } catch (_) { /* */ }
+      if (!bet(i)) return stop();
+      holdTimer = setTimeout(() => {
+        repeatTimer = setInterval(() => { if (!bet(i)) stop(); }, 90);
+      }, 380);
+    });
+    k.el.addEventListener('pointerup', (e) => {
+      if (pointerId != null && e.pointerId !== pointerId) return;
+      stop();
+    });
+    k.el.addEventListener('pointercancel', (e) => {
+      if (pointerId != null && e.pointerId !== pointerId) return;
+      stop();
+    });
+    // no lostpointercapture (WebKit may fire it before pointerup)
+    // no pointerleave — pressed animation used to shift hitbox and cancel holds
+    k.el.addEventListener('contextmenu', (e) => e.preventDefault());
+    k.el.addEventListener('click', (e) => { if (e.detail === 0) { stopAuto(); bet(i); } });
   });
-  btn.settings.addEventListener('click', openSettings);
+
+  // 開分: tap +100, hold +500. Commit only on pointerup (leave/cancel = abort).
+  (() => {
+    let holdTimer = null;
+    let held = false;
+    let armed = false;
+    let pointerId = null;
+    const clearHold = () => { clearTimeout(holdTimer); holdTimer = null; };
+    const disarm = () => {
+      clearHold();
+      armed = false;
+      pointerId = null;
+      held = false;
+      btn.open.classList.remove('pressed');
+    };
+    btn.open.addEventListener('pointerdown', (e) => {
+      if (e.button !== undefined && e.button !== 0) return;
+      if (armed) return;
+      e.preventDefault();
+      Sound.unlock();
+      armed = true;
+      held = false;
+      pointerId = e.pointerId;
+      btn.open.classList.add('pressed');
+      try { btn.open.setPointerCapture(e.pointerId); } catch (_) { /* */ }
+      const reason = why.open();
+      if (reason) { deny(reason); disarm(); return; }
+      stopAuto();
+      holdTimer = setTimeout(() => {
+        held = true;
+        openCredit(OPEN_CREDIT_HOLD);
+      }, 420);
+    });
+    btn.open.addEventListener('pointerup', (e) => {
+      if (!armed || (pointerId != null && e.pointerId !== pointerId)) return;
+      const wasHeld = held;
+      const hadTimer = !!holdTimer;
+      disarm();
+      // Short tap: fire +100. Hold already credited +500 inside the timer.
+      if (hadTimer && !wasHeld) openCredit(OPEN_CREDIT_TAP);
+    });
+    btn.open.addEventListener('pointercancel', (e) => {
+      if (pointerId != null && e.pointerId !== pointerId) return;
+      disarm(); // cancel — do not credit
+    });
+    btn.open.addEventListener('contextmenu', (e) => e.preventDefault());
+    btn.open.addEventListener('click', (e) => { if (e.detail === 0) A.open(); });
+  })();
 
   window.addEventListener('keydown', (e) => {
     if (settingsDlg.open || helpDlg.open || confirmDlg?.open || e.metaKey || e.ctrlKey || e.altKey) return;

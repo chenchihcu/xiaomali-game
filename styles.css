@@ -471,6 +471,7 @@ button {
 }
 .coin-fall {
   position: absolute;
+  pointer-events: none;
   top: -4%;
   width: calc(var(--u) * 2.4);
   height: calc(var(--u) * 2.4);
@@ -1278,6 +1279,7 @@ button {
   filter: drop-shadow(0 1px 1px rgba(0, 0, 0, 0.3));
   transition: transform 55ms;
   transform: translateY(calc(var(--u) * -0.2));
+  pointer-events: none; /* whole keycap is the hit target */
 }
 .betkey .ic-77 { font-size: 0.8em; }
 .betkey .ic-bar { font-size: 0.24em; }
@@ -1481,6 +1483,13 @@ button {
 .sheet-actions .btn:disabled { opacity: 0.5; }
 /* no double-tap zoom / long-press callouts on controls */
 .btn, .betkey, .knob, .chip { touch-action: manipulation; -webkit-touch-callout: none; -webkit-user-select: none; user-select: none; }
+.btn:focus-visible, .betkey:focus-visible, .knob:focus-visible, .chip:focus-visible {
+  outline: 3px solid #ffe566;
+  outline-offset: 2px;
+}
+.btn:focus:not(:focus-visible), .betkey:focus:not(:focus-visible), .knob:focus:not(:focus-visible) {
+  outline: none;
+}
 @media (prefers-reduced-motion: reduce) {
   .toast, .toast.bump { transition: none; animation: none; }
 }
@@ -1826,7 +1835,8 @@ html, body {
 .ps-tr { top: calc(var(--u) * 1.6); right: calc(var(--u) * 1.6); transform: scaleX(-1); }
 .ps-bl { bottom: calc(var(--u) * 1.6); left: calc(var(--u) * 1.6); transform: scaleY(-1); }
 .ps-br { bottom: calc(var(--u) * 1.6); right: calc(var(--u) * 1.6); transform: scale(-1); }
-.cabinet > .marquee, .cabinet > .topper, .cabinet > .glass, .cabinet > .deck, .cabinet > .note { position: relative; z-index: 2; }
+.cabinet > .marquee, .cabinet > .topper, .cabinet > .glass, .cabinet > .note { position: relative; z-index: 2; }
+.cabinet > .deck { position: relative; z-index: 9; } /* above flourish(8)/rails for reliable taps */
 .cabinet > .screw { z-index: 6; }
 
 /* ---------- brushed-metal panels ---------- */
@@ -2748,7 +2758,10 @@ html.fit-2 .reel-cell { font-size: calc(var(--u) * 7.6); }
 html.fit-2 .ds-label { width: calc(var(--u) * 6.2); height: calc(var(--u) * 6.2); }
 html.fit-2 .dice svg { width: calc(var(--u) * 3.5); height: calc(var(--u) * 5.6); }
 html.fit-2 .btn, html.fit-2 .deck-main .btn, html.fit-2 .btn-start, html.fit-2 .betkey {
-  height: calc(var(--u) * 9.2);
+  /* Keep ≥44px touch targets even when density compresses --u. */
+  height: max(44px, calc(var(--u) * 9.2));
+  min-height: 44px;
+  min-width: 44px;
 }
 html.fit-2 .pgroup { gap: calc(var(--u) * 0.35); padding-bottom: calc(var(--u) * 0.55); }
 html.fit-2 .topper { padding: calc(var(--u) * 0.3) calc(var(--u) * 0.45); min-height: calc(var(--u) * 10.5); gap: calc(var(--u) * 0.3); }
@@ -2858,9 +2871,11 @@ html.fit-1 .deck-bets { gap: calc(var(--u) * 0.35); }
 }
 .help-ui { list-style: disc; color: rgba(255, 255, 255, 0.88); }
 .first-tip {
+  /* Sit over the glass/board — never cover the control deck (dead taps). */
   position: fixed;
   left: 50%;
-  bottom: max(18px, env(safe-area-inset-bottom));
+  top: max(12%, env(safe-area-inset-top, 0px));
+  bottom: auto;
   transform: translateX(-50%);
   z-index: 80;
   width: min(92vw, 360px);

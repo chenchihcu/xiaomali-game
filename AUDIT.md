@@ -1,39 +1,49 @@
-# Audit — UI/UX · 機率／派彩 · 防呆（2026-10-05）
+# Audit — UI/UX · 按鍵／Hitbox · 機率／派彩 · Bonus · 音效 · 防呆 · 效能 · a11y（2026-10-05）
 
-Scope: `/workspace/xiaomali` static game (`engine.js` / `game.js` / `index.html`).
-Method: code review + `node sim.js` Monte-Carlo + targeted unit checks.
+Scope: `/workspace/xiaomali` static game (`engine.js` / `game.js` / `index.html` / `styles.css`).
+Method: code review + button-panel screenshot + `node sim.js` Monte-Carlo + targeted unit checks.
+Target device: **iPhone 16 Pro Max** 430×932 portrait (Safari chrome ~746).
 
-## Issues found → fixed
+## Issues found → fixed (this pass)
 
 | # | Area | Issue | Fix |
 |---|---|---|---|
-| 1 | Math / RTP | All-on **標準** RTP ≈ **120%** (easy ≈176%); far above entertainment target ~90–100% | Raised `small` house-edge on presets; lowered stage chances (`SUPER_RUN` / `doubleRun` / `SLOT` / `FEVER` / classic `BONUS`); retuned easy/hard. Post-fix: easy≈122% · normal≈98% · hard≈81% · classic-no-bonus≈89% (`node sim.js 120000`) |
-| 2 | Math | `resolveSlotBonus` paid using **max bet across symbols** when matched symbol had 0 bet (free ride) | Pay only `bets[si] * mult`; unmatched → show result, gained 0 |
-| 3 | Math | `applyBingoMark` cleared cells **per line**, so shared-cell columns/diagonals were dropped on a full board (paid 3/8 instead of 8/8) | Detect all complete lines first, then clear union of cells |
-| 4 | Math | `simulate()` grew JP pot **before** `resolveRound`; live play uses pot then `nextJpPot` | Simulate now mirrors live `nextJpPot` |
-| 5 | 防呆 / UX | Settings dimmed / warned「中彩機率無效」when classic song/train/sanyuan off — but **三輪／FEVER still scale on `bonusRate`** | `usesBonusRate` includes `slotBonus` \|\| `fever`; hint text updated |
-| 6 | 防呆 | `collect` / `collectInstant` / load could push CREDIT past `CREDIT_CAP` (999999); LED truncates | Cap credit on collect paths + load; leftover WIN kept with toast |
-| 7 | 防呆 | Auto mode could **loop forever** collecting when CREDIT at cap and WIN residual | Stop auto with toast when cap blocks drain |
+| 1 | Buttons / hitbox | Deck controls used `click` only; iOS often feels laggy / drops taps when finger slides on glossy caps | Added `bindTap()`: `pointerdown` + `setPointerCapture` + fire on `pointerup`; keyboard still via `click` `detail===0` |
+| 2 | Buttons / 開分 | `pointerleave` committed +100 credit (drag-off = accidental open) | Open commits **only** on `pointerup`; `pointercancel` aborts |
+| 3 | Buttons / 押注鍵 | `pointerleave` cancelled hold-repeat when pressed animation shifted the hitbox | Removed leave handler; `setPointerCapture` keeps repeat with the finger |
+| 4 | Overlay | `#firstTip` fixed at bottom (`z-index:80`) covered 開始／自動／水果鍵 → dead taps for first-run | Tip moved to **top ~12%** over glass/board, not the deck |
+| 5 | Overlay / z-index | Flourish layer `z-index:8` sat above deck `z-index:2` (safe only while `pointer-events:none`) | Deck raised to `z-index:9`; coin FX also `pointer-events:none` |
+| 6 | Touch targets | `fit-2` set button height to `calc(u*9.2)` which dips under 44px on narrow `--W` | `height: max(44px, calc(u*9.2))` + keep `min-width/min-height: 44px` |
+| 7 | Icon hit area | Bet-key `.bicon` SVG could be the event target | `pointer-events: none` on `.bicon` (whole keycap is the target) |
+| 8 | Auto label | Fallback `btn.auto.textContent = …` would wipe SVG icon children if `#autoLab` missing | Never set `textContent` on the button; only update `#autoLab` |
+| 9 | Math / stages | `tryPushCabinetStage(force=true)` still rolled `rng() >= rate` (force was a no-op) | `force` now skips the rate roll (still capped by `maxPerRound`) |
+| 10 | Copy | Help said 洗分「清 WIN」but wash zeros CREDIT＋WIN | Help line →「洗分歸零」 |
+| 11 | a11y | No visible keyboard focus ring on deck controls | `:focus-visible` gold outline; suppress non-keyboard `:focus` |
 
 ## Verified OK (no change)
 
-- `why.*` guards + `.off` + toast deny for start/clear/all/bet/dbl/rebet/auto/collect/gamble/open/wash
-- `validateSettings` / `snap` from slider min/max/step; fruit weights cannot all be 0
-- `state.busy` set before any `await`; `guarded()` cooldowns
-- JP: big BAR tile + BAR bet; pot growth `JP.rate × jpRate`; win fraction `bet/fullBet`
-- ONCE MORE chain capped at `MAX_ONCE_MORE_CHAIN` (8)
-- Bet unit 1–10, per-symbol cap 99, unpaid preview (`betsPaid`) charge on 開始
-- Big/small: 1–4 / 6–9 / 5 push
+- RTP (`node sim.js 80000`): easy≈122% · **normal≈98%** · hard≈80% · classic-no-bonus≈89%
+- Slot pays only bet-on-matched-symbol; bingo detects **all** lines then clears union
+- `simulate()` mirrors live `nextJpPot` order
+- Cabinet stages: ≤1 / round (0 multi-stage in 30k trials); special/ONCE MORE steps carry `step.trigger`; UI `cueStageEntry` → overlay → `celebrateHit`
+- `why.*` + `.off` + toast deny; `state.busy` before `await`; `guarded()` cooldowns
+- ONCE MORE chain ≤ `MAX_ONCE_MORE_CHAIN` (8); CREDIT_CAP on collect/load/auto
+- Sound: gesture `unlock` + silent buffer; BGM duck under fanfare; `prefers-reduced-motion` skips heavy FX / tiny vibrate only
+- `fitCabinet()` probe for `env(safe-area-*)`, fit-1/fit-2 density, iterative `--W` nudge
+- Screenshot of deck: icon+label layout matches intended 開分／洗分／小／得分／大／加倍／續押／8 水果／清除／全押／自動／開始
 
 ## Remaining risks (not bugs, watch)
 
-1. **Apple single-bet RTP** still low (~70% normal) vs mid fruits (~95%) — track has many apple tiles including ×3; intentional volume, uneven EV by symbol.
-2. **Easy** still player-favored (~122%) by design; BAR/77 single-bet hotter than apple.
-3. Slider UI max for rates is **2.0×** (`index.html`); `engine.normalizeSettings` allows **3** — console/`__xiaomali.setSettings` can exceed UI until `validateSettings` snaps to slider range.
-4. `startCredit` slider max **5000** vs engine clamp **99999** — same pattern.
-5. Bingo / stages / JP are entertainment features; RTP estimate in settings uses only **2500** rounds (noisy ± a few %).
-6. No cryptographic RNG audit beyond `crypto.getRandomValues` float; fine for fake credit.
-7. Gamble ×2 has no win ceiling other than later CREDIT_CAP on collect.
+1. **Apple single-bet RTP** still low (~70% normal) vs mid fruits (~95%) — many apple tiles incl. ×3.
+2. **Easy** still player-favored (~122%) by design.
+3. Slider UI max for rates is **2.0×**; `normalizeSettings` allows **3** via console until `validateSettings` snaps.
+4. `startCredit` slider max **5000** vs engine clamp **99999**.
+5. Settings RTP estimate uses only **2500** rounds (noisy).
+6. Cabinet mini-stages entry is intentionally rare (~0.3% rounds at normal) — wired correctly but may feel scarce; raising `STAGE_ENTRY.chance` will lift RTP.
+7. Sic Bo / roulette entertainment tickets almost always pay a small `floor(totalBet×mult/4)` once entered (house edge is the entry rate).
+8. Gamble ×2 has no ceiling other than CREDIT_CAP on collect.
+9. No cryptographic RNG audit beyond `crypto.getRandomValues` float (fine for fake credit).
+10. `bindTap` + `preventDefault` on `pointerdown` relies on Pointer Events; very old WebKit without PE falls back to `click detail===0` only (keyboard) — touch may need a one-off polyfill if ever reported.
 
 ## How to re-check
 
@@ -42,4 +52,4 @@ node sim.js 120000
 node --check engine.js && node --check game.js
 ```
 
-DevTools: iPhone 16 Pro Max 430×932; exercise settings toggles (only 三輪/FEVER on → 中彩機率 still active); open CREDIT to cap then win + auto.
+DevTools: iPhone 16 Pro Max 430×932; first-load tip must **not** cover deck; tap/hold 開分 & fruit keys; greyed 得分 still toasts; special lamp → Bonus entry cue; Settings → only 三輪/FEVER/stages on → 中彩機率 still active; CREDIT at cap + auto.
