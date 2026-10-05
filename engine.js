@@ -135,7 +135,7 @@
     song: '停後隨機加亮 1–3 燈',
     train: '停後順向連亮 2–5 格',
     sanyuan: '點亮大／小三元或大四喜',
-    jp: '大 BAR＋有押 BAR→吃彩池',
+    jp: '大 BAR＋有押 BAR→吃彩池（僅開啟時累積）',
     slotBonus: '特殊燈／ONCE→三輪拉霸',
     fever: 'JP／高倍／特殊／大贏→連跑',
     bingo: '有中／雙燈標格；連線 max(1,floor(押/4))',

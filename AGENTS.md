@@ -116,7 +116,10 @@ node sim.js 50000          # RTP / hit / LUCKY / JP rates per preset
 - Persist: `save()` always folds paid stakes into stored CREDIT (mid-spin refresh must not eat the bet). While a round animates, `roundPersist` freezes stored WIN/bingo at round-start so refresh cannot keep partial wins and the stake refund together. Bingo UI applies per-step `step.board` (not the final board up front).
 - Settings: `onceRate` slider stays live when `superRun` is on (it scales 超跑 even if 連跑／大 ONCE are off).
 - End-of-round FX: `start()` `finally` strips stuck `fx-spin`/`reach`/`expect`/`fever` only — do not `FX.clear()` after `FX.win()` or the win pulse vanishes.
-- Hold lamps: `holdsSpin()` is visual-only; never write `holdCount` except via `holdsSet` at round end / idle.
+- Hold lamps: `holdsSpin()` is visual-only; never write `holdCount` except via `holdsSet` at round end / idle / JP cue. Persist `holdCount`; freeze it in `roundPersist` while busy.
+- Bingo LINE meter (`bingoLineWins`) is lifetime completed lines (board clears on hit). 雙燈 paying lands also mark bingo.
+- JP pot (`nextJpPot`) only runs while `modes.jp` is on.
+- `cabinet.stage-open` disables deck pointer-events during mini-stages. `animGen` aborts orphan reel RAFs on round end.
 
 ## Changing odds
 1. Edit `engine.js` `TRACK[].w` / `PRESETS` / `BONUS.*.chance` / stage chances (`SUPER_RUN`, `SLOT_BONUS`, `FEVER_STAGE`, `LIGHT_FX.doubleRun`) / `JP`.

@@ -534,7 +534,7 @@
   /** While a round animates, persist WIN/bingo as of round-start so a mid-spin
    *  refresh refunds the stake WITHOUT keeping partial round wins / bingo marks
    *  (visibilitychange / pagehide call save() while busy). */
-  let roundPersist = null; // { win, bingo, jp, bingoLineWins } | null
+  let roundPersist = null; // { win, bingo, jp, bingoLineWins, holdCount } | null
   /** Bumped when a round ends/aborts so orphan reel RAFs stop writing. */
   let animGen = 0;
 
@@ -596,6 +596,7 @@
       const bingo = roundPersist ? roundPersist.bingo : state.bingo;
       const jp = roundPersist ? roundPersist.jp : state.jp;
       const bingoLineWins = roundPersist ? roundPersist.bingoLineWins : state.bingoLineWins;
+      const holdSave = roundPersist ? roundPersist.holdCount : holdCount;
       localStorage.setItem(STORAGE_KEY, JSON.stringify({
         credit: state.credit + refund,
         win,
@@ -606,7 +607,7 @@
         jp,
         bingo,
         bingoLineWins,
-        holdCount,
+        holdCount: holdSave,
       }));
     } catch { /* */ }
   }
@@ -2263,7 +2264,7 @@
     state.lastPlayedBets = state.bets.slice();
     state.busy = true;
     // Snapshot for mid-spin persist + exception rollback (see roundPersist / save).
-    roundPersist = { win: state.win, bingo: state.bingo.slice(), jp: state.jp, bingoLineWins: state.bingoLineWins };
+    roundPersist = { win: state.win, bingo: state.bingo.slice(), jp: state.jp, bingoLineWins: state.bingoLineWins, holdCount };
     FX.spin();
     render();
     save();
@@ -2589,7 +2590,7 @@
         state.bingo = roundPersist.bingo.slice();
         state.jp = roundPersist.jp;
         state.bingoLineWins = roundPersist.bingoLineWins;
-        try { FX.idle(); } catch (_) { /* */ }
+        try { FX.holdsSet(roundPersist.holdCount); FX.idle(); } catch (_) { /* */ }
       } else {
         // Success: drop stuck spin/expect/fever but keep end-of-round fx-win pulse
         // (FX.clear() here used to wipe FX.win() set just above).
