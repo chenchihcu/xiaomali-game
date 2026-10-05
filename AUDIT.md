@@ -82,3 +82,10 @@ node -e "const E=require('./engine.js'); let n=0; for(let i=0;i<50;i++){const r=
 ```
 
 DevTools: mid-spin refresh → stake refunded, WIN/bingo/hold/LINE not partially kept; open a mini-stage → deck not tappable; 雙燈 pay → two bingo flashes when symbols differ.
+
+## 2026-10-05 — save / settings UX / fidelity / bingo icons
+- Progress: `savedAt` payload; settings 進度 card (save / export / import / clear).
+- Settings sheet: section chips + search + sticky head/foot (Pro Max width ≤540px).
+- Bingo cells: fruit-reel SVG icons (same `iconHTML` as track).
+- Cabinet: mini wheel + BONUS lamp always visible.
+- Visual ~2×: denser textures, DPR hairlines, refined button SVGs.

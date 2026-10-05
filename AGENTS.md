@@ -33,7 +33,11 @@ Repo: https://github.com/chenchihcu/xiaomali-game
   reverse, skip, doubleRun, fakeStop, superRun }`
 - `music`: `off` \| `arcade` \| `breezy` \| `festive` \| `retro` \| `neon`
 
-Credit/win/sound/jp/lastBets/bingo: `xiaomali.v1`.
+Credit/win/sound/jp/lastBets/bingo/holds/`savedAt`: `xiaomali.v1`.
+Settings sheet: sticky nav chips + search, progress card with 立即儲存／匯出／匯入／清除.
+Bingo 3×3 cells use the same `iconHTML` fruit-reel art as the track (not 蘋橙芒 text).
+Cabinet toys: always-on mini lucky wheel + BONUS pending lamp in `#cabToys`.
+Visual: denser procedural textures, DPR `--dpr` hairlines, sharper deck/knob SVGs.
 
 ## Stages & light modes (toggleable)
 | Mode | Trigger | Effect |

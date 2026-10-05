@@ -557,59 +557,94 @@
     } catch { /* private mode */ }
   }
 
+  let lastSavedAt = 0; // ms epoch of last successful localStorage write
+
+  function progressPayload() {
+    const refund = state.betsPaid ? sum(state.bets) : 0;
+    const win = roundPersist ? roundPersist.win : state.win;
+    const bingo = roundPersist ? roundPersist.bingo : state.bingo;
+    const jp = roundPersist ? roundPersist.jp : state.jp;
+    const bingoLineWins = roundPersist ? roundPersist.bingoLineWins : state.bingoLineWins;
+    const holdSave = roundPersist ? roundPersist.holdCount : holdCount;
+    return {
+      v: 1,
+      savedAt: Date.now(),
+      credit: state.credit + refund,
+      win,
+      pos: state.pos,
+      sound: Sound.on,
+      lastBets: state.bets.slice(),
+      lastPlayedBets: state.lastPlayedBets.slice(),
+      jp,
+      bingo: bingo.slice ? bingo.slice() : bingo,
+      bingoLineWins,
+      holdCount: holdSave,
+    };
+  }
+
+  function applyProgressData(d, { restoreHold = true } = {}) {
+    if (!d || !Number.isFinite(d.credit)) return false;
+    state.credit = Math.min(CREDIT_CAP, Math.max(0, Math.floor(d.credit)));
+    state.win = Math.min(CREDIT_CAP, Math.max(0, Math.floor(d.win || 0)));
+    state.pos = (d.pos | 0) % N;
+    if (d.sound !== undefined) Sound.on = d.sound !== false;
+    if (Number.isFinite(d.jp) && d.jp >= 0) state.jp = Math.min(JP.max, d.jp);
+    if (Array.isArray(d.bingo) && d.bingo.length === 9) state.bingo = d.bingo.map(Boolean);
+    if (Number.isFinite(d.bingoLineWins)) state.bingoLineWins = Math.max(0, Math.min(9999, d.bingoLineWins | 0));
+    if (Array.isArray(d.lastBets) && d.lastBets.length === SYMBOLS.length) {
+      state.bets = d.lastBets.map((n) => Math.min(MAX_BET_PER_SYMBOL, Math.max(0, n | 0)));
+      state.betsPaid = false;
+    } else {
+      state.bets = new Array(SYMBOLS.length).fill(0);
+      state.betsPaid = true;
+    }
+    if (Array.isArray(d.lastPlayedBets) && d.lastPlayedBets.length === SYMBOLS.length) {
+      state.lastPlayedBets = d.lastPlayedBets.map((n) => Math.min(MAX_BET_PER_SYMBOL, Math.max(0, n | 0)));
+    } else if (sum(state.bets) > 0) {
+      state.lastPlayedBets = state.bets.slice();
+    } else {
+      state.lastPlayedBets = new Array(SYMBOLS.length).fill(0);
+    }
+    if (Number.isFinite(d.holdCount)) {
+      const h = Math.max(0, Math.min(4, d.holdCount | 0));
+      if (restoreHold && typeof FX !== 'undefined' && FX.holdsSet) FX.holdsSet(h);
+      else state._pendingHold = h;
+    }
+    if (Number.isFinite(d.savedAt)) lastSavedAt = d.savedAt;
+    return true;
+  }
+
   function load() {
     try {
       const d = JSON.parse(localStorage.getItem(STORAGE_KEY) || 'null');
       if (d && Number.isFinite(d.credit)) {
-        state.credit = Math.min(CREDIT_CAP, Math.max(0, Math.floor(d.credit)));
-        state.win = Math.min(CREDIT_CAP, Math.max(0, Math.floor(d.win || 0)));
-        state.pos = (d.pos | 0) % N;
-        Sound.on = d.sound !== false;
-        if (Number.isFinite(d.jp) && d.jp >= 0) state.jp = Math.min(JP.max, d.jp);
-        if (Array.isArray(d.bingo) && d.bingo.length === 9) state.bingo = d.bingo.map(Boolean);
-        if (Number.isFinite(d.bingoLineWins)) state.bingoLineWins = Math.max(0, Math.min(9999, d.bingoLineWins | 0));
-        if (Array.isArray(d.lastBets) && d.lastBets.length === SYMBOLS.length) {
-          state.bets = d.lastBets.map((n) => Math.min(MAX_BET_PER_SYMBOL, Math.max(0, n | 0)));
-          state.betsPaid = false;
-        }
-        if (Array.isArray(d.lastPlayedBets) && d.lastPlayedBets.length === SYMBOLS.length) {
-          state.lastPlayedBets = d.lastPlayedBets.map((n) => Math.min(MAX_BET_PER_SYMBOL, Math.max(0, n | 0)));
-        } else if (sum(state.bets) > 0) {
-          state.lastPlayedBets = state.bets.slice();
-        }
-        if (Number.isFinite(d.holdCount)) {
-          // Applied after FX/holds exist — boot calls FX.holdsSet below if needed.
-          state._pendingHold = Math.max(0, Math.min(4, d.holdCount | 0));
-        }
+        applyProgressData(d, { restoreHold: false });
+        if (Number.isFinite(d.savedAt)) lastSavedAt = d.savedAt;
       }
     } catch { /* ignore */ }
   }
 
   function save() {
     try {
-      // Always fold paid stakes into saved CREDIT. Mid-spin refresh used to
-      // drop the stake (busy ⇒ no refund) while reloading bets as unpaid.
-      const refund = state.betsPaid ? sum(state.bets) : 0;
-      // Freeze WIN/bingo at round-start while animating — otherwise refresh
-      // kept partial wins AND refunded the stake (free credit).
-      const win = roundPersist ? roundPersist.win : state.win;
-      const bingo = roundPersist ? roundPersist.bingo : state.bingo;
-      const jp = roundPersist ? roundPersist.jp : state.jp;
-      const bingoLineWins = roundPersist ? roundPersist.bingoLineWins : state.bingoLineWins;
-      const holdSave = roundPersist ? roundPersist.holdCount : holdCount;
-      localStorage.setItem(STORAGE_KEY, JSON.stringify({
-        credit: state.credit + refund,
-        win,
-        pos: state.pos,
-        sound: Sound.on,
-        lastBets: state.bets,
-        lastPlayedBets: state.lastPlayedBets,
-        jp,
-        bingo,
-        bingoLineWins,
-        holdCount: holdSave,
-      }));
+      const payload = progressPayload();
+      localStorage.setItem(STORAGE_KEY, JSON.stringify(payload));
+      lastSavedAt = payload.savedAt;
+      try { refreshProgressUI(); } catch (_) { /* settings UI may not exist yet */ }
     } catch { /* */ }
+  }
+
+  function settingsPayload() {
+    return { ...settings, music: Music.track };
+  }
+
+  function buildBackup() {
+    return {
+      app: 'xiaomali',
+      v: 1,
+      exportedAt: Date.now(),
+      progress: progressPayload(),
+      settings: settingsPayload(),
+    };
   }
 
   // ---------------------------------------------------------------------------
@@ -731,26 +766,6 @@
   buildRails();
   FX.holdsSet(0);
 
-  // Bingo 3×3 mission board (Medal/Bingo hybrid — marks on land)
-  (function buildBingo() {
-    const root = $('bingoBoard');
-    if (!root || root.childElementCount) return;
-    const labels = {
-      apple: '蘋', orange: '橙', mango: '芒', bell: '鈴',
-      melon: '西', star: '星', seven: '77', bar: 'BAR', once: 'OM',
-    };
-    BINGO_CELLS.forEach((id, i) => {
-      const c = document.createElement('button');
-      c.type = 'button';
-      c.className = 'bingo-cell';
-      c.dataset.b = String(i);
-      c.disabled = true;
-      c.setAttribute('aria-label', WEIGHT_LABELS[id] || id);
-      c.innerHTML = `<span>${labels[id] || id}</span>`;
-      root.appendChild(c);
-    });
-  })();
-
   /** Classic 小瑪莉 cabinet tile icons: glossy molded plastic on cream face. */
   let _icUid = 0;
   function iconHTML(symId) {
@@ -769,6 +784,23 @@
     };
     return SVGS[symId] || '';
   }
+
+  // Bingo 3×3 — same fruit-reel art as track / reels (not text glyphs).
+  (function buildBingo() {
+    const root = $('bingoBoard');
+    if (!root || root.childElementCount) return;
+    BINGO_CELLS.forEach((id, i) => {
+      const c = document.createElement('button');
+      c.type = 'button';
+      c.className = 'bingo-cell';
+      c.dataset.b = String(i);
+      c.dataset.sym = id;
+      c.disabled = true;
+      c.setAttribute('aria-label', WEIGHT_LABELS[id] || id);
+      c.innerHTML = `<span class="bingo-ic">${iconHTML(id)}</span>`;
+      root.appendChild(c);
+    });
+  })();
 
   const tileEls = TRACK.map((t, i) => {
     const el = document.createElement('div');
@@ -1148,6 +1180,50 @@
     if (off) el.title = reason; else el.removeAttribute('title');
   }
 
+
+  /** Always-visible mini wheel + BONUS lamp (non-interactive status toys). */
+  let bonusArmedUntil = 0;
+  function anyStageModeOn() {
+    return (E.STAGE_KEYS || ['luckyWheel','gacha','sicbo','pachinko','ballDraw','roulette'])
+      .some((k) => settings.modes && settings.modes[k]);
+  }
+  function armBonusLamp(label, ms = 2200) {
+    bonusArmedUntil = performance.now() + ms;
+    const lamp = $('bonusLamp');
+    const sub = $('bonusLampSub');
+    const wheel = $('miniWheel');
+    if (sub) sub.textContent = label || '預備';
+    if (lamp) { lamp.classList.add('is-on'); lamp.classList.remove('is-fever'); }
+    if (wheel) { wheel.classList.add('is-armed', 'is-spin'); }
+  }
+  function updateCabToys() {
+    const wheel = $('miniWheel');
+    const lamp = $('bonusLamp');
+    const sub = $('bonusLampSub');
+    if (!wheel && !lamp) return;
+    const stagesOn = anyStageModeOn();
+    if (wheel) {
+      wheel.classList.toggle('off', !stagesOn);
+      const spinning = performance.now() < bonusArmedUntil;
+      if (!spinning) wheel.classList.remove('is-armed', 'is-spin');
+    }
+    if (!lamp) return;
+    const feverEl = $('feverBanner');
+    const feverOn = feverEl && !feverEl.hidden;
+    const armed = performance.now() < bonusArmedUntil;
+    const stageOpen = !!($('stageOverlay') && !$('stageOverlay').hidden);
+    const on = armed || feverOn || stageOpen;
+    lamp.classList.toggle('is-on', on);
+    lamp.classList.toggle('is-fever', !!feverOn && !stageOpen);
+    if (sub) {
+      if (stageOpen) sub.textContent = '舞台中';
+      else if (feverOn) sub.textContent = ($('feverTag')?.textContent || 'FEVER');
+      else if (armed) { /* keep label from armBonusLamp */ }
+      else if (!stagesOn && !settings.modes.fever && !settings.modes.slotBonus) sub.textContent = '關閉';
+      else sub.textContent = '待機';
+    }
+  }
+
   function render() {
     const jpRow = $('jpRow');
     if (jpRow) {
@@ -1158,6 +1234,7 @@
     const jpMiniVal = $('jpMiniVal');
     if (jpMiniVal) jpMiniVal.textContent = String(Math.floor(state.jp));
     if (jpMini) jpMini.classList.toggle('off', !settings.modes.jp);
+    updateCabToys();
     renderBingo();
     winLed.set(state.win);
     creditLed.set(state.credit);
@@ -2128,6 +2205,7 @@
       : trig && trig.kind === 'special'
         ? '特殊燈・進入舞台'
         : '進入舞台';
+    armBonusLamp(trig && trig.kind === 'once' ? 'ONCE→舞台' : '特殊→舞台', 2800);
     setMsg(why, 'hot');
     Sound.lucky();
     celebrateHit({
@@ -3107,14 +3185,232 @@
     } catch {
       oddsHint.textContent = '預估 RTP —';
     }
+    try { refreshProgressUI(); } catch (_) {}
+  }
+
+  function fmtSavedAt(ts) {
+    if (!ts) return '尚未儲存';
+    try {
+      const d = new Date(ts);
+      const p = (n) => String(n).padStart(2, '0');
+      return `${p(d.getMonth() + 1)}/${p(d.getDate())} ${p(d.getHours())}:${p(d.getMinutes())}:${p(d.getSeconds())}`;
+    } catch { return '—'; }
+  }
+  function refreshProgressUI() {
+    const el = (id) => $(id);
+    if (!el('progStatus')) return;
+    const refund = state.betsPaid ? sum(state.bets) : 0;
+    const credit = state.credit + (roundPersist ? refund : (state.betsPaid ? refund : 0));
+    // Show live totals (what save() would write for CREDIT folds paid stakes).
+    const showCredit = state.credit + (state.betsPaid ? sum(state.bets) : 0);
+    if (el('progCredit')) el('progCredit').textContent = String(showCredit);
+    if (el('progWin')) el('progWin').textContent = String(roundPersist ? roundPersist.win : state.win);
+    if (el('progJp')) el('progJp').textContent = String(Math.floor(roundPersist ? roundPersist.jp : state.jp));
+    const bets = state.bets;
+    const betSum = sum(bets);
+    const betN = bets.filter((n) => n > 0).length;
+    if (el('progBets')) el('progBets').textContent = betSum ? `${betN}格・${betSum}` : '無';
+    const bingo = roundPersist ? roundPersist.bingo : state.bingo;
+    const marked = (bingo || []).reduce((n, v) => n + (v ? 1 : 0), 0);
+    if (el('progBingo')) el('progBingo').textContent = `${marked}/9`;
+    const hold = roundPersist ? roundPersist.holdCount : holdCount;
+    if (el('progHold')) el('progHold').textContent = `${hold}/4`;
+    if (el('progSavedAt')) el('progSavedAt').textContent = lastSavedAt ? `已存 ${fmtSavedAt(lastSavedAt)}` : '自動儲存中';
+    if (el('progNote')) {
+      const preset = settings.preset || 'custom';
+      const modesOn = MODE_KEYS.filter((k) => settings.modes && settings.modes[k]).length;
+      el('progNote').textContent = `設定：${preset}・玩法 ${modesOn}/${MODE_KEYS.length}・音量 SFX ${Math.round((settings.sfxVol || 0) * 100)}%`;
+    }
+  }
+
+  const SET_NAV = [
+    ['preset', '難度'], ['rates', '機率'], ['weights', '權重'], ['modes', '玩法'],
+    ['credit', '分數'], ['audio', '音量'], ['music', '音樂'], ['progress', '進度'],
+  ];
+  function jumpToSec(id) {
+    const body = $('setBody');
+    const sec = document.getElementById('sec-' + id) || body?.querySelector(`[data-sec="${id}"]`);
+    if (!sec || !body) return;
+    sec.scrollIntoView({ behavior: 'smooth', block: 'start' });
+    $('setNav')?.querySelectorAll('.set-chip').forEach((c) => {
+      const on = c.dataset.jump === id;
+      c.classList.toggle('on', on);
+      c.setAttribute('aria-selected', String(on));
+    });
+  }
+  function filterSettings(q) {
+    const query = (q || '').trim().toLowerCase();
+    const body = $('setBody');
+    if (!body) return;
+    body.querySelectorAll('.set-sec').forEach((sec) => {
+      let any = false;
+      const secText = (sec.querySelector('h3')?.textContent || '') + ' ' + (sec.dataset.sec || '');
+      const secHit = !query || secText.toLowerCase().includes(query)
+        || (sec.textContent || '').toLowerCase().includes(query);
+      // Per-item filter for modes / weights / range labels
+      sec.querySelectorAll('.mode-list label, .weight-list .range-label, .set-sec > .range-label').forEach((lab) => {
+        const t = (lab.textContent || '').toLowerCase();
+        const hit = !query || t.includes(query);
+        lab.classList.toggle('is-filtered-out', query ? !hit : false);
+        if (hit) any = true;
+      });
+      const hasItems = sec.querySelector('.mode-list label, .weight-list .range-label, .set-sec > .range-label');
+      const show = !query || secHit || any || !hasItems && secHit;
+      // If section has filterable items, require any match; else use secHit
+      if (hasItems && query) sec.classList.toggle('is-filtered-out', !any && !secHit);
+      else sec.classList.toggle('is-filtered-out', query ? !secHit : false);
+    });
+  }
+  function wireSettingsChrome() {
+    const nav = $('setNav');
+    const body = $('setBody');
+    const search = $('setSearch');
+    if (nav && !nav._wired) {
+      nav._wired = true;
+      nav.addEventListener('click', (e) => {
+        const chip = e.target.closest('[data-jump]');
+        if (!chip) return;
+        e.preventDefault();
+        jumpToSec(chip.dataset.jump);
+        Sound.bet();
+      });
+    }
+    if (search && !search._wired) {
+      search._wired = true;
+      search.addEventListener('input', () => filterSettings(search.value));
+      search.addEventListener('keydown', (e) => {
+        if (e.key === 'Enter') { e.preventDefault(); e.stopPropagation(); }
+      });
+    }
+    if (body && !body._obs && typeof IntersectionObserver === 'function') {
+      body._obs = true;
+      const secs = [...body.querySelectorAll('.set-sec[data-sec]')];
+      const io = new IntersectionObserver((entries) => {
+        const vis = entries.filter((en) => en.isIntersecting).sort((a, b) => b.intersectionRatio - a.intersectionRatio)[0];
+        if (!vis) return;
+        const id = vis.target.dataset.sec;
+        nav?.querySelectorAll('.set-chip').forEach((c) => {
+          const on = c.dataset.jump === id;
+          c.classList.toggle('on', on);
+          c.setAttribute('aria-selected', String(on));
+        });
+      }, { root: body, threshold: [0.35, 0.55] });
+      secs.forEach((s) => io.observe(s));
+    }
+    // Progress actions
+    const saveBtn = $('btnSaveNow');
+    const expBtn = $('btnExportSave');
+    const impBtn = $('btnImportSave');
+    const clrBtn = $('btnClearProgress');
+    const fileInp = $('importFile');
+    if (saveBtn && !saveBtn._wired) {
+      saveBtn._wired = true;
+      saveBtn.addEventListener('click', () => {
+        if (state.busy) { deny(BUSY_MSG); return; }
+        save();
+        saveSettings();
+        refreshProgressUI();
+        toast('進度已儲存', 'ok');
+        Sound.bet();
+      });
+    }
+    if (expBtn && !expBtn._wired) {
+      expBtn._wired = true;
+      expBtn.addEventListener('click', () => {
+        try {
+          const blob = new Blob([JSON.stringify(buildBackup(), null, 2)], { type: 'application/json' });
+          const a = document.createElement('a');
+          const stamp = new Date().toISOString().slice(0, 19).replace(/[:T]/g, '-');
+          a.href = URL.createObjectURL(blob);
+          a.download = `xiaomali-backup-${stamp}.json`;
+          a.click();
+          setTimeout(() => URL.revokeObjectURL(a.href), 2000);
+          toast('已匯出備份', 'ok');
+          Sound.bet();
+        } catch (err) {
+          deny('匯出失敗');
+        }
+      });
+    }
+    if (impBtn && fileInp && !impBtn._wired) {
+      impBtn._wired = true;
+      impBtn.addEventListener('click', () => {
+        if (state.busy) { deny(BUSY_MSG); return; }
+        fileInp.value = '';
+        fileInp.click();
+      });
+      fileInp.addEventListener('change', async () => {
+        const f = fileInp.files && fileInp.files[0];
+        if (!f) return;
+        try {
+          const text = await f.text();
+          const data = JSON.parse(text);
+          const prog = data.progress || data;
+          const set = data.settings;
+          if (!prog || !Number.isFinite(prog.credit)) throw new Error('格式不符');
+          const ok = await confirmBox('匯入備份',
+            `將覆蓋目前進度${set ? '與設定' : ''}（CREDIT ${Math.floor(prog.credit)}）。確定？`, '匯入');
+          if (!ok) { toast('已取消匯入', 'info'); return; }
+          applyProgressData(prog, { restoreHold: true });
+          if (set && typeof set === 'object') {
+            const v = validateSettings(set);
+            settings = v.s;
+            if (set.music && MUSIC_TRACKS[set.music]) Music.track = set.music;
+            saveSettings();
+          }
+          save();
+          setLight(state.pos);
+          refreshSettingsUI();
+          render();
+          Music.applyVolume();
+          toast('備份已匯入', 'ok');
+          Sound.bet();
+        } catch (err) {
+          deny('匯入失敗：檔案無效');
+        }
+      });
+    }
+    if (clrBtn && !clrBtn._wired) {
+      clrBtn._wired = true;
+      clrBtn.addEventListener('click', async () => {
+        if (state.busy) { deny(BUSY_MSG); return; }
+        const ok = await confirmBox('清除進度',
+          'CREDIT／WIN／押注／賓果／JP／保留燈將歸零（設定保留）。確定？', '清除');
+        if (!ok) { toast('已取消', 'info'); return; }
+        state.credit = startCreditAmount();
+        state.win = 0;
+        state.bets = new Array(SYMBOLS.length).fill(0);
+        state.betsPaid = true;
+        state.lastPlayedBets = new Array(SYMBOLS.length).fill(0);
+        state.jp = JP.seed;
+        state.bingo = new Array(9).fill(false);
+        state.bingoLineWins = 0;
+        FX.holdsSet(0);
+        save();
+        render();
+        refreshProgressUI();
+        toast('進度已清除', 'ok');
+        Sound.bet();
+      });
+    }
   }
 
   function openSettings() {
     if (state.busy) { deny(BUSY_MSG); return; }
     if (confirmDlg?.open) { deny('請先關閉視窗'); return; }
+    wireSettingsChrome();
+    const search = $('setSearch');
+    if (search) { search.value = ''; filterSettings(''); }
     refreshSettingsUI();
+    refreshProgressUI();
     if (typeof settingsDlg.showModal === 'function') settingsDlg.showModal();
     else settingsDlg.setAttribute('open', '');
+    // Reset scroll to top section
+    requestAnimationFrame(() => {
+      const body = $('setBody');
+      if (body) body.scrollTop = 0;
+      jumpToSec('preset');
+    });
   }
 
   const SEEN_HELP_KEY = 'xiaomali.seenHelp.v1';
@@ -3591,6 +3887,16 @@
   // ---------------------------------------------------------------------------
   // boot
   // ---------------------------------------------------------------------------
+  // Device pixel ratio → CSS hairlines / crisp borders (Pro Max ≈3).
+  (function applyDpr() {
+    const dpr = Math.max(1, Math.min(3, window.devicePixelRatio || 1));
+    document.documentElement.style.setProperty('--dpr', String(dpr));
+  })();
+  window.addEventListener('resize', () => {
+    const dpr = Math.max(1, Math.min(3, window.devicePixelRatio || 1));
+    document.documentElement.style.setProperty('--dpr', String(dpr));
+  });
+
   loadSettings();
   load();
   if (Number.isFinite(state._pendingHold)) {
@@ -3615,6 +3921,6 @@
       render();
       return { fixed: v.fixed, errors: v.errors, warnings: v.warnings };
     },
-    validateSettings, toast,
+    validateSettings, toast, save, load, buildBackup, applyProgressData,
   };
 })();
