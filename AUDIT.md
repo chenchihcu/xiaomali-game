@@ -1,55 +1,49 @@
-# Audit — 第三輪（按鍵／押注／舞台／給分／soft-lock）（2026-10-05）
+# Audit — 第四輪（賓果動畫／存檔／設定連動／文案）（2026-10-05）
 
-Scope: `/workspace/xiaomali` after `a334d3d`.
-Method: code review + `node --check` + `node sim.js` + all-modes census + `forceStage` probe + label/hint cross-check.
+Scope: `/workspace/xiaomali` after `a5ff15b`.
+Method: code review + `node --check` + `node sim.js` + forceStage probe + bingo step-board progression + label/hint cross-check.
 
 ## Issues found → fixed
 
 | # | Area | Issue | Fix |
 |---|---|---|---|
-| 1 | Buttons / bets | 局後 `betsPaid=false` 時點任一水果會經 `freshBets()` **清掉整排押注**（只留當下那顆）— 像按鍵壞掉／誤觸全滅 | 移除 `freshBets`；未付預覽改為只加該格（與加倍相同邏輯），`開始` 再扣 `sum(bets)` |
-| 2 | Stages wiring | `opts.forceStage` 寫在稽核說明但 **resolveRound 從未讀取**（實際命中≈隨機） | 接上 `forcedKind`：跳過 `STAGE_ENTRY` 機率、仍受 `maxPerRound`；若整局無特殊／ONCE 也會在結尾強制開一次 |
-| 3 | Math / labels | 舞台 `floor(押×倍/6)` 在 **單押／低總押** 常為 0，與「進場給分」文案不符（輪盤色／骰寶小大尤明顯） | `stagePayFromTotal`：`mult>0` 時至少給 1（`×0` 轉輪仍為 0） |
-| 4 | Copy | `MODE_HINTS`／註解仍寫 `/4` 或未提特殊燈／ONCE 入口；賓果註解誤寫 `ceil(押/2)` | 提示與註解改對齊 `/6`、特殊燈／ONCE、賓果 `floor(押/4)`；玩法說明補舞台公式 |
-| 5 | Soft-lock | `start()` 若在轉輪／舞台 await 中拋錯，可能留下 `.spinning` 轉輪＋busy 已清 | `finally` 額外清 reel `spinning`/`landed`、overlay、FEVER、once banner |
-| 6 | UI | 自動鍵 SVG 中心圓點易被看成字母「b」 | 改為循環箭頭＋時鐘指針圖示 |
+| 1 | Bingo / UI | `start()` 一進局就把 `state.bingo` 設成**整局最終盤**，賓果步驟的 `step.board` 沒用上 → 標格／連線動畫跳過、任務條提前跳滿 | 改為逐步套用：先亮 `step.cell`、播連線，再寫入 `step.board`；局末再同步 `result.bingoBoard` |
+| 2 | Persistence | `save()` 在 `busy` 時不把已扣押注折回 CREDIT；中途重新整理會**吃掉本局押金**，又把同一排押注載成未付預覽 | `betsPaid` 時一律 `credit += sum(bets)` 寫入 LS（記憶體內仍維持已付） |
+| 3 | Settings | `onceRate` 在關「連跑／大 ONCE」時被 dim／disabled，但 **超跑仍吃 onceRate** → 玩家無法調超跑機率 | dim 條件改為：`(once∧(multi∨big)) ∨ superRun` 任一成立就保持可調 |
+| 4 | Soft-lock | `start()` `finally` 清了轉輪／overlay／FEVER，但 **cabinet `fx-spin` 等 class 可能殘留** | `finally` 加 `FX.clear()` |
+| 5 | Copy | `MODE_HINTS`／玩法說明寫 `floor(…)`，與引擎 `max(1, floor(…))`（轉輪 ×0 除外）不完全一致 | 提示與 help 改對齊 min-1 公式 |
 
-## All-modes-ON trigger census (`node`, 40k rounds, normal)
+## All-modes-ON trigger census (prior round still holds; re-checked forceStage)
 
-| Mode | Round rate | Notes |
-|---|---|---|
-| once | ~4.0% | base ONCE MORE stops |
-| song / train / sanyuan | ~1.9% / 1.2% / 1.0% | LUCKY after land |
-| slotBonus | ~0.8% | special / ONCE |
-| fever | ~0.9% | JP / mult≥20 / special / solid hit |
-| superRun | ~1.5% | paying/special × onceRate |
-| jp | ~0.2% | rare by design |
-| doubleRun | ~3.0% | land FX |
-| cabinet stages (sum) | ~1.8% | ≤1/round；各約 0.3% |
-| forceStage | **100/100** | 修後保證進場 |
+| Mode | Notes |
+|---|---|
+| forceStage | **6/6 kinds × 30/30** |
+| sicbo min-1 | **0** violations on 單押1（mult>0） |
+| once / song / train / sanyuan / stages | rates unchanged from audit 3 (~4% / 1–2% / ~0.3% each stage) |
 
-## RTP (`node sim.js 80000`)
+## RTP (`node sim.js 30000`)
 
 | Preset | 全押 RTP |
 |---|---|
-| 輕鬆 | ≈126% |
-| **標準** | **≈101%** |
+| 輕鬆 | ≈128% |
+| **標準** | **≈100–101%** |
 | 困難 | ≈83% |
-| 標準無彩蛋 | ≈79% |
+| 標準無彩蛋 | ≈81% |
 
 ## Verified OK
 
 - `bindTap`／開分 commit-on-up／水果 hold-repeat／`visualViewport` resize-only
-- `start` / `collect` / `gamble` / cabinet stages 皆有 `try/finally` 清 `busy`
-- 全開玩法時各模式仍有可感觸發率（同上表）
-- `MODE_LABELS` / `MODE_HINTS` 與引擎路徑一致（舞台＝特殊燈／ONCE；FEVER 入口；賓果連線公式）
+- `start` / `collect` / `gamble` / cabinet stages `try/finally` 清 `busy`
+- `forceStage` 保證進場；舞台 `stagePayFromTotal` min 1（×0 除外）
+- 局後未付預覽加押不整排清空；例外路徑清轉輪／overlay／FX
+- `MODE_LABELS` / `MODE_HINTS` / 玩法說明與引擎公式一致
 
 ## Remaining risks (watch)
 
-1. 蘋果單押 RTP 仍偏低（≈65%，小圖×3 權重堆疊）— 未為保全押≈100% 強行拉高。
-2. 骰寶／輪盤進場後娛樂給分（edge 主要在進場率）；低總押現為至少 1。
-3. 六種櫃舞台共用一個進場名額（全開時各約 0.3%）。
-4. 無 crypto RNG 深度稽核（僅 `crypto.getRandomValues` float）。
+1. 蘋果單押 RTP 仍偏低（≈60–70%，小圖×3 權重堆疊）— 未為保全押≈100% 強行拉高。
+2. 六種櫃舞台共用一個進場名額（全開時各約 0.3%）。
+3. 無 crypto RNG 深度稽核（僅 `crypto.getRandomValues` float）。
+4. 極矮視窗 fit-2 後 bet key 寬度仍依賴 `--W` 下限；現有 360／250 floor 已測過，極端橫向需再盯。
 
 ## How to re-check
 
@@ -59,4 +53,4 @@ node sim.js 120000
 node -e "const E=require('./engine.js'); let n=0; for(let i=0;i<50;i++){const r=E.resolveRound([1,1,1,1,1,1,1,1],E.DEFAULT_SETTINGS,Math.random,200,{forceStage:'roulette'}); if(r.steps.some(s=>s.type==='roulette'))n++;} console.log(n+'/50');"
 ```
 
-DevTools iPhone 16 Pro Max：局後點單一水果應保留其他押注；中途例外不得留下灰掉操作台或空轉輪。
+DevTools iPhone 16 Pro Max：賓果標格應逐步亮起再清線；旋轉中強制重新整理後 CREDIT 不應少掉當局押金；僅開「超跑」時連跑機率滑桿仍可調。

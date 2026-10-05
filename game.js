@@ -574,7 +574,9 @@
 
   function save() {
     try {
-      const refund = state.betsPaid && !state.busy ? sum(state.bets) : 0;
+      // Always fold paid stakes into saved CREDIT. Mid-spin refresh used to
+      // drop the stake (busy ⇒ no refund) while reloading bets as unpaid.
+      const refund = state.betsPaid ? sum(state.bets) : 0;
       localStorage.setItem(STORAGE_KEY, JSON.stringify({
         credit: state.credit + refund,
         win: state.win,
@@ -2179,7 +2181,7 @@
     try {
     const potBefore = settings.modes.jp ? state.jp : 0;
     const result = E.resolveRound(state.bets, settings, randomFloat, potBefore, { bingoBoard: state.bingo });
-    if (Array.isArray(result.bingoBoard)) state.bingo = result.bingoBoard.map(Boolean);
+    // Apply bingo snapshots per step (not the final board) so marks / lines animate.
     let roundWin = 0;
     let inOnceRun = false;
     let onceVariant = 'single';
@@ -2363,8 +2365,12 @@
       }
 
       if (step.type === 'bingo') {
-        renderBingo();
-        if (step.cell >= 0) flashBingoCell(step.cell);
+        // Show the freshly marked cell on the live board first (step.board is post-clear).
+        if (step.cell >= 0 && state.bingo.length === 9) {
+          state.bingo[step.cell] = true;
+          renderBingo();
+          flashBingoCell(step.cell);
+        }
         if (step.lines && step.lines.length) {
           celebrateHit({
             amount: step.gained || 30,
@@ -2383,6 +2389,7 @@
         } else {
           await sleep(180);
         }
+        if (Array.isArray(step.board)) state.bingo = step.board.map(Boolean);
         renderBingo();
         continue;
       }
@@ -2429,6 +2436,7 @@
       }
     }
     hideOnceBanner();
+    if (Array.isArray(result.bingoBoard)) state.bingo = result.bingoBoard.map(Boolean);
     renderBingo();
 
     state.jp = E.nextJpPot(state.jp, total, result.jpWin, settings);
@@ -2466,10 +2474,11 @@
       hideOnceBanner();
       closeStageOverlay();
       FX.hideFever();
-      // Soft-lock guards: never leave reels/deck stuck if a stage/light await threw.
+      // Soft-lock guards: never leave reels/deck/FX stuck if a stage/light await threw.
       try {
         reelStrips.forEach((r) => r.parent.classList.remove('landed', 'spinning'));
       } catch (_) { /* boot race */ }
+      try { FX.clear(); } catch (_) { /* */ }
       state.busy = false;
       render();
       save();
@@ -2908,7 +2917,8 @@
       el.disabled = off;
       el.closest('label')?.classList.toggle('dim', off);
     };
-    dim('onceRate', !m.once || !(m.onceMulti || m.onceBig));
+    // onceRate also scales 超跑 — keep the slider live when superRun is on.
+    dim('onceRate', !((m.once && (m.onceMulti || m.onceBig)) || m.superRun));
     dim('bonusRate', !(BONUS_MODES.some((k) => m[k]) || m.slotBonus || m.fever || STAGE_MODES.some((k) => m[k])));
     dim('jpRate', !m.jp);
     const wOnce = weightList.querySelector('input[data-weight="once"]');
