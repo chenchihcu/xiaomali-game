@@ -35,6 +35,20 @@ Credit/win/sound/jp/lastBets: `xiaomali.v1`.
 Frame LED rails, side lamps, 假保留燈 strip, FEVER/READY banner. Classes on `#cabinet`:
 `fx-spin` / `fx-reach` / `fx-expect` / `fx-win` / `fx-fever`. No gameplay effect.
 
+## UI 防呆 (guards)
+- `why.*()` in `game.js` returns a reason string (blocked) or `null` for every action
+  (`start/clear/all/bet(i)/dbl/rebet/auto/collect/gamble/open/wash/reset`). `render()` greys
+  controls via `.off` + `aria-disabled` (not native `disabled`) so a tap still explains why via `toast()`.
+- Action functions re-check `why.*` themselves (keyboard/console paths too). `state.busy` is set
+  synchronously before any `await`; `guarded()` adds a per-action cooldown (double-tap, Space on a
+  focused button, key repeat ignored). One pending `autoTimer` only.
+- Auto stops with a toast as soon as CREDIT+WIN can't cover the next pattern.
+- 洗分 and 重設分數 go through `confirmBox()` (`#confirmDialog`).
+- Settings: `validateSettings()` clamps/snaps every value to the slider `min/max/step` in `index.html`
+  (single source of truth), repairs all-zero fruit weights, and `settingsWarnings()` lists ineffective
+  combos in `#setAlert`. Dependent controls (連跑/大 ONCE MORE, rate sliders) grey out when their mode is off.
+  Loaded/console settings are validated too (`__xiaomali.setSettings` returns `{fixed, errors, warnings}`).
+
 ## Game rules in code
 - Stop = `effectiveWeights` (ONCE MORE weight 0 if `modes.once` off).
 - `resolveRound` steps: `once` `{grant,remaining,variant}` → `land` `{runsLeft}` → optional `bonus` / `jp`.

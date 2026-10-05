@@ -201,12 +201,25 @@
         <p class="hint">程序合成音・🔇 一併關 BGM</p>
       </section>
 
+      <div class="set-alert" id="setAlert" hidden role="status" aria-live="polite"></div>
+
       <div class="sheet-actions triple">
         <button class="btn btn-arcade btn-blue" value="help" id="btnOpenHelp" type="submit">玩法</button>
         <button class="btn btn-arcade btn-yellow" value="reset" id="btnReset" type="submit">重設分數</button>
         <button class="btn btn-arcade btn-green" value="close" type="submit">完成</button>
       </div>
       <p class="disclaimer">娛樂用・虛擬分數・非賭博</p>
+    </form>
+  </dialog>
+
+  <dialog class="sheet confirm-sheet" id="confirmDialog">
+    <form method="dialog">
+      <h2 id="confirmTitle">確認</h2>
+      <p class="confirm-text" id="confirmText"></p>
+      <div class="sheet-actions">
+        <button class="btn btn-arcade btn-slate" value="cancel" id="confirmCancel" type="submit">取消</button>
+        <button class="btn btn-arcade btn-orange" value="ok" id="confirmOk" type="submit">確定</button>
+      </div>
     </form>
   </dialog>
 
@@ -222,6 +235,7 @@
         <li>WIN 可「得分」或比大小（1–4 小、6–9 大；5 和）。</li>
         <li>「開分」虛擬加分（點 +100／按住 +500）；「洗分」WIN→CREDIT 後清零。</li>
         <li>⚙️ 調難度、中彩／連跑／JP 機率、停燈權重、押注單位、音量。分數存本機。</li>
+        <li>防呆：轉動中按鈕變灰；無押注／CREDIT 不足無法開始；CREDIT 不夠會自動停；設定超出範圍會修正並提示。</li>
       </ol>
       <table class="paytable" id="paytable"></table>
       <p class="disclaimer">娛樂用・虛擬分數・非賭博</p>

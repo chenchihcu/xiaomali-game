@@ -35,6 +35,7 @@
   })();
 
   const START_CREDIT = 1000;
+  const CREDIT_CAP = 999999;
   const MAX_BET_PER_SYMBOL = 99;
   const STORAGE_KEY = 'xiaomali.v1';
   const SETTINGS_KEY = 'xiaomali.settings.v1';
@@ -377,8 +378,13 @@
   function loadSettings() {
     try {
       const d = JSON.parse(localStorage.getItem(SETTINGS_KEY) || 'null');
-      settings = E.normalizeSettings(d);
       if (d && MUSIC_TRACKS[d.music]) Music.track = d.music;
+      const v = validateSettings(d);
+      settings = v.s;
+      if (d && (v.fixed.length || v.errors.length)) {
+        settingsNotice = v.errors[0] || `設定超出範圍，已修正：${v.fixed.slice(0, 3).join('、')}${v.fixed.length > 3 ? '…' : ''}`;
+        saveSettings();
+      }
     } catch { settings = E.normalizeSettings(null); }
   }
 
@@ -702,6 +708,54 @@
     msgEl.className = 'msg' + (cls ? ' ' + cls : '');
   }
 
+  // --- 防呆 feedback: toast + confirm --------------------------------------
+  // Toast lives in <body>, but re-parents into an open modal <dialog> so it
+  // stays visible above the top layer (settings errors, etc.).
+  const toastEl = document.createElement('div');
+  toastEl.className = 'toast';
+  toastEl.setAttribute('role', 'alert');
+  toastEl.setAttribute('aria-live', 'assertive');
+  document.body.appendChild(toastEl);
+  let toastTimer = null;
+  function toast(text, kind = 'info', ms = 1900) {
+    const host = document.querySelector('dialog[open]') || document.body;
+    if (toastEl.parentNode !== host) host.appendChild(toastEl);
+    const same = toastEl.classList.contains('show') && toastEl.textContent === text;
+    toastEl.textContent = text;
+    toastEl.className = 'toast show ' + kind;
+    if (same) {
+      // re-trigger a small bump so repeated taps still read as feedback
+      toastEl.classList.remove('bump');
+      void toastEl.offsetWidth;
+      toastEl.classList.add('bump');
+    }
+    clearTimeout(toastTimer);
+    toastTimer = setTimeout(() => toastEl.classList.remove('show'), ms);
+  }
+  /** Reject an action: error beep + red toast (+ VFD line). */
+  function deny(reason, { vfd = true } = {}) {
+    Sound.error();
+    toast(reason, 'bad');
+    if (vfd) setMsg(reason, 'bad');
+  }
+
+  const confirmDlg = $('confirmDialog');
+  /** Cabinet-styled confirm. Resolves true on 確定. */
+  function confirmBox(title, text, okLabel = '確定') {
+    if (!confirmDlg || typeof confirmDlg.showModal !== 'function') {
+      return Promise.resolve(window.confirm(`${title}\n${text}`));
+    }
+    $('confirmTitle').textContent = title;
+    $('confirmText').textContent = text;
+    $('confirmOk').textContent = okLabel;
+    confirmDlg.returnValue = '';
+    return new Promise((resolve) => {
+      confirmDlg.addEventListener('close', () => resolve(confirmDlg.returnValue === 'ok'), { once: true });
+      confirmDlg.showModal();
+      $('confirmCancel').focus();
+    });
+  }
+
   const onceBanner = $('onceBanner');
   const onceBannerTag = $('onceBannerTag');
   const onceBannerCount = $('onceBannerCount');
@@ -727,6 +781,99 @@
     if (trail >= 2) tileEls[(pos - 2 + N) % N].classList.add('trail2');
   }
 
+  // --- 防呆: availability rules. Each returns a reason string (blocked) or null.
+  const BUSY_MSG = '轉動中・請稍候';
+  const NO_CREDIT = 'CREDIT 不足・請開分';
+  const avail = () => state.credit + state.win;          // WIN auto-collects before betting
+  const paidRefund = () => (state.betsPaid ? sum(state.bets) : 0);
+  const lastPattern = () => (sum(state.lastPlayedBets) > 0 ? state.lastPlayedBets : state.bets);
+  const doubledTotal = () => state.bets.reduce((a, b) => a + Math.min(MAX_BET_PER_SYMBOL, b * 2), 0);
+
+  const why = {
+    start() {
+      if (state.busy) return BUSY_MSG;
+      const total = sum(state.bets);
+      if (total <= 0) return '請先押注再開始';
+      if (!state.betsPaid && avail() < total) return `CREDIT 不足（需 ${total}）・請清除或開分`;
+      return null;
+    },
+    clear() {
+      if (state.busy) return BUSY_MSG;
+      if (sum(state.bets) <= 0) return '目前沒有押注';
+      return null;
+    },
+    all() {
+      if (state.busy) return BUSY_MSG;
+      if (avail() < 1) return NO_CREDIT;
+      if (state.betsPaid && state.bets.every((b) => b >= MAX_BET_PER_SYMBOL)) return `已全部押滿 ${MAX_BET_PER_SYMBOL}`;
+      return null;
+    },
+    bet(i) {
+      if (state.busy) return BUSY_MSG;
+      if (avail() < 1) return NO_CREDIT;
+      if (state.betsPaid && state.bets[i] >= MAX_BET_PER_SYMBOL) return `${SYMBOLS[i].name} 已達上限 ${MAX_BET_PER_SYMBOL}`;
+      return null;
+    },
+    dbl() {
+      if (state.busy) return BUSY_MSG;
+      const total = sum(state.bets);
+      if (total <= 0) return '請先押注再加倍';
+      const dbl = doubledTotal();
+      if (dbl <= total) return '押注已達上限';
+      if (state.betsPaid) { if (avail() < 1) return NO_CREDIT; }
+      else if (avail() < dbl) return `CREDIT 不足（加倍需 ${dbl}）`;
+      return null;
+    },
+    rebet() {
+      if (state.busy) return BUSY_MSG;
+      const need = sum(lastPattern());
+      if (need <= 0) return '沒有上一局押注';
+      if (avail() + paidRefund() < need) return `CREDIT 不足（續押需 ${need}）`;
+      return null;
+    },
+    auto() {
+      if (state.auto) return null; // always allowed to switch off
+      if (state.busy) return BUSY_MSG;
+      const need = sum(lastPattern());
+      if (need <= 0) return '請先押注再自動';
+      if (!(state.betsPaid && sum(state.bets) > 0) && avail() + paidRefund() < need) return `CREDIT 不足（需 ${need}）・無法自動`;
+      return null;
+    },
+    collect() {
+      if (state.busy) return BUSY_MSG;
+      if (state.win <= 0) return '沒有 WIN 可得分';
+      return null;
+    },
+    gamble() {
+      if (state.busy) return BUSY_MSG;
+      if (state.win <= 0) return '沒有 WIN 可比倍';
+      return null;
+    },
+    open() {
+      if (state.busy) return BUSY_MSG;
+      if (state.credit >= CREDIT_CAP) return 'CREDIT 已達上限';
+      return null;
+    },
+    wash() {
+      if (state.busy) return BUSY_MSG;
+      if (avail() + paidRefund() <= 0) return '沒有分數可洗';
+      return null;
+    },
+    reset() {
+      if (state.busy) return BUSY_MSG;
+      return null;
+    },
+  };
+
+  /** Grey a control but keep it tappable so a tap can explain why (toast). */
+  function setAvail(el, reason) {
+    const off = !!reason;
+    el.disabled = false;
+    el.classList.toggle('off', off);
+    el.setAttribute('aria-disabled', String(off));
+    if (off) el.title = reason; else el.removeAttribute('title');
+  }
+
   function render() {
     const jpRow = $('jpRow');
     if (jpRow) {
@@ -739,24 +886,24 @@
       k.led.set(state.bets[i] || 0, { pad: ' ' });
       k.cell.classList.toggle('stale', !state.betsPaid && state.bets[i] > 0);
     });
-    const idle = !state.busy;
+    const startWhy = why.start();
+    setAvail(btn.start, startWhy);
+    setAvail(btn.clear, why.clear());
+    setAvail(btn.all, why.all());
+    setAvail(btn.collect, why.collect());
+    setAvail(btn.small, why.gamble());
+    setAvail(btn.big, why.gamble());
+    setAvail(btn.open, why.open());
+    setAvail(btn.wash, why.wash());
+    setAvail(btn.dbl, why.dbl());
+    setAvail(btn.rebet, why.rebet());
+    setAvail(btn.auto, why.auto());
+    betKeys.forEach((k, i) => setAvail(k.el, why.bet(i)));
+    if (btn.reset) btn.reset.disabled = state.busy;
+    document.body.classList.toggle('is-busy', state.busy);
     const hasWin = state.win > 0;
-    const hasBets = sum(state.bets) > 0;
-    const hasLast = sum(state.lastPlayedBets) > 0 || hasBets;
-    btn.start.disabled = !idle;
-    btn.clear.disabled = !idle;
-    btn.all.disabled = !idle;
-    btn.collect.disabled = !idle || !hasWin;
-    btn.small.disabled = !idle || !hasWin;
-    btn.big.disabled = !idle || !hasWin;
-    btn.open.disabled = !idle;
-    btn.wash.disabled = !idle;
-    btn.dbl.disabled = !idle || !hasBets;
-    btn.rebet.disabled = !idle || !hasLast;
-    btn.auto.disabled = false; // can always toggle off
-    betKeys.forEach((k) => (k.el.disabled = !idle || state.auto));
-    btn.collect.classList.toggle('flash', idle && hasWin && !state.auto);
-    btn.start.classList.toggle('flash', idle && !hasWin && hasBets && !state.auto);
+    btn.collect.classList.toggle('flash', !state.busy && hasWin && !state.auto);
+    btn.start.classList.toggle('flash', !startWhy && !hasWin && !state.auto);
     btn.auto.classList.toggle('on', state.auto);
     btn.auto.classList.toggle('flash', state.auto);
     btn.auto.textContent = state.auto ? '自動中' : '自動';
@@ -813,7 +960,8 @@
   }
 
   function bet(i) {
-    if (state.busy) return false;
+    const reason = why.bet(i);
+    if (reason) { deny(reason); render(); return false; }
     if (state.auto) stopAuto();
     collectInstant();
     clearHighlights();
@@ -827,8 +975,7 @@
     const room = MAX_BET_PER_SYMBOL - state.bets[i];
     const add = Math.min(unit, room, state.credit);
     if (add < 1) {
-      setMsg('分數不足・⚙️ 可重設', 'bad');
-      Sound.error();
+      deny(NO_CREDIT);
       render();
       return false;
     }
@@ -836,13 +983,17 @@
     state.credit -= add;
     Sound.bet();
     setMsg(`已押 ${sum(state.bets)}・按開始`);
+    if (add < unit && add < room && state.credit === 0) {
+      toast(`CREDIT 不足，只押上 ${add}`, 'warn');
+    }
     render();
     save();
     return true;
   }
 
   function betAll() {
-    if (state.busy) return;
+    const reason = why.all();
+    if (reason) { deny(reason); render(); return; }
     collectInstant();
     clearHighlights();
     freshBets();
@@ -858,14 +1009,18 @@
       state.credit -= add;
       added += add;
     }
-    if (added) { Sound.seq([784, 988, 1175], 0.05, 'triangle', 0.07); setMsg(`全押 ${sum(state.bets)}`); }
-    else { Sound.error(); setMsg('無法加注', 'bad'); }
+    if (added) {
+      Sound.seq([784, 988, 1175], 0.05, 'triangle', 0.07);
+      setMsg(`全押 ${sum(state.bets)}`);
+      if (state.credit === 0 && added < unit * SYMBOLS.length) toast('CREDIT 不足，部分押注', 'warn');
+    } else deny('無法加注');
     render();
     save();
   }
 
   function clearBets() {
-    if (state.busy) return;
+    const reason = why.clear();
+    if (reason) { deny(reason); render(); return; }
     clearHighlights();
     if (state.betsPaid) state.credit += sum(state.bets);
     state.bets.fill(0);
@@ -934,21 +1089,17 @@
   }
 
   async function start() {
-    if (state.busy) return;
+    // Synchronous guard + busy flag (set before any await) blocks double-tap races.
+    const reason = why.start();
+    if (reason) { deny(reason); stopAuto(); render(); return; }
     Sound.unlock();
     if (state.win > 0) collectInstant();
     clearHighlights();
     const total = sum(state.bets);
-    if (total === 0) {
-      setMsg('請先押注', 'bad');
-      Sound.error();
-      render();
-      return;
-    }
     if (!state.betsPaid) {
       if (state.credit < total) {
-        setMsg(`分數不足（需 ${total}）`, 'bad');
-        Sound.error();
+        deny(`CREDIT 不足（需 ${total}）・請清除或開分`);
+        stopAuto();
         render();
         return;
       }
@@ -1089,7 +1240,11 @@
     }
     if (state.credit === 0 && state.win === 0) {
       setMsg('分數用完・開分或⚙️重設', 'bad');
-      stopAuto('分數不足');
+      toast('CREDIT 用完・請開分', 'bad');
+      stopAuto('CREDIT 不足・自動已停');
+    } else if (state.auto && state.credit + state.win < sum(state.lastPlayedBets)) {
+      // auto-off as soon as the next round can't be afforded
+      stopAuto(`CREDIT 不足（需 ${sum(state.lastPlayedBets)}）・自動已停`);
     }
     render();
     save();
@@ -1097,7 +1252,8 @@
   }
 
   async function collect() {
-    if (state.busy || state.win <= 0) return;
+    const reason = why.collect();
+    if (reason) { if (!state.auto) deny(reason); return; }
     state.busy = true;
     clearHighlights();
     render();
@@ -1123,7 +1279,8 @@
   }
 
   async function gamble(choice) {
-    if (state.busy || state.win <= 0) return;
+    const reason = why.gamble();
+    if (reason) { deny(reason); return; }
     state.busy = true;
     clearHighlights();
     render();
@@ -1160,16 +1317,26 @@
     save();
   }
 
-  function stopAuto(reason) {
+  let autoTimer = null;
+
+  function stopAuto(reason, kind = 'bad') {
+    clearTimeout(autoTimer);
+    autoTimer = null;
     if (!state.auto) return;
     state.auto = false;
-    if (reason) setMsg(reason, 'bad');
+    if (reason) {
+      setMsg(reason, kind === 'bad' ? 'bad' : '');
+      toast(reason, kind);
+      if (kind === 'bad') Sound.error();
+    }
     render();
   }
 
+  /** Single pending auto timer — prevents stacked ticks from rapid toggles. */
   function queueAuto() {
     if (!state.auto) return;
-    setTimeout(() => { if (state.auto) autoTick(); }, 420);
+    clearTimeout(autoTimer);
+    autoTimer = setTimeout(() => { autoTimer = null; if (state.auto) autoTick(); }, 420);
   }
 
   async function autoTick() {
@@ -1178,40 +1345,33 @@
       await collect();
       return;
     }
-    const pattern = sum(state.lastPlayedBets) > 0 ? state.lastPlayedBets : state.bets;
+    const pattern = lastPattern();
     const need = sum(pattern);
     if (need <= 0) {
-      stopAuto('無押注可自動');
+      stopAuto('無押注・自動已停');
       return;
     }
-    // Ensure bets match last pattern and are ready to start
-    if (!state.betsPaid || sum(state.bets) === 0) {
-      if (!applyBetPattern(pattern, { quiet: true })) {
-        stopAuto('分數不足・已停自動');
+    const ready = state.betsPaid && sum(state.bets) > 0;
+    if (!ready) {
+      if (avail() + paidRefund() < need) {
+        stopAuto(`CREDIT 不足（需 ${need}）・自動已停`);
         return;
       }
-    } else if (state.credit < 0) {
-      stopAuto('分數不足・已停自動');
-      return;
+      if (!applyBetPattern(pattern, { quiet: true })) {
+        stopAuto('無法續押・自動已停');
+        return;
+      }
     }
     await start();
   }
 
   function toggleAuto() {
     if (state.auto) {
-      stopAuto('已停自動');
-      setMsg('已停自動');
-      render();
+      stopAuto('已停自動', 'info');
       return;
     }
-    if (state.busy) return;
-    const pattern = sum(state.lastPlayedBets) > 0 ? state.lastPlayedBets : state.bets;
-    if (sum(pattern) <= 0) {
-      setMsg('請先押注再自動', 'bad');
-      Sound.error();
-      render();
-      return;
-    }
+    const reason = why.auto();
+    if (reason) { deny(reason); render(); return; }
     state.auto = true;
     Sound.seq([880, 1175], 0.06, 'square', 0.05);
     setMsg('自動中…', 'hot');
@@ -1229,12 +1389,12 @@
     state.betsPaid = true;
     const need = sum(pattern);
     if (need <= 0) {
-      if (!quiet) { setMsg('無上一局押注', 'bad'); Sound.error(); }
+      if (!quiet) deny('沒有上一局押注');
       render();
       return false;
     }
     if (state.credit < need) {
-      if (!quiet) { setMsg(`分數不足（需 ${need}）`, 'bad'); Sound.error(); }
+      if (!quiet) deny(`CREDIT 不足（需 ${need}）`);
       render();
       return false;
     }
@@ -1254,21 +1414,16 @@
   }
 
   function rebet() {
-    if (state.busy) return;
-    const pattern = sum(state.lastPlayedBets) > 0 ? state.lastPlayedBets : state.bets;
-    applyBetPattern(pattern);
+    const reason = why.rebet();
+    if (reason) { deny(reason); render(); return; }
+    applyBetPattern(lastPattern());
   }
 
   function doubleBets() {
-    if (state.busy) return;
+    const reason = why.dbl();
+    if (reason) { deny(reason); render(); return; }
     collectInstant();
     clearHighlights();
-    if (sum(state.bets) <= 0) {
-      setMsg('請先押注', 'bad');
-      Sound.error();
-      render();
-      return;
-    }
     let added = 0;
     // Unpaid (stale preview): double display amounts only; charge on 開始
     if (!state.betsPaid) {
@@ -1295,8 +1450,7 @@
       Sound.seq([660, 880, 1100], 0.05, 'square', 0.055);
       setMsg(`加倍・押 ${sum(state.bets)}`);
     } else {
-      Sound.error();
-      setMsg(state.betsPaid && state.credit < 1 ? '分數不足' : '已達上限', 'bad');
+      deny(state.betsPaid && state.credit < 1 ? NO_CREDIT : '押注已達上限');
     }
     render();
     save();
@@ -1304,21 +1458,33 @@
 
   const OPEN_CREDIT_TAP = 100;
   const OPEN_CREDIT_HOLD = 500;
-  const CREDIT_CAP = 999999;
 
   function openCredit(amount) {
-    if (state.busy) return;
-    const add = Math.max(0, amount | 0);
-    if (!add) return;
-    state.credit = Math.min(CREDIT_CAP, state.credit + add);
+    const reason = why.open();
+    if (reason) { deny(reason); return; }
+    const want = Math.max(0, amount | 0);
+    if (!want) return;
+    const add = Math.min(want, CREDIT_CAP - state.credit);
+    state.credit += add;
     Sound.coin();
     setMsg(`開分 +${add}`);
+    if (add < want) toast('CREDIT 已達上限', 'warn');
     render();
     save();
   }
 
-  function washCredit() {
-    if (state.busy) return;
+  let washAsking = false;
+  async function washCredit() {
+    const reason = why.wash();
+    if (reason) { deny(reason); return; }
+    if (washAsking) return;
+    stopAuto();
+    const total = avail() + paidRefund();
+    washAsking = true;
+    const ok = await confirmBox('洗分', `CREDIT＋WIN 共 ${total} 將全部歸零，確定？`, '洗分');
+    washAsking = false;
+    if (!ok) { toast('已取消洗分', 'info'); return; }
+    if (why.wash()) { deny(why.wash()); return; } // state changed while asking
     clearHighlights();
     // Transfer WIN → CREDIT, refund unpaid bets if any, then cash-out CREDIT to 0
     if (state.win > 0) {
@@ -1333,6 +1499,7 @@
     stopAuto();
     Sound.seq([520, 400, 300], 0.07, 'triangle', 0.06);
     setMsg(cashed > 0 ? `洗分 ${cashed}` : '已洗分');
+    toast(cashed > 0 ? `已洗分 ${cashed}` : '已洗分', 'ok');
     render();
     save();
   }
@@ -1342,7 +1509,8 @@
   }
 
   function resetCredit() {
-    if (state.busy) return;
+    const reason = why.reset();
+    if (reason) { deny(reason); return; }
     stopAuto();
     const amt = startCreditAmount();
     state.credit = amt;
@@ -1353,6 +1521,7 @@
     clearHighlights();
     diceLed.set('-');
     setMsg(`已重設 ${amt}`);
+    toast(`已重設 CREDIT ${amt}`, 'ok');
     render();
     save();
   }
@@ -1383,6 +1552,120 @@
     lab.innerHTML = `<input type="checkbox" data-mode="${k}"> <span>${MODE_LABELS[k]}</span>`;
     modeList.appendChild(lab);
   });
+
+  // --- 防呆: settings validation -------------------------------------------
+  // Ranges come from the slider attributes (single source of truth), so values
+  // from localStorage / console can never exceed what the UI allows.
+  const RANGE_LABELS = {
+    bonusRate: '中彩機率', onceRate: '連跑機率', jpRate: 'JP 累積',
+    startCredit: '起始 CREDIT', betUnit: '單次押注', sfxVol: '音效', bgmVol: 'BGM',
+  };
+  const WEIGHT_RANGE = { min: 0, max: 3, step: 0.1 };
+  const BONUS_MODES = ['song', 'train', 'sanyuan'];
+  const DEFAULTS = E.normalizeSettings(null);
+  function rangeOf(el, fb) {
+    const n = (a, d) => (el && Number.isFinite(parseFloat(el.getAttribute(a))) ? parseFloat(el.getAttribute(a)) : d);
+    return { min: n('min', fb.min), max: n('max', fb.max), step: n('step', fb.step) };
+  }
+  const RANGES = Object.fromEntries(Object.entries(rangeEls).map(([k, [el]]) => [k, rangeOf(el, { min: 0, max: 1, step: 0.01 })]));
+  /** Clamp to [min,max] and snap to step. Returns NaN for non-numbers. */
+  function snap(v, { min, max, step }) {
+    const x = Number(v);
+    if (!Number.isFinite(x)) return NaN;
+    const c = Math.min(max, Math.max(min, x));
+    const k = Math.round((c - min) / step);
+    return Math.min(max, +(min + k * step).toFixed(4));
+  }
+  /** Sum of light-stop weight on paying (non-ONCE MORE) tiles. 0 ⇒ invalid. */
+  function fruitWeight(s) {
+    return TRACK.reduce((a, t) => {
+      if (t.s === 'once') return a;
+      const small3 = t.small && t.pay === 3 ? (s.weights.small ?? 1) : 1;
+      return a + t.w * (s.weights[t.s] ?? 1) * small3;
+    }, 0);
+  }
+  /**
+   * Validate + repair settings. Returns { s, fixed[], errors[], warnings[] }.
+   * fixed   – fields clamped/reset to valid range
+   * errors  – invalid combos that were repaired
+   * warnings– legal but ineffective combos (shown in settings sheet)
+   */
+  function validateSettings(raw) {
+    const s = E.normalizeSettings(raw);
+    const fixed = [];
+    const errors = [];
+    const src = raw && typeof raw === 'object' ? raw : {};
+    for (const [k, r] of Object.entries(RANGES)) {
+      const v = snap(s[k], r);
+      const orig = src[k] !== undefined ? Number(src[k]) : s[k];
+      if (!Number.isFinite(v)) { s[k] = DEFAULTS[k]; fixed.push(RANGE_LABELS[k]); continue; }
+      if (!Number.isFinite(orig) || Math.abs(v - orig) > 1e-6) fixed.push(RANGE_LABELS[k]);
+      s[k] = v;
+    }
+    const sw = src.weights && typeof src.weights === 'object' ? src.weights : {};
+    for (const k of WEIGHT_KEYS) {
+      const v = snap(s.weights[k], WEIGHT_RANGE);
+      const orig = sw[k] !== undefined ? Number(sw[k]) : s.weights[k];
+      if (!Number.isFinite(v)) { s.weights[k] = DEFAULTS.weights[k]; fixed.push(WEIGHT_LABELS[k] || k); continue; }
+      if (!Number.isFinite(orig) || Math.abs(v - orig) > 1e-6) fixed.push(WEIGHT_LABELS[k] || k);
+      s.weights[k] = v;
+    }
+    if (fruitWeight(s) <= 0) {
+      errors.push('水果停燈權重不可全為 0（已還原預設）');
+      s.weights = { ...DEFAULTS.weights };
+      s.preset = 'custom';
+    }
+    return { s, fixed, errors, warnings: settingsWarnings(s) };
+  }
+  function settingsWarnings(s) {
+    const w = [];
+    const m = s.modes;
+    if (!m.once && (m.onceMulti || m.onceBig)) w.push('ONCE MORE 已關：連跑／大 ONCE MORE 不會觸發');
+    if (m.once && s.weights.once <= 0) w.push('ONCE MORE 權重 0：不會停到再跑');
+    if (m.once && (m.onceMulti || m.onceBig) && s.onceRate <= 0) w.push('連跑機率 0：只會單次再跑');
+    if (BONUS_MODES.some((k) => m[k]) && s.bonusRate <= 0) w.push('中彩機率 0：不會中彩');
+    if (!BONUS_MODES.some((k) => m[k]) && s.bonusRate > 0) w.push('中彩玩法全關：中彩機率無效');
+    if (m.jp && s.weights.bar <= 0) w.push('BAR 權重 0：JP 無法觸發');
+    if (m.jp && s.jpRate <= 0) w.push('JP 累積 0：彩池不會增加');
+    if (s.betUnit * SYMBOLS.length > s.startCredit) w.push('單次押注 × 8 超過起始 CREDIT');
+    return w;
+  }
+  const setAlertEl = $('setAlert');
+  function updateSettingsAlert(errors = []) {
+    if (!setAlertEl) return;
+    const warns = settingsWarnings(settings);
+    const items = [
+      ...errors.map((t) => `<li class="err">${t}</li>`),
+      ...warns.map((t) => `<li>${t}</li>`),
+    ];
+    setAlertEl.hidden = items.length === 0;
+    setAlertEl.classList.toggle('has-err', errors.length > 0);
+    setAlertEl.innerHTML = items.length ? `<ul>${items.join('')}</ul>` : '';
+  }
+  /** Grey out controls that have no effect under the current mode toggles. */
+  function applySettingsDependencies() {
+    const m = settings.modes;
+    const dep = {
+      onceMulti: !m.once, onceBig: !m.once,
+    };
+    modeList.querySelectorAll('input[data-mode]').forEach((inp) => {
+      const off = !!dep[inp.dataset.mode];
+      inp.disabled = off;
+      inp.closest('label')?.classList.toggle('dim', off);
+    });
+    const dim = (key, off) => {
+      const el = rangeEls[key]?.[0];
+      if (!el) return;
+      el.disabled = off;
+      el.closest('label')?.classList.toggle('dim', off);
+    };
+    dim('onceRate', !m.once || !(m.onceMulti || m.onceBig));
+    dim('bonusRate', !BONUS_MODES.some((k) => m[k]));
+    dim('jpRate', !m.jp);
+    const wOnce = weightList.querySelector('input[data-weight="once"]');
+    if (wOnce) { wOnce.disabled = !m.once; wOnce.closest('label')?.classList.toggle('dim', !m.once); }
+  }
+  let settingsNotice = null;
 
   WEIGHT_KEYS.forEach((k) => {
     const lab = document.createElement('label');
@@ -1426,6 +1709,8 @@
     musicRow.querySelectorAll('.chip').forEach((c) => {
       c.classList.toggle('on', c.dataset.music === Music.track);
     });
+    applySettingsDependencies();
+    updateSettingsAlert();
     try {
       const sim = E.simulate(settings, 2500, Math.random);
       const pct = (sim.rtp * 100).toFixed(0);
@@ -1460,6 +1745,8 @@
   modeList.addEventListener('change', (e) => {
     const inp = e.target.closest('input[data-mode]');
     if (!inp) return;
+    // Reject turning every paying path off at once is fine (base fruit still pays);
+    // dependent toggles are greyed in applySettingsDependencies().
     settings.modes[inp.dataset.mode] = inp.checked;
     markCustom();
     saveSettings();
@@ -1467,34 +1754,65 @@
     render();
   });
 
+  /** Validate one weight edit; reverts the slider and returns false if invalid. */
+  function tryWeight(inp) {
+    const k = inp.dataset.weight;
+    const v = snap(inp.value, WEIGHT_RANGE);
+    const span = weightList.querySelector(`[data-weight-val="${k}"]`);
+    const prev = settings.weights[k];
+    if (!Number.isFinite(v)) {
+      inp.value = String(prev);
+      deny(`${WEIGHT_LABELS[k] || k}：數值無效`, { vfd: false });
+      return false;
+    }
+    const cand = { ...settings, weights: { ...settings.weights, [k]: v } };
+    if (fruitWeight(cand) <= 0) {
+      inp.value = String(prev);
+      if (span) span.textContent = Number(prev).toFixed(1);
+      deny('水果停燈權重不可全為 0', { vfd: false });
+      updateSettingsAlert(['至少保留一種水果權重 > 0']);
+      return false;
+    }
+    settings.weights[k] = v;
+    inp.value = String(v);
+    markCustom();
+    if (span) span.textContent = v.toFixed(1);
+    return true;
+  }
   weightList.addEventListener('input', (e) => {
     const inp = e.target.closest('input[data-weight]');
-    if (!inp) return;
-    const k = inp.dataset.weight;
-    settings.weights[k] = Number(inp.value);
-    markCustom();
-    const span = weightList.querySelector(`[data-weight-val="${k}"]`);
-    if (span) span.textContent = Number(inp.value).toFixed(1);
+    if (inp) tryWeight(inp);
   });
   weightList.addEventListener('change', (e) => {
     const inp = e.target.closest('input[data-weight]');
     if (!inp) return;
-    settings.weights[inp.dataset.weight] = Number(inp.value);
-    markCustom();
-    saveSettings();
-    refreshSettingsUI();
+    if (tryWeight(inp)) {
+      saveSettings();
+      refreshSettingsUI();
+    }
   });
 
   for (const [key, [el, valEl, fmt]] of Object.entries(rangeEls)) {
     if (!el) continue;
+    const accept = () => {
+      const v = snap(el.value, RANGES[key]);
+      if (!Number.isFinite(v)) {
+        el.value = String(settings[key]);
+        deny(`${RANGE_LABELS[key]}：數值無效`, { vfd: false });
+        return false;
+      }
+      settings[key] = v;
+      if (String(v) !== el.value) el.value = String(v);
+      valEl.textContent = fmt(v);
+      return true;
+    };
     el.addEventListener('input', () => {
-      settings[key] = Number(el.value);
+      if (!accept()) return;
       if (key === 'bonusRate' || key === 'onceRate' || key === 'jpRate') markCustom();
-      valEl.textContent = fmt(Number(el.value));
       if (key === 'sfxVol' || key === 'bgmVol') Music.applyVolume();
     });
     el.addEventListener('change', () => {
-      settings[key] = Number(el.value);
+      if (!accept()) return;
       if (key === 'bonusRate' || key === 'onceRate' || key === 'jpRate') markCustom();
       saveSettings();
       refreshSettingsUI();
@@ -1514,7 +1832,21 @@
 
   settingsDlg.addEventListener('close', () => {
     const v = settingsDlg.returnValue;
-    if (v === 'reset') resetCredit();
+    // final gate: never persist an invalid combo
+    const chk = validateSettings({ ...settings });
+    settings = chk.s;
+    if (chk.errors.length) toast(chk.errors[0], 'bad');
+    if (v === 'reset') {
+      setTimeout(async () => {
+        const reason = why.reset();
+        if (reason) { deny(reason); return; }
+        const amt = startCreditAmount();
+        const lost = avail() + paidRefund();
+        const ok = await confirmBox('重設分數',
+          `CREDIT 改為 ${amt}，WIN／押注／JP 歸零${lost ? `（目前 ${lost}）` : ''}。確定？`, '重設');
+        if (ok) resetCredit(); else toast('已取消重設', 'info');
+      }, 0);
+    }
     if (v === 'help') {
       // reopen help after settings closes
       setTimeout(openHelp, 0);
@@ -1553,19 +1885,44 @@
     ['pointerup', 'pointerleave', 'pointercancel', 'lostpointercapture'].forEach((ev) =>
       k.el.addEventListener(ev, stop));
     k.el.addEventListener('contextmenu', (e) => e.preventDefault());
-    k.el.addEventListener('click', (e) => { if (e.detail === 0) bet(i); });
+    k.el.addEventListener('click', (e) => { if (e.detail === 0) { stopAuto(); bet(i); } });
   });
 
-  btn.start.addEventListener('click', () => { if (state.auto) stopAuto(); start(); });
-  btn.clear.addEventListener('click', () => { stopAuto(); clearBets(); });
-  btn.all.addEventListener('click', () => { stopAuto(); betAll(); });
-  btn.collect.addEventListener('click', collect);
-  btn.small.addEventListener('click', () => { stopAuto(); gamble('small'); });
-  btn.big.addEventListener('click', () => { stopAuto(); gamble('big'); });
-  btn.rebet.addEventListener('click', () => { stopAuto(); rebet(); });
-  btn.dbl.addEventListener('click', () => { stopAuto(); doubleBets(); });
-  btn.auto.addEventListener('click', toggleAuto);
-  btn.wash.addEventListener('click', washCredit);
+  // 防呆: per-action cooldown swallows double-taps / ghost clicks / key+click
+  // duplicates (e.g. Space on a focused 開始 button fires both).
+  const lastTap = new Map();
+  function guarded(key, fn, cooldown = 280) {
+    return (...args) => {
+      const now = performance.now();
+      if (now - (lastTap.get(key) || 0) < cooldown) return;
+      lastTap.set(key, now);
+      fn(...args);
+    };
+  }
+  const A = {
+    start: guarded('start', () => { if (state.auto && !state.busy) stopAuto(); start(); }, 450),
+    clear: guarded('clear', () => { stopAuto(); clearBets(); }),
+    all: guarded('all', () => { stopAuto(); betAll(); }),
+    collect: guarded('collect', () => collect(), 400),
+    small: guarded('gamble', () => { stopAuto(); gamble('small'); }, 400),
+    big: guarded('gamble', () => { stopAuto(); gamble('big'); }, 400),
+    rebet: guarded('rebet', () => { stopAuto(); rebet(); }),
+    dbl: guarded('dbl', () => { stopAuto(); doubleBets(); }),
+    auto: guarded('auto', () => toggleAuto(), 400),
+    wash: guarded('wash', () => washCredit(), 400),
+    open: guarded('open', () => { stopAuto(); openCredit(OPEN_CREDIT_TAP); }, 120),
+  };
+
+  btn.start.addEventListener('click', A.start);
+  btn.clear.addEventListener('click', A.clear);
+  btn.all.addEventListener('click', A.all);
+  btn.collect.addEventListener('click', A.collect);
+  btn.small.addEventListener('click', A.small);
+  btn.big.addEventListener('click', A.big);
+  btn.rebet.addEventListener('click', A.rebet);
+  btn.dbl.addEventListener('click', A.dbl);
+  btn.auto.addEventListener('click', A.auto);
+  btn.wash.addEventListener('click', A.wash);
 
   // 開分: tap +100, hold +500
   (() => {
@@ -1576,6 +1933,8 @@
       if (e.button !== undefined && e.button !== 0) return;
       e.preventDefault();
       held = false;
+      const reason = why.open();
+      if (reason) { deny(reason); return; }
       stopAuto();
       holdTimer = setTimeout(() => {
         held = true;
@@ -1592,6 +1951,7 @@
     ['pointerup', 'pointerleave', 'pointercancel', 'lostpointercapture'].forEach((ev) =>
       btn.open.addEventListener(ev, up));
     btn.open.addEventListener('contextmenu', (e) => e.preventDefault());
+    btn.open.addEventListener('click', (e) => { if (e.detail === 0) A.open(); }); // keyboard
   })();
 
   btn.sound.addEventListener('click', () => {
@@ -1606,21 +1966,24 @@
   btn.settings.addEventListener('click', openSettings);
 
   window.addEventListener('keydown', (e) => {
-    if (settingsDlg.open || helpDlg.open || e.metaKey || e.ctrlKey || e.altKey) return;
+    if (settingsDlg.open || helpDlg.open || confirmDlg?.open || e.metaKey || e.ctrlKey || e.altKey) return;
     const k = e.key;
     if (k >= '1' && k <= '8') { stopAuto(); bet(Number(k) - 1); e.preventDefault(); return; }
+    // Focused <button> handles its own Space/Enter → avoid firing twice.
+    if ((k === ' ' || k === 'Enter') && e.target instanceof HTMLButtonElement) return;
+    if (e.repeat) { e.preventDefault(); return; } // held key ≠ repeated start/collect
     switch (k.toLowerCase()) {
-      case ' ': case 'enter': if (state.auto) stopAuto(); start(); break;
-      case 'a': stopAuto(); betAll(); break;
-      case 'c': case 'backspace': stopAuto(); clearBets(); break;
-      case 's': collect(); break;
-      case 'arrowleft': case 'q': stopAuto(); gamble('small'); break;
-      case 'arrowright': case 'e': stopAuto(); gamble('big'); break;
-      case 'd': stopAuto(); doubleBets(); break;
-      case 'r': stopAuto(); rebet(); break;
-      case 't': toggleAuto(); break;
-      case 'o': stopAuto(); openCredit(OPEN_CREDIT_TAP); break;
-      case 'w': washCredit(); break;
+      case ' ': case 'enter': A.start(); break;
+      case 'a': A.all(); break;
+      case 'c': case 'backspace': A.clear(); break;
+      case 's': A.collect(); break;
+      case 'arrowleft': case 'q': A.small(); break;
+      case 'arrowright': case 'e': A.big(); break;
+      case 'd': A.dbl(); break;
+      case 'r': A.rebet(); break;
+      case 't': A.auto(); break;
+      case 'o': A.open(); break;
+      case 'w': A.wash(); break;
       default: return;
     }
     e.preventDefault();
@@ -1653,9 +2016,17 @@
   requestAnimationFrame(() => idleReels());
   if (!state.betsPaid && sum(state.bets) > 0) setMsg('按開始續玩，或重押');
   render();
+  if (settingsNotice) setTimeout(() => toast(settingsNotice, 'warn', 3200), 400);
 
   window.__xiaomali = {
     state, settings, TRACK, SYMBOLS, pickTarget, resetCredit, Music, Sound, E,
-    setSettings(s) { settings = E.normalizeSettings(s); saveSettings(); render(); },
+    setSettings(s) {
+      const v = validateSettings(s);
+      settings = v.s;
+      saveSettings();
+      render();
+      return { fixed: v.fixed, errors: v.errors, warnings: v.warnings };
+    },
+    validateSettings, toast,
   };
 })();
