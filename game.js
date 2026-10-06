@@ -1648,6 +1648,8 @@
     if (missionCnt) missionCnt.textContent = `${marked}/9`;
     if (bingoWrap) bingoWrap.classList.toggle('is-plaque', !bingoOn);
     if (topPlaque) topPlaque.hidden = bingoOn;
+    // Compact topper (no bingo board): wings get short → art must shrink above the meter.
+    $('topper')?.classList.toggle('is-compact', !bingoOn);
 
     const lineMini = $('lineMini');
     const lineMiniVal = $('lineMiniVal');
@@ -4094,7 +4096,7 @@
   setTimeout(maybeFirstRunTip, 500);
 
   window.__xiaomali = {
-    build: '20261006d2',
+    build: '20261006d3',
     state, settings, TRACK, SYMBOLS, pickTarget, resetCredit, Music, Sound, E, fitCabinet,
     setSettings(s) {
       const v = validateSettings(s);
