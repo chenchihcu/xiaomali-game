@@ -4765,3 +4765,54 @@ html.fit-1 .center { gap: calc(var(--u) * 0.45); padding: calc(var(--u) * 0.7); 
 .prog-note { color: rgba(255, 255, 255, 0.72); }
 /* R5-5 compact plaque title fell to 6.9–7.7 px at 320 / 360 / landscape */
 .plaque-title { font-size: max(8px, calc(var(--u) * 2.2)); }
+
+/* ========== UI Audit-6 (20261006d4) ========== */
+/* Crisp 4-side outline (no blur, no filter) — lets white labels stay white on the
+   bright lit caps without darkening any keycap (WCAG "halo/outline" technique). */
+:root {
+  --ol: 0.6px 0 0 rgba(0, 0, 0, 0.82), -0.6px 0 0 rgba(0, 0, 0, 0.82), 0 -0.6px 0 rgba(0, 0, 0, 0.82), 0 1px 0 rgba(0, 0, 0, 0.9);
+}
+/* R6-1 lit coloured keys: 得分 2.4:1, 開分 2.8, 續押 2.7, 開始 2.9, dialog 清除進度 2.4 / 關閉 2.8 / 立即儲存 3.0 */
+.btn:not(.btn-yellow):not(:disabled):not(.off),
+.btn:not(.btn-yellow):not(:disabled):not(.off) .btn-lab,
+.deck-main .btn-start:not(.off):not(:disabled) .btn-lab { text-shadow: var(--ol); }
+/* R6-2 bet-count badges on the orange chip 2.8–3.5:1 */
+.betkey .bbet { text-shadow: var(--ol); }
+/* R6-3 ONCE MORE banner (white 4.3 / yellow 3.7 on red; tag 7.1 px @320) */
+.once-banner-tag, .once-banner-count { text-shadow: var(--ol); }
+.once-banner-tag { font-size: max(8px, calc(var(--u) * 2.6)); }
+/* R6-4 lucky-wheel labels: white on yellow / orange segments 1.4–4.0:1, soft 2px shadow only */
+.sw-lab { text-shadow: var(--ol); }
+/* R6-5 sic-bo 大/小 tag 7.6 px + white on light-blue 3.5:1; roulette chip 6 px, status 7.1 px @320 */
+.ss-tag { font-size: max(9px, calc(var(--u) * 2.8)); text-shadow: var(--ol); }
+.sr-info { font-size: max(9px, calc(var(--u) * 2.6)); }
+.sr-chip { font-size: max(8px, calc(var(--u) * 2.2)); text-shadow: var(--ol); }
+/* R6-6 marked bingo cell ONCE MORE: cream on the orange lamp 1.7:1 → dark ink like the lit 大/小 lamp */
+.bingo-cell.on .bingo-ic .ic-once { color: #4a1400; text-shadow: 0 1px 0 rgba(255, 240, 200, 0.5); }
+/* R6-7 gamble chase: the label colour faded 120 ms while the lamp face snapped → each flip showed
+   washed-out 大/小 (1.2–1.9:1). Colour now switches with the face; only the glow eases. */
+.ds-label { transition: box-shadow 0.12s; }
+/* R6-8 paytable chip "10" (green) 2.99:1 at 320 → outline */
+.paycell .mult { text-shadow: var(--ol); }
+/* R6-9 pachinko pocket multipliers 5.4 px and wheel labels 6.7 px at 320 (were exempt as
+   "board graphics"; they are prize info) → ≥8 px; pockets outlined */
+.sp-pocket { font-size: max(8px, calc(var(--u) * 1.7)); text-shadow: var(--ol); line-height: 1; }
+.sw-lab { font-size: max(8px, calc(var(--u) * 2.1)); }
+/* R6-8b the stale-state rule `.paycell:not(.is-bet) .mult…` (0,3,0) still won → same selector list */
+.paycell:not(.is-bet) .mult,
+.paycell.is-bet .mult,
+.paycell.hit .mult { text-shadow: var(--ol); }
+/* R6-9b 8 px pockets no longer fit 9 × auto columns in the 120 px fit-2 board → shrinkable columns */
+.sp-pockets { grid-template-columns: repeat(9, minmax(0, 1fr)); padding: 0 1px 1px; }
+.sp-pocket { letter-spacing: -0.04em; min-width: 0; }
+/* R6-10 lucky-wheel hub "GO" 6 px at 320 */
+.sw-hub { font-size: max(8px, calc(var(--u) * 2.4)); }
+/* R6-11 stage titles sit on the lighter gold glow of the roulette / gacha cards (2.6:1) → outline */
+.stage-title { text-shadow: var(--ol), 0 0 calc(var(--u) * 1.2) rgba(255, 200, 80, 0.4); }
+/* R6-12 FEVER tag white on the orange banner 1.9:1 (brown drop + white glow only);
+   gacha SR tier / stage result on the bright SR glow 3.2 / 4.3:1 (320) → outline, glow kept */
+.fever-tag { text-shadow: var(--ol), 0 2px 0 #5a1a00, 0 0 12px rgba(255, 255, 255, 0.45); }
+.sg-tier { text-shadow: var(--ol), 0 0 calc(var(--u) * 1.5) rgba(255, 200, 80, 0.6); }
+.stage-result:not(.miss) { text-shadow: var(--ol), 0 0 calc(var(--u) * 1.5) rgba(255, 220, 80, 0.6); }
+/* R6-13 roulette "馬 ▸▸▸" dash flourish 7.7 px at 320 */
+.horse-dash { font-size: max(8px, calc(var(--u) * 2.4)); }
