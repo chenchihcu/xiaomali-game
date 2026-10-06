@@ -4816,3 +4816,8 @@ html.fit-1 .center { gap: calc(var(--u) * 0.45); padding: calc(var(--u) * 0.7); 
 .stage-result:not(.miss) { text-shadow: var(--ol), 0 0 calc(var(--u) * 1.5) rgba(255, 220, 80, 0.6); }
 /* R6-13 roulette "馬 ▸▸▸" dash flourish 7.7 px at 320 */
 .horse-dash { font-size: max(8px, calc(var(--u) * 2.4)); }
+
+/* ========== UI Audit-7 (20261006d5) ========== */
+/* R7-1 idle WHEEL / BONUS strip was transform:scale(.88) → its 8 px labels rendered at 7 px
+   (the ≥8 px rule was only met on paper). Natural size now. */
+.center .cab-toys { transform: none; }
