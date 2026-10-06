@@ -805,11 +805,10 @@
     if (!needsRebuild && cells.length === BINGO_CELLS.length) return;
     root.replaceChildren();
     BINGO_CELLS.forEach((id, i) => {
-      const c = document.createElement('button');
-      c.type = 'button';
+      const c = document.createElement('span');
       c.className = 'bingo-cell';
+      c.setAttribute('role', 'img');
       c.dataset.b = String(i);
-      c.disabled = true;
       paintBingoCell(c, id);
       root.appendChild(c);
     });
@@ -1935,13 +1934,12 @@
     }
   }
 
+  // Stage prizes / balls use the same painted art as the track (not emoji),
+  // so apple/orange stay realistic and melon/coconut stay cartoon everywhere.
   function iconForSym(id) {
     const s = SYMBOLS.find((x) => x.id === id);
-    if (!s) return '❓';
-    if (s.icon) return s.icon;
-    if (id === 'seven') return '7️⃣';
-    if (id === 'bar') return '🅱️';
-    return s.name[0];
+    if (!s) return '<span class="stage-ic">?</span>';
+    return `<span class="stage-ic stage-ic-${id}">${iconHTML(id)}</span>`;
   }
 
   async function playLuckyWheel(step) {
@@ -2170,7 +2168,7 @@
     for (const b of step.balls || []) {
       const el = document.createElement('div');
       el.className = 'sb-ball' + (b.hit ? ' hit' : '');
-      el.textContent = iconForSym(b.id);
+      el.innerHTML = iconForSym(b.id);
       el.title = b.name;
       drawn.appendChild(el);
       await sleep(180);
@@ -2434,6 +2432,9 @@
     const result = E.resolveRound(state.bets, settings, randomFloat, potBefore, { bingoBoard: state.bingo });
     // Apply bingo snapshots per step (not the final board) so marks / lines animate.
     let roundWin = 0;
+    let payLines = 0;
+    let lastPayText = '';
+    let lastPayGain = 0;
     let inOnceRun = false;
     let onceVariant = 'single';
 
@@ -2455,7 +2456,10 @@
         const small = TRACK[step.target].small ? '小' : '';
         const prefix = fromSuper ? '超跑・' : '';
         const betAmt = state.bets[step.si] | 0;
-        setMsg(`${prefix}${sym.name}${small} ${betAmt} × ${step.mult} = +${step.gained}`, 'hot');
+        lastPayText = `${prefix}${sym.name}${small} ${betAmt} × ${step.mult} = +${step.gained}`;
+        lastPayGain = step.gained;
+        payLines += 1;
+        setMsg(lastPayText, 'hot');
         await animateWin(state.win, state.win + step.gained);
       } else if (!sym && TRACK[step.target]?.s === 'once') {
         // Super / FEVER can still land on ONCE MORE (0 pay) — don't go silent.
@@ -2709,7 +2713,10 @@
 
     if (roundWin > 0) {
       setCenterFocus(true);
-      setMsg(`本局 +${roundWin}・得分或比大小`, 'hot');
+      // Single pay line → keep the formula readable (it used to flash ~0.4 s).
+      setMsg(payLines === 1 && roundWin === lastPayGain && lastPayText
+        ? `${lastPayText}・得分／比大小`
+        : `本局 +${roundWin}・得分或比大小`, 'hot');
     } else {
       setCenterFocus(false);
       if (!msgEl.textContent.includes('沒中') && !msgEl.textContent.includes('上限')) {
@@ -3327,7 +3334,7 @@
     if (el('progHold')) el('progHold').textContent = `${hold}/4`;
     if (el('progSavedAt')) el('progSavedAt').textContent = lastSavedAt ? `已存 ${fmtSavedAt(lastSavedAt)}` : '自動儲存中';
     if (el('progNote')) {
-      const preset = settings.preset || 'custom';
+      const preset = ({ easy: '輕鬆', normal: '標準', hard: '困難', custom: '自訂' })[settings.preset] || '自訂';
       const modesOn = MODE_KEYS.filter((k) => settings.modes && settings.modes[k]).length;
       el('progNote').textContent = `設定：${preset}・玩法 ${modesOn}/${MODE_KEYS.length}・音量 SFX ${Math.round((settings.sfxVol || 0) * 100)}%`;
     }
@@ -3337,16 +3344,30 @@
     ['preset', '難度'], ['rates', '機率'], ['weights', '權重'], ['modes', '玩法'],
     ['credit', '分數'], ['audio', '音量'], ['music', '音樂'], ['progress', '進度'],
   ];
+  let navLockUntil = 0;
+  function setActiveChip(id) {
+    const nav = $('setNav');
+    if (!nav) return;
+    nav.querySelectorAll('.set-chip').forEach((c) => {
+      const on = c.dataset.jump === id;
+      c.classList.toggle('on', on);
+      c.setAttribute('aria-selected', String(on));
+      if (on) {
+        // keep the active chip visible in the horizontally scrolling nav
+        const l = c.offsetLeft - nav.offsetLeft;
+        if (l < nav.scrollLeft || l + c.offsetWidth > nav.scrollLeft + nav.clientWidth) {
+          nav.scrollTo({ left: Math.max(0, l - 12), behavior: 'smooth' });
+        }
+      }
+    });
+  }
   function jumpToSec(id) {
     const body = $('setBody');
     const sec = document.getElementById('sec-' + id) || body?.querySelector(`[data-sec="${id}"]`);
     if (!sec || !body) return;
+    navLockUntil = performance.now() + 700; // smooth scroll must not flip the chip mid-way
     sec.scrollIntoView({ behavior: 'smooth', block: 'start' });
-    $('setNav')?.querySelectorAll('.set-chip').forEach((c) => {
-      const on = c.dataset.jump === id;
-      c.classList.toggle('on', on);
-      c.setAttribute('aria-selected', String(on));
-    });
+    setActiveChip(id);
   }
   function filterSettings(q) {
     const query = (q || '').trim().toLowerCase();
@@ -3395,17 +3416,20 @@
     if (body && !body._obs && typeof IntersectionObserver === 'function') {
       body._obs = true;
       const secs = [...body.querySelectorAll('.set-sec[data-sec]')];
+      const atBottom = () => body.scrollTop + body.clientHeight >= body.scrollHeight - 4;
       const io = new IntersectionObserver((entries) => {
+        if (performance.now() < navLockUntil) return;
+        if (atBottom()) return; // short last sections never reach 35% → handled by scroll
         const vis = entries.filter((en) => en.isIntersecting).sort((a, b) => b.intersectionRatio - a.intersectionRatio)[0];
         if (!vis) return;
-        const id = vis.target.dataset.sec;
-        nav?.querySelectorAll('.set-chip').forEach((c) => {
-          const on = c.dataset.jump === id;
-          c.classList.toggle('on', on);
-          c.setAttribute('aria-selected', String(on));
-        });
+        setActiveChip(vis.target.dataset.sec);
       }, { root: body, threshold: [0.35, 0.55] });
       secs.forEach((s) => io.observe(s));
+      body.addEventListener('scroll', () => {
+        if (performance.now() < navLockUntil || !atBottom()) return;
+        const last = secs.filter((s) => !s.classList.contains('is-filtered-out')).pop();
+        if (last) setActiveChip(last.dataset.sec);
+      }, { passive: true });
     }
     // Progress actions
     const saveBtn = $('btnSaveNow');
@@ -3539,6 +3563,9 @@
     markSeenHelp();
     if (typeof helpDlg.showModal === 'function') helpDlg.showModal();
     else helpDlg.setAttribute('open', '');
+    // showModal focuses the bottom 關閉 button → sheet opened scrolled to the end.
+    helpDlg.scrollTop = 0;
+    requestAnimationFrame(() => { helpDlg.scrollTop = 0; });
   }
   helpDlg?.addEventListener('close', markSeenHelp);
   function maybeFirstRunTip() {
@@ -4038,7 +4065,7 @@
   setTimeout(maybeFirstRunTip, 500);
 
   window.__xiaomali = {
-    build: '20261006c8',
+    build: '20261006c9',
     state, settings, TRACK, SYMBOLS, pickTarget, resetCredit, Music, Sound, E, fitCabinet,
     setSettings(s) {
       const v = validateSettings(s);

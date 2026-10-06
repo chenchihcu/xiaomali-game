@@ -4348,3 +4348,143 @@ html.fit-2 .mission-lab { font-size: max(7px, calc(var(--u) * 1.3)); }
   font-size: max(5.5px, calc(var(--u) * 1.25));
   text-shadow: 0 0 3px rgba(80, 160, 255, 0.6), 0 1px 0 #000;
 }
+
+
+/* ========== UI Audit-2: layout / legibility / touch (20261006c9) ========== */
+/* See UI-AUDIT.md「第二輪」. Same rules as Audit-1 (no filter on text/SVG
+   containers, no translucency over grain, info text ≥ ~7–8 px / α ≥ 0.6). */
+
+/* R2-1 closed <dialog> must not render: `.settings-sheet{display:flex}` beat the
+   UA `dialog:not([open]){display:none}` → its gold edge peeked under the
+   cabinet and its inputs were reachable by Tab while "closed". */
+.settings-sheet:not([open]),
+.sheet:not([open]) { display: none; }
+
+/* R2-2 win / focus: center window used to grow to 72% — wider than the 71%
+   lamp-ring hole — and sat at z 5, covering every inner red dome lamp and
+   the tile edges. 68% stays inside the hole; z 3 keeps lamps (z 4) on top. */
+.cabinet.center-focus .center,
+.cabinet.stage-open .center,
+.cabinet.fx-win .center {
+  width: 68%;
+  height: 68%;
+  z-index: 3;
+}
+
+/* R2-3 sheets: brushed-metal + noise behind 12–14 px grey copy read as
+   gritty. Flat dark gradient for every dialog body. */
+.sheet,
+.settings-sheet {
+  background: linear-gradient(180deg, #2a2a31 0%, #17171b 100%);
+}
+.hint { color: rgba(255, 255, 255, 0.72); }
+.keys { color: rgba(255, 255, 255, 0.66); }
+.mode-hint { color: rgba(255, 255, 255, 0.72); font-size: 11.5px; }
+.mode-list label { align-items: center; }
+
+/* R2-4 settings touch targets ≥ 44 px (chips 38, search 40, sliders 16) */
+.set-chip,
+.set-search input { min-height: 44px; }
+.range-label input[type="range"] { height: 44px; margin: 0; background: transparent; }
+.mode-list label { min-height: 44px; }
+.weight-list .range-label { min-height: 44px; margin-top: 0; }
+/* nav scrolls sideways: fade the right edge so hidden chips are discoverable */
+.set-nav {
+  -webkit-mask-image: linear-gradient(90deg, #000 0, #000 calc(100% - 22px), transparent 100%);
+  mask-image: linear-gradient(90deg, #000 0, #000 calc(100% - 22px), transparent 100%);
+  padding-right: 18px;
+}
+/* single action in a sheet (help 關閉) spans the row instead of half width */
+.sheet-actions > .btn:only-child { grid-column: 1 / -1; }
+
+/* R2-5 JP / LINE mini meters: brushed streaks + α .66 over the painted wing
+   let the red sun-rays bleed through the digits. Solid, opaque face. */
+.mini-meter,
+.wing-panel > .mini-meter,
+.mini-meter:not(.is-hit):not(.is-live),
+.mini-meter.is-live:not(.is-hit) {
+  opacity: 1;
+  filter: none;
+  background: linear-gradient(180deg, #1e1e24, #0a0a0d);
+}
+.mini-meter:not(.is-hit):not(.is-live) .mini-val { color: #e2493a; text-shadow: 0 0 4px rgba(255, 40, 20, 0.4); }
+.mini-meter.off { opacity: 0.62; filter: none; }
+
+/* R2-6 bingo board: unmarked α .57 → ~.74; BAR 4.4 px stack → one 7 px chip;
+   ONCE MORE 5.5 → ≥6.5 px. Marked cells keep the orange lamp. */
+.bingo-wrap:not(.is-plaque) .bingo-cell:not(.on):not(.flash):not(.line) { opacity: 0.8; }
+.bingo-cell .bingo-ic .ic-bar { transform: none; gap: 0; }
+.bingo-cell .bingo-ic .ic-bar i:nth-child(n + 2) { display: none; }
+.bingo-cell .bingo-ic .ic-bar i {
+  font-size: max(7px, calc(var(--u) * 1.6));
+  padding: 1px 3px;
+  line-height: 1.1;
+}
+.bingo-cell .bingo-ic .ic-once { font-size: max(6.5px, calc(var(--u) * 1.45)); }
+
+/* R2-7 small labels */
+.hold-plate,
+.top-core .hold-plate { font-size: max(8px, calc(var(--u) * 1.75)); }
+html.fit-1 .top-core .hold-plate { font-size: max(7px, calc(var(--u) * 1.45)); }
+.mission-lab,
+.mini-lab { font-size: max(8px, calc(var(--u) * 1.7)); }
+.wing-caption {
+  font-size: max(7px, calc(var(--u) * 1.6));
+  opacity: 0.8;
+  letter-spacing: 0.14em;
+}
+.paytable .ic-bar { font-size: 8px; }
+
+/* R2-8 stage prizes / balls: painted SVG fruit (was emoji 🍎🥥7️⃣🅱️) */
+.stage-ic {
+  display: grid;
+  place-items: center;
+  width: 1em;
+  height: 1em;
+  line-height: 1;
+}
+.stage-ic .ic-svg { width: 100%; height: 100%; }
+.stage-ic .ic-77 { font-size: 0.72em; }
+.stage-ic .ic-bar { font-size: 0.26em; }
+.stage-ic .ic-once { font-size: 0.24em; }
+.sg-prize { font-size: calc(var(--u) * 7); }
+.sb-ball { font-size: calc(var(--u) * 6.4); }
+.sb-float { font-size: calc(var(--u) * 3.4); opacity: 1; }
+
+/* R2-9 short screens (fit-1 / fit-2, e.g. Safari 430×700): 8 bet keys were
+   forced to 44 px each and overflowed the deck by ~9 px on the right (BAR key
+   clipped by the frame). Let the row use the deck padding and share width;
+   keys stay 44 px tall and ≈ 43.8–47 px wide. */
+html.fit-2 .deck-bets {
+  grid-template-columns: repeat(8, minmax(0, 1fr));
+  gap: 0.5px;
+  padding-left: 0;
+  padding-right: 0;
+  margin-left: calc(var(--u) * -0.75);
+  margin-right: calc(var(--u) * -0.75);
+}
+html.fit-2 .betkey { min-width: 0; width: 100%; }
+/* main row labels were 7.1 px on fit-2 although the keys are 63×44 px */
+html.fit-2 .deck-main .btn-lab { font-size: max(10px, calc(var(--u) * 2.2)); }
+html.fit-2 .deck-main .btn-svg { width: max(16px, calc(var(--u) * 3.8)); height: max(16px, calc(var(--u) * 3.8)); }
+html.fit-2 .deck-main .btn-start .btn-lab { font-size: max(13px, calc(var(--u) * 2.9)); }
+html.fit-2 .deck-main .btn-start .btn-svg { width: max(18px, calc(var(--u) * 4.4)); height: max(18px, calc(var(--u) * 4.4)); }
+/* disclaimer ribbon must stay legible (was 5.3 px on fit-2, 6.5 px on fit-1) */
+html.fit-1 .note,
+html.fit-2 .note { font-size: max(8px, calc(var(--u) * 1.6)); }
+
+/* R2-10 pulse keyframes on text (stage result ×N +N, FEVER/READY tag, bingo
+   flash) animated `filter: brightness` → the glyphs re-rasterised soft every
+   frame. Same motion, no filter (later @keyframes of the same name win). */
+@keyframes stagePulse {
+  from { transform: scale(1); }
+  to { transform: scale(1.06); }
+}
+@keyframes feverPop {
+  from { transform: translate(-50%, -50%) scale(0.96); }
+  to { transform: translate(-50%, -50%) scale(1.05); }
+}
+@keyframes bingoFlash {
+  from { transform: scale(1); box-shadow: 0 0 0 rgba(255, 240, 120, 0); }
+  to { transform: scale(1.06); box-shadow: 0 0 calc(var(--u) * 1.4) rgba(255, 240, 120, 0.9); }
+}
