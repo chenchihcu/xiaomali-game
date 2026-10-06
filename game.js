@@ -784,8 +784,21 @@
       melon: `<svg class="ic-svg" viewBox="0 0 64 64" aria-hidden="true"><!-- cartoon flat 小瑪莉 watermelon: half red flesh + seeds + rind --><path d="M7 27c0 18.2 11.2 33 25 33s25-14.8 25-33H7z" fill="#1f8a22" stroke="#0a3d10" stroke-width="2.3" stroke-linejoin="round"/><path d="M11 27c0 15.4 9 27.5 21 27.5S53 42.4 53 27H11z" fill="#8fd84a"/><path d="M15 27c0 13 7.4 23 17 23s17-10 17-23H15z" fill="#e01838" stroke="#7a0014" stroke-width="1.5"/><ellipse cx="24" cy="35" rx="1.7" ry="2.6" fill="#1a0800" transform="rotate(-20 24 35)"/><ellipse cx="32" cy="41" rx="1.7" ry="2.6" fill="#1a0800"/><ellipse cx="40" cy="35" rx="1.7" ry="2.6" fill="#1a0800" transform="rotate(20 40 35)"/><ellipse cx="27" cy="45" rx="1.5" ry="2.2" fill="#1a0800" transform="rotate(-10 27 45)"/><ellipse cx="37" cy="45" rx="1.5" ry="2.2" fill="#1a0800" transform="rotate(10 37 45)"/><path d="M7 27h50" fill="none" stroke="#0a3d10" stroke-width="2.6" stroke-linecap="round"/></svg>`,
       star: `<svg class="ic-svg" viewBox="0 0 64 64" aria-hidden="true"><defs><radialGradient id="${u}s" cx="40%" cy="30%" r="65%"><stop offset="0%" stop-color="#fff9c8"/><stop offset="32%" stop-color="#ffd400"/><stop offset="75%" stop-color="#d08800"/><stop offset="100%" stop-color="#7a4800"/></radialGradient></defs><path d="M32 4.5l7.2 19.8H60.5L44.8 36.8l5.9 20.5L32 45l-18.7 12.3 5.9-20.5L3.5 24.3h21.3z" fill="url(#${u}s)" stroke="#5a3800" stroke-width="2.1" stroke-linejoin="round"/><path d="M32 13.5l4.2 11.5H48.5" fill="none" stroke="#fff" stroke-width="2.5" opacity=".48" stroke-linecap="round"/><path d="M32 21.5l2.3 6.2H41" fill="none" stroke="#fff8b0" stroke-width="1.45" opacity=".75" stroke-linecap="round"/></svg>`,
     };
-    return SVGS[symId] || '';
+    const svg = SVGS[symId] || '';
+    return IC_VIEWBOX[symId] ? svg.replace('viewBox="0 0 64 64"', `viewBox="${IC_VIEWBOX[symId]}"`) : svg;
   }
+  // Optical normalisation (r3): each drawing's painted bbox is re-centred and
+  // scaled so every symbol reads the same size in every slot (tile / reel /
+  // bet key / bingo / stage). Melon is a half slice drawn at y 27–60 → was
+  // visibly low; bell & star are heavier → given a little more margin.
+  const IC_VIEWBOX = {
+    apple: '0 2.3 64 64',
+    orange: '1 2.7 62 62',
+    coconut: '0 -0.5 64 64',
+    bell: '-2 -3.2 68 68',
+    melon: '2 13.5 60 60',
+    star: '-3 -4.1 70 70',
+  };
 
   // Bingo 3×3 — same fruit-reel art as track / reels (never text glyphs 蘋/橙/芒).
   function paintBingoCell(el, id) {
@@ -894,12 +907,13 @@
 
   $('paytable').innerHTML = SYMBOLS.map((s) =>
     `<tr><td>${iconHTML(s.id)}</td><td>${s.name}</td><td>× ${s.mult}</td></tr>`).join('') +
-    '<tr><td>×3</td><td>小圖／BAR50</td><td>×3／×50</td></tr>' +
-    '<tr><td><span class="ic-once" style="font-size:8px">ONCE<br>MORE</span></td><td>再跑／連跑</td><td>FREE</td></tr>' +
-    `<tr><td>JP</td><td>大 BAR＋押 BAR</td><td>彩金</td></tr>` +
-    '<tr><td>★</td><td>送燈／火車／三元</td><td>中彩</td></tr>' +
-    '<tr><td>🎰</td><td>三輪 Bonus／FEVER／賓果</td><td>舞台</td></tr>' +
-    '<tr><td>💡</td><td>倒跑／跳格／假停／雙燈／超跑</td><td>跑燈</td></tr>';
+    '<tr><td><span class="pt-glyph">×3</span></td><td>小圖／BAR50</td><td>×3／×50</td></tr>' +
+    '<tr><td><span class="ic-once">ONCE<br>MORE</span></td><td>再跑／連跑</td><td>FREE</td></tr>' +
+    `<tr><td><span class="pt-glyph pt-jp">JP</span></td><td>大 BAR＋押 BAR</td><td>彩金</td></tr>` +
+    '<tr><td><span class="pt-glyph">★</span></td><td>送燈／火車／三元</td><td>中彩</td></tr>' +
+    // was emoji 🎰 / 💡 — off-style next to the painted symbols
+    '<tr><td><span class="pt-reel3" aria-hidden="true"><i></i><i></i><i></i></span></td><td>三輪 Bonus／FEVER／賓果</td><td>舞台</td></tr>' +
+    '<tr><td><span class="pt-lamp" aria-hidden="true"></span></td><td>倒跑／跳格／假停／雙燈／超跑</td><td>跑燈</td></tr>';
 
   // --- 3 fruit reels --------------------------------------------------------
   const REEL_LOOPS = 8; // repeated strip length multiplier
@@ -923,12 +937,16 @@
     reelStrips.forEach((r) => { r.cellH = h || (parseFloat(getComputedStyle(document.documentElement).fontSize) * 2); });
   }
 
+  // Offset is in *cell units* (CSS `--ri`), not px: styles.css turns it into
+  // translateY(centre-pad − cell × ri), so the stop stays on the payline even
+  // if fitCabinet changes --u mid-round (iOS toolbar collapse / rotate) —
+  // the old px value was measured once and went stale → half-cells showed.
   function setReelOffset(ri, index, animate) {
     const r = reelStrips[ri];
-    if (!r.cellH) measureReelCells();
-    const y = -(index * r.cellH);
     r.el.classList.toggle('settle', !!animate);
-    r.el.style.transform = `translateY(${y}px)`;
+    r.el.style.removeProperty('transform');
+    r.el.style.setProperty('--ri', String(index));
+    r.idx = index;
   }
 
   function findReelIndex(ri, symId, preferNearEnd) {
@@ -4065,7 +4083,7 @@
   setTimeout(maybeFirstRunTip, 500);
 
   window.__xiaomali = {
-    build: '20261006c9',
+    build: '20261006d1',
     state, settings, TRACK, SYMBOLS, pickTarget, resetCredit, Music, Sound, E, fitCabinet,
     setSettings(s) {
       const v = validateSettings(s);
@@ -4075,5 +4093,17 @@
       return { fixed: v.fixed, errors: v.errors, warnings: v.warnings };
     },
     validateSettings, toast, save, load, buildBackup, applyProgressData,
+    /** Audit/QA only: show three symbols on the payline (no round, no credit). */
+    debugReels(ids) {
+      if (state.busy || !Array.isArray(ids)) return false;
+      ids.slice(0, 3).forEach((id, ri) => {
+        const i = findReelIndex(ri, id, true);
+        if (i < 0) return;
+        reelStrips[ri].parent.classList.remove('spinning');
+        reelStrips[ri].parent.classList.add('landed');
+        setReelOffset(ri, i, true);
+      });
+      return true;
+    },
   };
 })();

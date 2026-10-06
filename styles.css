@@ -4488,3 +4488,132 @@ html.fit-2 .note { font-size: max(8px, calc(var(--u) * 1.6)); }
   from { transform: scale(1); box-shadow: 0 0 0 rgba(255, 240, 120, 0); }
   to { transform: scale(1.06); box-shadow: 0 0 calc(var(--u) * 1.4) rgba(255, 240, 120, 0.9); }
 }
+
+
+/* ========== UI Audit-3: icon size / centring everywhere (20261006d1) ========== */
+/*
+ * Root cause of "圖示大小沒有適中": `.ic-svg { width: 92%; height: 92% }`
+ * (Icons pass) — in a grid cell whose height is not a definite percentage
+ * basis the height falls back to the width-derived ratio, so in the wide
+ * reel cells (center 56 → 68 %) the SVG grew to 111–120 % of the window
+ * height: icons were cut top and bottom and the neighbours' overflow showed
+ * as big half-icons. Each slot now sizes its icon with an explicit length
+ * (em of a fixed font-size, or `cqmin` of its own box) — never % height.
+ * Drawings are also optically re-centred via per-symbol viewBox in
+ * game.js `IC_VIEWBOX` (melon was drawn in the lower half of its box).
+ */
+
+/* R3-1 centre reels: window 15u, cell 11.4u, icon 9.6u (64 % of window).
+   One whole icon sits on the payline; neighbours peek ≈ 0.9u under shade.
+   Offset is in cell units (`--ri` from setReelOffset) → never stale px. */
+.reels {
+  --reel-win: calc(var(--u) * 15);
+  --reel-cell: calc(var(--u) * 11.4);
+  --reel-ic: calc(var(--u) * 9.6);
+}
+html.fit-2 .reels {
+  --reel-win: calc(var(--u) * 11.5);
+  --reel-cell: calc(var(--u) * 8.8);
+  --reel-ic: calc(var(--u) * 7.4);
+}
+.reel-mask,
+html.fit-2 .reel-mask { height: var(--reel-win); }
+.reel-cell,
+html.fit-2 .reel-cell { height: var(--reel-cell); font-size: var(--reel-ic); }
+.reel-strip {
+  transform: translateY(calc((var(--reel-win) - var(--reel-cell)) / 2 - var(--reel-cell) * var(--ri, 0)));
+}
+.reel-cell .ic-svg { width: 1em; height: 1em; flex: none; }
+.reel-cell .ic-77 { font-size: 0.8em; }
+.reel-cell .ic-bar { font-size: 0.215em; }
+.reel-cell .ic-once { font-size: 0.32em; }
+/* cylinder shade only over the neighbour peeks, not over the payline icon */
+.reel-mask::before,
+.reel-mask::after { height: calc((var(--reel-win) - var(--reel-cell)) / 2 + var(--u) * 0.5); }
+.reel-mask::before { background: linear-gradient(180deg, rgba(0, 0, 0, 0.55), rgba(0, 0, 0, 0.12) 80%, transparent); }
+.reel-mask::after { background: linear-gradient(0deg, rgba(0, 0, 0, 0.55), rgba(0, 0, 0, 0.12) 80%, transparent); }
+
+/* R3-2 outer 24 tiles: icon = % of the smaller side of its own box
+   (fit-1/fit-2 tiles are wider than tall → SVG overflowed to 107 %). */
+.tile .ic { container-type: size; }
+.tile .ic .ic-svg { width: 90cqmin; height: 90cqmin; }
+/* text symbols also scale from the box (fit-2 tiles are ~30 % shorter: the
+   3-row BAR stack spilled under the lamp, small-tile 77 hit the ×3 badge) */
+.tile .ic .ic-77 { font-size: min(0.8em, 66cqmin); }
+.tile.small .ic .ic-77 { font-size: min(0.95em, 62cqmin); }
+.tile .ic .ic-bar { font-size: min(0.255em, 26cqh); }
+html.fit-1 .tile .ic .ic-bar { font-size: min(0.255em, 21cqh); }
+html.fit-2 .tile .ic .ic-bar { font-size: min(0.255em, 18cqh); }
+
+/* R3-3 bet keys: SVG was 92 % of the key width (40×37 px in a 45 px cap) →
+   star/bell touched the cap edge and the bet badge covered the bottom. */
+.betkey .bicon {
+  width: calc(var(--u) * 7.4);
+  height: calc(var(--u) * 7.4);
+  font-size: calc(var(--u) * 7.4);
+}
+.betkey .bicon .ic-svg { width: 1em; height: 1em; }
+.betkey .ic-77 { font-size: 0.66em; }
+.betkey .ic-bar { font-size: 0.185em; }
+.betkey.is-bet .bicon { transform: translateY(calc(var(--u) * -1.1)); }
+html.fit-2 .betkey .bicon {
+  width: min(calc(var(--u) * 7.4), 30px);
+  height: min(calc(var(--u) * 7.4), 30px);
+  font-size: min(calc(var(--u) * 7.4), 30px);
+}
+
+/* R3-4 bingo 3×3: size from the cell's smaller side (fit-2 cells 1.85:1). */
+.bingo-cell .bingo-ic { container-type: size; }
+.bingo-cell .bingo-ic .ic-svg {
+  width: 82cqmin;
+  height: 82cqmin;
+  max-width: none;
+  max-height: none;
+}
+.bingo-cell .bingo-ic .ic-77 { font-size: max(9px, 62cqmin); letter-spacing: -0.06em; }
+
+/* R3-5 stage prizes / balls: BAR stack was 125 % of its ball. */
+.stage-ic .ic-bar { font-size: 0.19em; }
+.stage-ic .ic-once { font-size: 0.25em; }
+
+/* R3-6 help paytable: fixed 26 px icon cell; BAR stack made its row 1.6×
+   taller, ONCE MORE was 5.7 px. */
+.paytable td:first-child { height: 34px; line-height: 0; }
+.paytable td:first-child .ic-svg { width: 28px; height: 28px; margin: 0 auto; }
+.paytable .ic-77 { font-size: 20px; line-height: 1; }
+.paytable .ic-bar { font-size: 6.4px; display: inline-flex; vertical-align: middle; }
+.paytable .ic-once { font-size: 9px; line-height: 1.05; color: #8cc4ff; text-shadow: 0 1px 0 #000; }
+.paytable .pt-glyph {
+  display: inline-grid;
+  place-items: center;
+  width: 28px;
+  height: 28px;
+  font: 900 18px/1 "Arial Black", Impact, sans-serif;
+  color: #ffe9a0;
+}
+.paytable .pt-lamp {
+  display: inline-block;
+  width: 18px;
+  height: 18px;
+  border-radius: 50%;
+  background: radial-gradient(circle at 35% 30%, #ffd0c0, #e02020 55%, #600);
+  box-shadow: 0 0 0 2px #8a8a90, 0 0 6px 1px rgba(255, 80, 60, 0.7);
+}
+.paytable .pt-jp { color: #ff4ad0; font-size: 15px; }
+.paytable .pt-reel3 {
+  display: inline-flex;
+  gap: 2px;
+  padding: 3px;
+  border-radius: 4px;
+  background: linear-gradient(180deg, #f0f0f2, #8a8a90 50%, #d8d8dc);
+  box-shadow: inset 0 0 0 1px #222;
+  vertical-align: middle;
+}
+.paytable .pt-reel3 i {
+  width: 7px;
+  height: 14px;
+  border-radius: 1.5px;
+  background: #fff;
+  box-shadow: inset 0 0 0 1px #111;
+}
+.paytable .pt-reel3 i:nth-child(2) { background: linear-gradient(#fff 40%, #e01818 40% 60%, #fff 60%); }
