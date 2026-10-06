@@ -4617,3 +4617,104 @@ html.fit-2 .betkey .bicon {
   box-shadow: inset 0 0 0 1px #111;
 }
 .paytable .pt-reel3 i:nth-child(2) { background: linear-gradient(#fff 40%, #e01818 40% 60%, #fff 60%); }
+
+
+/* ========== UI Audit-4: narrow / short / landscape / extreme values (20261006d2) ========== */
+/* R4-1 deck rows never overflow: on ≤ 380 px wide phones 8 bet keys / 7 func
+   keys at a 44 px min-width are physically wider than the cabinet (360: BAR
+   key cut at x 380; 320: 加倍/續押 off-screen). Keys share the row (min-width
+   0) and keep ≥ 44 px height. */
+.deck-bets { grid-template-columns: repeat(8, minmax(0, 1fr)); }
+.deck-func { grid-template-columns: minmax(0, 2fr) minmax(0, 3fr) minmax(0, 2fr); }
+.pkeys { grid-auto-columns: minmax(0, 1fr); }
+.deck-main { grid-template-columns: repeat(3, minmax(0, 1fr)) minmax(0, 2.35fr); }
+html body .deck .btn,
+html body .deck .betkey { min-width: 0; }
+.pgroup { min-width: 0; }
+.deck .btn-lab { white-space: nowrap; }
+
+/* R4-2 cabinet cannot fit even at the width floor (phone landscape 932×430,
+   tiny split views): body was position:fixed + .app overflow hidden +
+   centred → marquee and the whole deck (開始) were cut off and unreachable.
+   fitCabinet sets .fit-scroll → page scrolls instead. */
+html.fit-scroll,
+html.fit-scroll body { height: auto; overflow-x: hidden; overflow-y: auto; }
+html.fit-scroll body { position: static; }
+html.fit-scroll .app { height: auto; min-height: 100dvh; overflow: visible; justify-content: flex-start; }
+
+/* R4-3 info labels ≥ 8 px on every size (375×667 measured 5.4–7.7 px:
+   WIN/CREDIT plates, JP/LINE values, MISSION, WHEEL/BONUS, HOLD, JP label,
+   VFD message, pay multipliers). Decorative CHERRY/BELL stay ≥ 7 px. */
+.meter-plate { font-size: max(8px, calc(var(--u) * 1.9)); }
+.mini-val { font-size: max(8px, calc(var(--u) * 2.2)); }
+.mission-lab,
+html.fit-2 .mission-lab { font-size: max(8px, calc(var(--u) * 1.6)); }
+.mw-lab, .bl-lab, .bl-sub,
+html.fit-2 .mw-lab, html.fit-2 .bl-lab, html.fit-2 .bl-sub { font-size: max(8px, calc(var(--u) * 1.6)); }
+.hold-plate,
+.top-core .hold-plate,
+html.fit-1 .hold-plate,
+html.fit-1 .top-core .hold-plate { font-size: max(8px, calc(var(--u) * 1.65)); }
+.jp-label { font-size: max(8px, calc(var(--u) * 2.8)); }
+.msg { font-size: max(9px, calc(var(--u) * 3)); }
+.paycell .mult { font-size: max(8px, calc(var(--u) * 2.4)); }
+.note,
+html.fit-1 .note,
+html.fit-2 .note { font-size: max(8px, calc(var(--u) * 1.6)); }
+
+/* R4-4 fit-1 (e.g. 360×740): the board turns 1:0.86 so the 56 % centre
+   window got shorter but the reels kept 15u → JP badge cut at the top and the
+   VFD message at the bottom. Intermediate reel size + tighter centre. */
+html.fit-1 .reels {
+  --reel-win: calc(var(--u) * 13);
+  --reel-cell: calc(var(--u) * 9.9);
+  --reel-ic: calc(var(--u) * 8.3);
+}
+html.fit-2 .reels {
+  --reel-win: calc(var(--u) * 11.5);
+  --reel-cell: calc(var(--u) * 8.8);
+  --reel-ic: calc(var(--u) * 7.4);
+}
+html.fit-1 .center { gap: calc(var(--u) * 0.45); padding: calc(var(--u) * 0.7); margin: 0; }
+
+/* R4-5 bingo ONCE MORE overflowed its cell on 320 px / landscape */
+.bingo-cell .bingo-ic .ic-once { font-size: min(max(6.5px, calc(var(--u) * 1.45)), 40cqh, 30cqw); }
+/* 390-wide iPhones: shared row came out 41 px; trim tray gaps/padding and
+   bleed into the deck padding (as fit-2 already did) → ≥ 44 px wide keys. */
+.deck-bets {
+  gap: calc(var(--u) * 0.12);
+  padding-left: calc(var(--u) * 0.1);
+  padding-right: calc(var(--u) * 0.1);
+  margin-left: calc(var(--u) * -0.75);
+  margin-right: calc(var(--u) * -0.75);
+}
+
+/* R4-6 transient effects that still re-rasterised text/SVG with `filter`
+   (principle 1): big-win cabinet bump (whole cabinet!), cascade tiles, gacha
+   SSR prize pulse. Same motion/glow, no filter. Also the 1.02 bump made the
+   422 px cabinet 430 px inside a 422 px overflow-hidden .app → edges clipped
+   during the bounce; .app no longer clips (body still does). */
+@keyframes hapticBumpBig {
+  0% { transform: translateY(0) scale(1); }
+  25% { transform: translateY(calc(var(--u) * -1.1)) scale(1.02); }
+  55% { transform: translateY(calc(var(--u) * 0.45)) scale(0.988); }
+  100% { transform: translateY(0) scale(1); }
+}
+.app { overflow: visible; }
+.tile.cascade {
+  filter: none;
+  background:
+    radial-gradient(ellipse 90% 60% at 50% 10%, #fff 0%, transparent 65%),
+    linear-gradient(165deg, #fffbe6 0%, #ffef9a 50%, #ffd24a 100%);
+}
+@keyframes cascadeCore {
+  0% { transform: scale(1); box-shadow: 0 0 0 rgba(255, 230, 90, 0); }
+  35% { transform: scale(1.14); box-shadow: 0 0 calc(var(--u) * 3) rgba(255, 240, 140, 0.95); }
+  100% { transform: scale(1.04); box-shadow: 0 0 calc(var(--u) * 2) rgba(255, 220, 60, 0.8); }
+}
+@keyframes ssrPulse {
+  from { box-shadow: 0 0 calc(var(--u) * 3.5) #ffe082, 0 0 calc(var(--u) * 6) #ff9800; }
+  to { box-shadow: 0 0 calc(var(--u) * 5) #fff2c0, 0 0 calc(var(--u) * 8.5) #ffb300; }
+}
+/* R4-7 stage badge (GACHA / SIC BO …) was 7.0 px on 375×667 */
+.stage-badge { font-size: max(8px, calc(var(--u) * 2)); }

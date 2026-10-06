@@ -4002,7 +4002,7 @@
     const Hav = Math.max(240, vh - padT - padB);
 
     // Reset density so we measure the "full" layout first.
-    root.classList.remove('fit-1', 'fit-2');
+    root.classList.remove('fit-1', 'fit-2', 'fit-scroll');
     root.style.setProperty('--Wmax', Wmax + 'px');
     root.style.setProperty('--Hav', Hav + 'px');
     root.style.setProperty('--fit-ratio', '1.0'); // force width = Wmax for measure
@@ -4032,6 +4032,17 @@
       if (h <= Hav + 0.5) break;
       const floor = (Hav >= 680) ? 360 : 250;
       W = Math.max(floor, W * (Hav / h) * 0.992);
+      root.style.setProperty('--W', W + 'px');
+    }
+    // Still taller than the screen at the width floor (phone landscape, split
+    // view): stop shrinking into an unreadable strip and let the page scroll
+    // (otherwise the centred, overflow-hidden .app cut off the deck / 開始).
+    void cab.offsetHeight;
+    h = cab.getBoundingClientRect().height;
+    const scroll = h > Hav + 1;
+    root.classList.toggle('fit-scroll', scroll);
+    if (scroll) {
+      W = Math.max(W, Math.min(Wmax, 340));
       root.style.setProperty('--W', W + 'px');
     }
   }
@@ -4083,7 +4094,7 @@
   setTimeout(maybeFirstRunTip, 500);
 
   window.__xiaomali = {
-    build: '20261006d1',
+    build: '20261006d2',
     state, settings, TRACK, SYMBOLS, pickTarget, resetCredit, Music, Sound, E, fitCabinet,
     setSettings(s) {
       const v = validateSettings(s);
