@@ -4821,3 +4821,13 @@ html.fit-1 .center { gap: calc(var(--u) * 0.45); padding: calc(var(--u) * 0.7); 
 /* R7-1 idle WHEEL / BONUS strip was transform:scale(.88) → its 8 px labels rendered at 7 px
    (the ≥8 px rule was only met on paper). Natural size now. */
 .center .cab-toys { transform: none; }
+
+/* ========== UI Audit-8 (20261006d6) ========== */
+/* R8-1 Galaxy-Fold cover 344 px (no fit class): 清除／全押／自動 labels 7.9 px */
+.deck-main .btn:not(.btn-start) .btn-lab { font-size: max(9px, calc(var(--u) * 2.35)); }
+/* R8-2 settings rows greyed by a mode toggle sat at α.42 (name 2.6:1, hint ~2:1 — can't read why it is off).
+   Opaque now; "inactive" reads through muted grey text (≥4.5:1 on the sheet) + disabled cursor. */
+.mode-list label.dim, .range-label.dim { opacity: 1; cursor: not-allowed; }
+.mode-list label.dim .mode-name, .range-label.dim, .range-label.dim * { color: #bdb7ab; }
+.mode-list label.dim .mode-hint { color: #a8a296; }
+.mode-list label.dim input, .range-label.dim input { opacity: 0.55; }
