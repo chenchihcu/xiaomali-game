@@ -4831,3 +4831,54 @@ html.fit-1 .center { gap: calc(var(--u) * 0.45); padding: calc(var(--u) * 0.7); 
 .mode-list label.dim .mode-name, .range-label.dim, .range-label.dim * { color: #bdb7ab; }
 .mode-list label.dim .mode-hint { color: #a8a296; }
 .mode-list label.dim input, .range-label.dim input { opacity: 0.55; }
+
+/* ========== UI Audit-9 (20261006d7) ========== */
+/* R9-3 JP / LINE meter with its mode switched off: `.mini-meter.off` (0,2,0) lost to
+   `.mini-meter:not(.is-hit):not(.is-live)` (0,3,0) → looked identical to an idle live pot.
+   Value now reads OFF (game.js) on an opaque face with muted grey text (≥4.5:1), no glow. */
+.mini-meter.off,
+.mini-meter.off:not(.is-hit):not(.is-live) { opacity: 1; filter: none; }
+.mini-meter.off .mini-lab { color: #bdb7ab; }
+.mini-meter.off .mini-val,
+.mini-meter.off:not(.is-hit):not(.is-live) .mini-val { color: #bdb7ab; text-shadow: none; animation: none; }
+/* R9-5/6 wheel stops: JS puts segment i's centre at i·seg + seg/2 under the pointer (labels too),
+   but both conic gradients started at −seg/2 → the pointer always stopped on a colour seam
+   (roulette 6 looked half red). Gradients now start at 0deg so colour, label and pointer agree.
+   Hubs counter-rotate in JS (result number / GO upright); same transition as their wheel. */
+.sw-wheel {
+  background: conic-gradient(
+    from 0deg,
+    #c62828 0 36deg, #1b5e20 36deg 72deg, #1565c0 72deg 108deg,
+    #f9a825 108deg 144deg, #6a1b9a 144deg 180deg, #ef6c00 180deg 216deg,
+    #00838f 216deg 252deg, #ad1457 252deg 288deg, #4527a0 288deg 324deg,
+    #ffd54f 324deg 360deg
+  );
+}
+.sr-wheel {
+  background: conic-gradient(
+    from 0deg,
+    #1b5e20 0 27.692deg,
+    #c62828 27.692deg 55.385deg, #111 55.385deg 83.077deg,
+    #c62828 83.077deg 110.769deg, #111 110.769deg 138.462deg,
+    #c62828 138.462deg 166.154deg, #111 166.154deg 193.846deg,
+    #c62828 193.846deg 221.538deg, #111 221.538deg 249.231deg,
+    #c62828 249.231deg 276.923deg, #111 276.923deg 304.615deg,
+    #c62828 304.615deg 332.308deg, #111 332.308deg 360deg
+  );
+}
+.sw-hub, .sr-hub { transition: transform 0.05s linear; }
+@media (prefers-reduced-motion: reduce) {
+  .sw-hub, .sr-hub { transition: transform 0.4s ease-out !important; }
+}
+/* R9-7 ONCE MORE / 連跑 banner added a row to the centre window: in every fit-1 layout
+   (375×667, 360×740/640, 320, 414×736, 600×960, 1024/1280 desktop, landscape) the column
+   overflowed 4–6 px → JP row and VFD message clipped. The gamble dice row is idle while a
+   chain runs (gamble needs !busy; banner is always hidden at round end) → banner takes its place. */
+html.fit-1 .center.once-on .dice-row { display: none; }
+/* R9-8 all stage modes off: `.mini-wheel.off` was α.4 + grayscale filter over the WHEEL label
+   (principles 1 & 3). Opaque, no filter; "off" reads through a grey rim/hub and muted label. */
+.mini-wheel.off { opacity: 1; filter: none; }
+.mini-wheel.off .mw-rim { background: conic-gradient(from 0deg, #8f8a80, #5d5953, #8f8a80, #5d5953, #8f8a80); box-shadow: inset 0 0 0 1px rgba(0, 0, 0, 0.45); }
+.mini-wheel.off .mw-disc > i { background: conic-gradient(from calc(var(--i) * 45deg), transparent 0 38deg, rgba(220, 214, 204, 0.3) 38deg 45deg); }
+.mini-wheel.off .mw-hub { background: radial-gradient(circle at 35% 30%, #ebe6dd, #9b958b 55%, #4a463f); }
+.mini-wheel.off .mw-lab { color: #bdb7ab; }

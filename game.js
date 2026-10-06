@@ -1108,11 +1108,13 @@
     // Always show — previously remaining<=0 set hidden and the 「結束」cue never appeared.
     onceBanner.hidden = false;
     onceBanner.classList.toggle('pulse', remaining > 0);
+    $('center')?.classList.add('once-on'); // R9-7 short layouts: banner takes the idle dice row
   }
   function hideOnceBanner() {
     if (!onceBanner) return;
     onceBanner.hidden = true;
     onceBanner.classList.remove('pulse');
+    $('center')?.classList.remove('once-on');
   }
 
   function setLight(pos, trail = 0, trailDir = -1) {
@@ -1303,7 +1305,8 @@
     }
     const jpMini = $('jpMini');
     const jpMiniVal = $('jpMiniVal');
-    if (jpMiniVal) jpMiniVal.textContent = String(Math.floor(state.jp));
+    // R9-3 mode off → meter reads OFF (frozen pot is kept and shows again when re-enabled)
+    if (jpMiniVal) jpMiniVal.textContent = settings.modes.jp ? String(Math.floor(state.jp)) : 'OFF';
     if (jpMini) {
       jpMini.classList.toggle('off', !settings.modes.jp);
       jpMini.classList.toggle('is-live', !!settings.modes.jp && state.jp > 0);
@@ -1654,7 +1657,7 @@
     const lineMini = $('lineMini');
     const lineMiniVal = $('lineMiniVal');
     // LINE meter = lifetime completed lines (board clears on hit, so live count≈0).
-    if (lineMiniVal) lineMiniVal.textContent = String(state.bingoLineWins | 0);
+    if (lineMiniVal) lineMiniVal.textContent = bingoOn ? String(state.bingoLineWins | 0) : 'OFF';
     if (lineMini) {
       lineMini.classList.toggle('off', !bingoOn);
       lineMini.classList.toggle('is-hit', bingoOn && (liveLines > 0 || state.bingoLineWins > 0));
@@ -1972,6 +1975,7 @@
     wrap.innerHTML = `<div class="sw-pointer"></div><div class="sw-wheel" id="swWheel"><div class="sw-hub">GO</div></div>`;
     ui.body.appendChild(wrap);
     const wheel = wrap.querySelector('.sw-wheel');
+    const swHub = wrap.querySelector('.sw-hub');
     // Labels around the rim
     const labs = document.createElement('div');
     labs.className = 'sw-labels';
@@ -1980,7 +1984,8 @@
       lab.className = 'sw-lab';
       lab.textContent = seg.label;
       const ang = i * segAngle + segAngle / 2;
-      lab.style.transform = `rotate(${ang}deg) translateY(calc(var(--u) * -18)) rotate(${-ang}deg)`;
+      // R9-6 radial labels (rotate with the rim) → the winning label reads upright under the pointer
+      lab.style.transform = `rotate(${ang}deg) translateY(calc(var(--u) * -18))`;
       labs.appendChild(lab);
     });
     wheel.appendChild(labs);
@@ -1998,6 +2003,7 @@
         const ease = 1 - Math.pow(1 - p, 3);
         const ang = targetAngle * ease;
         if (wheel) wheel.style.transform = `rotate(${ang}deg)`;
+        if (swHub) swHub.style.transform = `rotate(${-ang}deg)`; // keep GO upright
         const seg = Math.floor(((ang % 360) / segAngle)) % n;
         if (seg !== lastTick) {
           lastTick = seg;
@@ -2249,6 +2255,8 @@
         const ease = 1 - Math.pow(1 - p, 3.2);
         const ang = targetAngle * ease;
         if (wheel) wheel.style.transform = `rotate(${ang}deg)`;
+        // R9-5 hub sits inside the wheel → counter-rotate so the result number reads upright (6 ≠ 9)
+        if (hub) hub.style.transform = `rotate(${-ang}deg)`;
         // Ball counter-rotates slightly for feel
         if (ball) ball.style.transform = `rotate(${-ang * 0.15}deg) translateY(0)`;
         const segI = Math.floor(((ang % 360) / seg)) % pockets;
@@ -2983,7 +2991,7 @@
     state.betsPaid = true;
     const need = sum(pattern);
     if (need <= 0) {
-      if (!quiet) deny('沒有上局押注');
+      if (!quiet) deny('沒有上一局押注');
       render();
       return false;
     }
@@ -3075,7 +3083,7 @@
     stopAuto();
     const total = avail() + paidRefund();
     washAsking = true;
-    const ok = await confirmBox('洗分', `CREDIT＋WIN 共 ${total} 將全部歸零，確定？`, '洗分');
+    const ok = await confirmBox('洗分', `CREDIT＋WIN${state.betsPaid && sum(state.bets) > 0 ? '＋已押' : ''} 共 ${total} 將全部歸零，押注與保留燈清空。確定？`, '洗分');
     washAsking = false;
     if (!ok) { toast('已取消洗分', 'info'); return; }
     if (why.wash()) { deny(why.wash()); return; } // state changed while asking
@@ -3530,7 +3538,7 @@
       clrBtn.addEventListener('click', async () => {
         if (state.busy) { deny(BUSY_MSG); return; }
         const ok = await confirmBox('清除進度',
-          'CREDIT／WIN／押注／賓果／JP／保留燈將歸零（設定保留）。確定？', '清除');
+          `CREDIT 回到 ${startCreditAmount()}、JP 回到 ${JP.seed}；WIN／押注／續押／賓果／保留燈清空（設定保留）。確定？`, '清除');
         if (!ok) { toast('已取消', 'info'); return; }
         if (state.busy) { deny(BUSY_MSG); return; }
         state.credit = startCreditAmount();
@@ -3727,7 +3735,7 @@
         const amt = startCreditAmount();
         const lost = avail() + paidRefund();
         const ok = await confirmBox('重設分數',
-          `CREDIT 改為 ${amt}，WIN／押注／JP 歸零${lost ? `（目前 ${lost}）` : ''}。確定？`, '重設');
+          `CREDIT 改為 ${amt}（目前 ${lost}），JP 回到 ${JP.seed}；WIN／押注／賓果／保留燈清空。確定？`, '重設');
         if (ok) resetCredit(); else toast('已取消重設', 'info');
       }, 0);
     }
@@ -3931,9 +3939,11 @@
 
   window.addEventListener('keydown', (e) => {
     if (settingsDlg.open || helpDlg.open || confirmDlg?.open || e.metaKey || e.ctrlKey || e.altKey) return;
+    const k = e.key;
+    // R9-4 T stops auto any time (same as the 自動 key: why.auto always allows switching off).
+    if (state.auto && k.toLowerCase() === 't' && !e.repeat) { e.preventDefault(); A.auto(); return; }
     // Ignore game keys while a round/gamble/collect animates (why.* would deny anyway).
     if (state.busy) return;
-    const k = e.key;
     if (k >= '1' && k <= '8') { stopAuto(); bet(Number(k) - 1); e.preventDefault(); return; }
     // Focused <button> handles its own Space/Enter → avoid firing twice.
     if ((k === ' ' || k === 'Enter') && e.target instanceof HTMLButtonElement) return;
@@ -4096,7 +4106,7 @@
   setTimeout(maybeFirstRunTip, 500);
 
   window.__xiaomali = {
-    build: '20261006d6',
+    build: '20261006d7',
     state, settings, TRACK, SYMBOLS, pickTarget, resetCredit, Music, Sound, E, fitCabinet,
     setSettings(s) {
       const v = validateSettings(s);
