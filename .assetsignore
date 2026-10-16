@@ -1,0 +1,13 @@
+# Cloudflare Workers static assets: files NOT to upload to the workers.dev site.
+# (The live site served /.git/config and the generated wrangler.jsonc.)
+.git
+.github
+.wrangler
+node_modules
+wrangler.json
+wrangler.jsonc
+wrangler.toml
+.assetsignore
+.gitignore
+*.md
+sim.js

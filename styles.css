@@ -4882,3 +4882,78 @@ html.fit-1 .center.once-on .dice-row { display: none; }
 .mini-wheel.off .mw-disc > i { background: conic-gradient(from calc(var(--i) * 45deg), transparent 0 38deg, rgba(220, 214, 204, 0.3) 38deg 45deg); }
 .mini-wheel.off .mw-hub { background: radial-gradient(circle at 35% 30%, #ebe6dd, #9b958b 55%, #4a463f); }
 .mini-wheel.off .mw-lab { color: #bdb7ab; }
+
+/* ========== iPhone 16 Pro Max / Apple HIG pass (20261017a) ========== */
+/* H1 Dark-only cabinet: tell WebKit so form controls, scrollbars and the
+   standalone status bar render dark (no light theme — the cabinet art is dark). */
+:root { color-scheme: dark; }
+
+/* H2 Landscape safe area: keep the machine clear of the Dynamic Island side and
+   the rounded corners (env(safe-area-inset-left/right) ≈ 62 px in landscape). */
+body { padding-left: var(--safe-l); padding-right: var(--safe-r); }
+
+/* H3 Phone landscape two-column cabinet (fitLandscape in game.js).
+   Left: glass (track + payout). Right: meters, topper, deck — all controls
+   inside the right-thumb zone, nothing behind the home indicator. */
+html.land .app { width: var(--Wland, var(--W)); }
+html.land .cabinet {
+  display: grid;
+  grid-template-columns: var(--Wg) minmax(0, 1fr);
+  grid-template-rows: auto auto minmax(0, 1fr) auto;
+  column-gap: calc(var(--u) * 1.6);
+  row-gap: calc(var(--u) * 0.8);
+}
+html.land .glass { --u: calc(var(--Wg) / 100); grid-column: 1; grid-row: 1 / span 4; align-self: center; }
+html.land .marquee { grid-column: 2; grid-row: 1; }
+html.land .topper { grid-column: 2; grid-row: 2; }
+html.land .deck { grid-column: 2; grid-row: 3; align-self: end; }
+html.land .note { grid-column: 2; grid-row: 4; }
+
+/* H4 Game surface: no pinch / double-tap zoom, no text selection or callout
+   while playing (the viewport meta no longer forbids zoom globally, so dialogs
+   and help text stay zoomable for accessibility). pan-y keeps the rare
+   fit-scroll fallback scrollable. */
+.cabinet {
+  touch-action: pan-y;
+  -webkit-user-select: none;
+  user-select: none;
+  -webkit-touch-callout: none;
+}
+.cabinet img, .cabinet svg { -webkit-user-drag: none; }
+
+/* H5 Inputs ≥ 16 px so iOS Safari doesn't auto-zoom on focus. */
+input[type="search"], input[type="text"], input[type="number"], select, textarea { font-size: max(16px, 1em); }
+#setSearch { font-size: 16px; }
+
+/* H6 Readable labels (HIG: ≥ 11 pt; our floor 12 px for actionable text).
+   Fruit / BAR / ONCE MORE glyph art stays art-sized. */
+.deck .btn:not(.btn-start) .btn-lab { font-size: max(12px, calc(var(--u) * 2.4)) !important; }
+.paycell .mult { font-size: max(12px, calc(var(--u) * 2.4)); }
+.note, html.fit-1 .note, html.fit-2 .note { font-size: max(11px, calc(var(--u) * 1.6)); }
+.meter-plate, .plate { font-size: max(9px, calc(var(--u) * 1.9)); }
+/* VFD status line + JP value are live game feedback: ≥ 12 px even when the
+   landscape glass column is narrower (messages ellipsize, never wrap). */
+.msg { font-size: max(12px, calc(var(--u) * 3)); }
+.jp-val { font-size: max(12px, calc(var(--u) * 3.6)); }
+
+/* H7 Landscape settings / help sheets: on a 440 px-tall screen the sticky
+   header + footer left ~150 px of scrollable content. Title sits inline with
+   the category chips, sheet uses the wider landscape width, footer tightens
+   (buttons stay 44 px). */
+@media (orientation: landscape) and (max-height: 520px) {
+  .sheet { max-height: calc(100dvh - var(--pad-t) - var(--pad-b) - 8px); }
+  .settings-sheet { width: min(calc(100vw - var(--safe-l) - var(--safe-r) - 24px), 720px); }
+  .set-head {
+    display: grid;
+    grid-template-columns: auto minmax(0, 1fr);
+    align-items: center;
+    column-gap: 12px;
+    padding: 8px 14px 8px;
+  }
+  .settings-sheet .set-head h2 { margin: 0; font-size: 20px; }
+  .set-head .set-nav { margin-bottom: 0; }
+  .set-head .set-search { grid-column: 1 / -1; margin-top: 6px; }
+  .set-foot { padding: 6px 14px 8px; }
+  .set-foot .disclaimer { margin: 4px 0 0; }
+  .sheet-actions .btn { height: 44px; }
+}

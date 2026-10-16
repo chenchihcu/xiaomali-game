@@ -3,7 +3,7 @@
 ## What this is
 「小瑪莉」fruit-machine web game with Running-Light / Pachislot / Medal / Bingo
 plus Lucky Wheel / Gacha / Sic Bo / Pachinko / Ball-draw / Roulette stage overlays. **Pure static** (HTML/CSS/vanilla JS), no build, no dependencies.
-Deployed as-is to GitHub Pages from repo root. Fake play credit only. Keep cabinet UI.
+Deployed as-is to GitHub Pages from repo root, and to Cloudflare Workers static assets (https://xiaomali-game.chihfu-chen-tw.workers.dev/ — no wrangler config in repo; Cloudflare generates one with `assets.directory: "."`; `.assetsignore` keeps `.git`/docs out). Fake play credit only. Keep cabinet UI.
 
 Live: https://chenchihcu.github.io/xiaomali-game/
 Repo: https://github.com/chenchihcu/xiaomali-game
@@ -100,6 +100,9 @@ Bingo marks and stage pays are real (fake credit); flourishes are not.
 - `fitCabinet()` (game.js) resolves `--pad-t` / `--pad-b` / `--safe-*` via a probe element (because `getPropertyValue` returns unevaluated `max()`/`env()` strings), measures cabinet height at `--Wmax`, applies `fit-1` / `fit-2` density (topper/deck/board compaction), then shrinks `--W` with iterative nudge so the machine clears the safe content box. Re-runs on `resize` / `orientationchange` / `visualViewport` / bingo visibility.
 - Enriched `.topper` (wings + HOLD + bingo/mission) is height-budgeted; fit levels shrink min-height / wing art / captions before width shrink.
 - Touch targets ≥ 44px (knobs, chips, buttons, bet keys `min-width/min-height`). Fit-2 also tightens horizontal deck/cabinet pads so 8 bet keys stay ≥44px on short Safari heights. Settings/help sheets scroll inside the dialog only.
+- **Landscape (956×440 etc.)**: `fitCabinet()` switches to `html.land` (two-column grid: `.glass` left sized by `--Wg`, marquee/topper/deck right sized by `--W`, `--Wland` = app width) via `fitLandscape()`. Body pads `env(safe-area-inset-left/right)`. Desktop/tall windows keep the portrait column.
+- Zoom: viewport meta no longer sets `maximum-scale`/`user-scalable=no` (iOS ignores them anyway). `.cabinet { touch-action: pan-y }` + scoped `gesturestart` block pinch/double-tap zoom on the game only; dialogs stay zoomable. Inputs ≥16px (no focus zoom).
+- Background: `visibilitychange` hidden → save, stop 自動, stop BGM, suspend AudioContext.
 - FX: win sparkles, 3-step lamp trails, reel bounce, FEVER splash/ring — all original CSS/SVG, no IP.
 
 ## How to test
