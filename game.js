@@ -3968,7 +3968,11 @@
   document.addEventListener('visibilitychange', () => {
     if (document.hidden) {
       save();
+      // HIG (games): pause when the player leaves. Stop the auto loop so it
+      // doesn't keep spending credit in the background, and suspend audio.
+      if (state.auto) stopAuto('離開畫面・自動已停', 'warn');
       Music.update();
+      try { if (Sound.ctx && Sound.ctx.state === 'running') Sound.ctx.suspend(); } catch (_) { /* */ }
     } else {
       // Tab/app resume often leaves AudioContext suspended — re-unlock then BGM.
       const p = Sound.unlock();
@@ -4010,8 +4014,19 @@
     // Skip duplicate visualViewport/orientation storms when nothing material changed.
     if (!force && sig === _fitSig && root.style.getPropertyValue('--W')) return;
     _fitSig = sig;
-    const Wmax = Math.min(vw - 2 * gutter - safeL - safeR, 480);
+    const availW = vw - 2 * gutter - safeL - safeR;
+    const Wmax = Math.min(availW, 480);
     const Hav = Math.max(240, vh - padT - padB);
+
+    // Phone landscape (iPhone 16 Pro Max 956×440): the portrait column cannot
+    // fit (it fell back to page scroll with 開始 off-screen). Use a two-column
+    // cabinet instead — glass on the left, meters + deck in thumb reach on the
+    // right — sized to the safe area (Dynamic Island / home indicator sides).
+    const land = vw > vh * 1.3 && (vh - padT - padB) < 620 && availW >= 600;
+    root.classList.toggle('land', land);
+    if (land) { fitLandscape(root, cab, availW, Hav); return; }
+    root.style.removeProperty('--Wg');
+    root.style.removeProperty('--Wland');
 
     // Reset density so we measure the "full" layout first.
     root.classList.remove('fit-1', 'fit-2', 'fit-scroll');
@@ -4058,6 +4073,56 @@
       root.style.setProperty('--W', W + 'px');
     }
   }
+  /** Two-column landscape fit. --W = right column (meters/topper/deck, so the
+   *  8 bet keys keep ≥44pt), --Wg = glass column. Escalates fit-1/fit-2
+   *  density, then narrows the right column, then shrinks the glass. */
+  function fitLandscape(root, cab, availW, Hav) {
+    const glass = cab.querySelector('.glass');
+    const px = (v) => parseFloat(v) || 0;
+    root.classList.remove('fit-1', 'fit-2', 'fit-scroll');
+    let Wr = Math.max(360, Math.min(470, availW * 0.5));
+    let padV = 0, padH = 0, rightH = 0;
+    const measureRight = () => {
+      root.style.setProperty('--W', Wr + 'px');
+      root.style.setProperty('--Wg', '120px');
+      root.style.setProperty('--Wland', (Wr + 120 + 40) + 'px');
+      void cab.offsetHeight;
+      const cs = getComputedStyle(cab);
+      padV = px(cs.paddingTop) + px(cs.paddingBottom);
+      padH = px(cs.paddingLeft) + px(cs.paddingRight) + px(cs.columnGap);
+      rightH = cab.getBoundingClientRect().height - padV;
+    };
+    measureRight();
+    let level = 0;
+    if (rightH > Hav - padV) { root.classList.add('fit-1'); level = 1; measureRight(); }
+    if (rightH > Hav - padV) { root.classList.add('fit-2'); level = 2; measureRight(); }
+    for (let i = 0; i < 4 && rightH > Hav - padV && Wr > 360; i++) {
+      Wr = Math.max(360, Wr * 0.94);
+      measureRight();
+    }
+    root.dataset.fit = String(level);
+    // Glass height is ~linear in its width: probe at a known width.
+    const probe = 300;
+    root.style.setProperty('--Wg', probe + 'px');
+    void cab.offsetHeight;
+    const gRatio = glass ? glass.getBoundingClientRect().height / probe : 1.2;
+    let Wg = Math.min(availW - Wr - padH, (Hav - padV) / Math.max(0.5, gRatio));
+    Wg = Math.max(220, Math.floor(Wg));
+    const apply = () => {
+      root.style.setProperty('--Wg', Wg + 'px');
+      root.style.setProperty('--Wland', Math.ceil(Wg + Wr + padH) + 'px');
+      void cab.offsetHeight;
+      return cab.getBoundingClientRect().height;
+    };
+    let h = apply();
+    for (let i = 0; i < 4 && h > Hav + 0.5 && Wg > 220; i++) {
+      Wg = Math.max(220, Math.floor(Wg * 0.97));
+      h = apply();
+    }
+    const scroll = h > Hav + 1;
+    root.classList.toggle('fit-scroll', scroll);
+  }
+
   let _fitRaf = 0;
   function scheduleFit() {
     cancelAnimationFrame(_fitRaf);
@@ -4075,7 +4140,12 @@
     visualViewport.addEventListener('resize', scheduleFit);
   }
 
-  document.addEventListener('gesturestart', (e) => e.preventDefault());
+  // Block pinch on the cabinet only — settings/help dialogs stay zoomable.
+  document.addEventListener('gesturestart', (e) => {
+    const t = e.target;
+    if (t && t.closest && t.closest('dialog')) return;
+    e.preventDefault();
+  });
 
   // ---------------------------------------------------------------------------
   // boot
@@ -4106,7 +4176,7 @@
   setTimeout(maybeFirstRunTip, 500);
 
   window.__xiaomali = {
-    build: '20261006d7',
+    build: '20261017a',
     state, settings, TRACK, SYMBOLS, pickTarget, resetCredit, Music, Sound, E, fitCabinet,
     setSettings(s) {
       const v = validateSettings(s);

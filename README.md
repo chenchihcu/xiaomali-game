@@ -125,7 +125,9 @@ AGENTS.md      給 Cursor／Codex 維護者的說明
 
 https://chenchihcu.github.io/xiaomali-game/
 
-iPhone：Safari 打開 → 分享 → **加入主畫面**。
+另有 Cloudflare Workers 版本：https://xiaomali-game.chihfu-chen-tw.workers.dev/ （repo 內沒有 wrangler 設定，由 Cloudflare 端產生，靜態資產目錄為 repo 根目錄；`.assetsignore` 排除 `.git`、文件與工具檔）。
+
+iPhone：Safari 打開 → 分享 → **加入主畫面**。直式、橫式都可玩（橫式為左盤面／右操作台）。
 
 ---
 
