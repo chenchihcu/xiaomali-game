@@ -1,0 +1,718 @@
+/* 小瑪莉 — NEON CABINET theme (20261017n)
+   Loaded after styles.css; everything is scoped to html.neon so the layout,
+   fit logic, safe areas and ≥44 pt targets from styles.css stay untouched.
+   Look: modern pachislot / Vegas video-slot face — deep space backdrop,
+   smoked-glass panels in chrome bezels, neon edges, LED chase, bloom on lit
+   lamps. Text labels that only named things are replaced by icons / colour
+   + shape coding (each element keeps its aria-label / title).
+   Perf: only transform / opacity animate; glows are static box-shadows
+   toggled by state classes (no animated filters on large areas).
+   Flash safety: every blinking state ≤ 2.5 Hz (WCAG 2.3.1 ≤ 3 flashes/s). */
+
+html.neon {
+  --n-cyan: #27e8ff;
+  --n-blue: #3d7bff;
+  --n-mag: #ff3fd8;
+  --n-violet: #9b5cff;
+  --n-gold: #ffd34d;
+  --n-lime: #4dff9a;
+  --n-red: #ff3a5c;
+  --n-ink: #05060f;
+  --n-glass: linear-gradient(180deg, rgba(36, 44, 86, 0.92) 0%, rgba(12, 15, 36, 0.96) 55%, rgba(7, 8, 22, 0.98) 100%);
+  --n-chrome: linear-gradient(180deg, #f4f7ff 0%, #9aa3bd 22%, #4b536c 48%, #c9d0e4 70%, #5a6178 100%);
+  --led-on: #27e8ff;
+  --led-off: rgba(39, 232, 255, 0.08);
+  --gold: #ffd34d;
+}
+
+/* ---------- page backdrop: deep space + soft neon haze (static) ---------- */
+html.neon, html.neon body {
+  background:
+    radial-gradient(ellipse 70% 45% at 50% 0%, rgba(155, 92, 255, 0.28), transparent 70%),
+    radial-gradient(ellipse 60% 40% at 15% 100%, rgba(39, 232, 255, 0.16), transparent 70%),
+    radial-gradient(ellipse 60% 40% at 85% 100%, rgba(255, 63, 216, 0.16), transparent 70%),
+    repeating-linear-gradient(0deg, rgba(120, 140, 255, 0.05) 0 1px, transparent 1px 28px),
+    repeating-linear-gradient(90deg, rgba(120, 140, 255, 0.05) 0 1px, transparent 1px 28px),
+    #04050c;
+}
+
+/* ---------- cabinet: gunmetal body, chrome bezel, neon edge ---------- */
+html.neon .cabinet {
+  background:
+    radial-gradient(ellipse 120% 40% at 50% 0%, rgba(155, 92, 255, 0.22), transparent 60%),
+    linear-gradient(160deg, #161b34 0%, #0b0d1d 45%, #120a26 100%);
+  box-shadow:
+    inset 0 0 0 calc(var(--u) * 0.25) #0a0c18,
+    inset 0 0 0 calc(var(--u) * 0.55) rgba(200, 210, 240, 0.55),
+    inset 0 0 0 calc(var(--u) * 0.8) #0a0c18,
+    inset 0 calc(var(--u) * 0.6) calc(var(--u) * 1.6) rgba(160, 180, 255, 0.18),
+    0 0 0 1px rgba(39, 232, 255, 0.55),
+    0 0 calc(var(--u) * 2.5) rgba(39, 232, 255, 0.35),
+    0 0 calc(var(--u) * 6) rgba(255, 63, 216, 0.22),
+    0 calc(var(--u) * 1.6) calc(var(--u) * 5) rgba(0, 0, 0, 0.85);
+}
+html.neon .cabinet.fx-expect,
+html.neon .cabinet.fx-reach {
+  box-shadow:
+    inset 0 0 0 calc(var(--u) * 0.25) #0a0c18,
+    inset 0 0 0 calc(var(--u) * 0.55) rgba(255, 120, 200, 0.7),
+    inset 0 0 0 calc(var(--u) * 0.8) #0a0c18,
+    0 0 0 1px rgba(255, 63, 216, 0.8),
+    0 0 calc(var(--u) * 3) rgba(255, 63, 216, 0.55),
+    0 calc(var(--u) * 1.6) calc(var(--u) * 5) rgba(0, 0, 0, 0.85);
+}
+html.neon .screw,
+html.neon .paint-scroll { display: none; }
+
+/* ---------- LED strips: neon chase around the cabinet ---------- */
+html.neon .rail-dot {
+  width: calc(var(--u) * 0.9);
+  height: calc(var(--u) * 0.9);
+  background: radial-gradient(circle at 40% 35%, #e8fdff 0%, var(--n-cyan) 45%, #0a6c8a 100%);
+  box-shadow: 0 0 calc(var(--u) * 0.8) rgba(39, 232, 255, 0.85);
+  opacity: 0.22;
+  filter: none !important;
+  animation: neonIdle 3.2s linear infinite;
+  animation-delay: calc(var(--i, 0) * -0.2s);
+}
+html.neon .rail-right .rail-dot,
+html.neon .rail-bot .rail-dot {
+  background: radial-gradient(circle at 40% 35%, #ffe8fb 0%, var(--n-mag) 45%, #8a0a6c 100%);
+  box-shadow: 0 0 calc(var(--u) * 0.8) rgba(255, 63, 216, 0.85);
+}
+@keyframes neonIdle {
+  0%, 70%, 100% { opacity: 0.22; }
+  80% { opacity: 0.95; }
+}
+html.neon .rail-dot.on { opacity: 1; }
+html.neon .cabinet.fx-spin .rail-dot { animation: neonChase 0.9s linear infinite; animation-delay: calc(var(--i, 0) * -0.075s); }
+@keyframes neonChase {
+  0%, 100% { opacity: 0.2; transform: scale(0.8); }
+  15% { opacity: 1; transform: scale(1.15); }
+  40% { opacity: 0.35; transform: scale(0.9); }
+}
+html.neon .cabinet.fx-win .rail-dot {
+  background: radial-gradient(circle at 40% 35%, #fffbe0 0%, var(--n-gold) 45%, #a06800 100%);
+  box-shadow: 0 0 calc(var(--u) * 1) rgba(255, 211, 77, 0.95);
+  animation: neonWinWave 0.8s ease-in-out infinite;
+  animation-delay: calc(var(--i, 0) * -0.1s);
+}
+@keyframes neonWinWave {
+  0%, 100% { opacity: 0.45; }
+  50% { opacity: 1; }
+}
+html.neon .cabinet.fx-reach .rail-dot,
+html.neon .cabinet.fx-expect .rail-dot {
+  background: radial-gradient(circle at 40% 35%, #ffe8fb 0%, var(--n-mag) 45%, #8a0a6c 100%);
+  box-shadow: 0 0 calc(var(--u) * 1) rgba(255, 63, 216, 0.95);
+  animation: neonChase 0.5s linear infinite;
+  animation-delay: calc(var(--i, 0) * -0.04s);
+}
+html.neon .side-lamp {
+  width: calc(var(--u) * 1.6);
+  height: calc(var(--u) * 1.6);
+  background: radial-gradient(circle at 40% 35%, #e8fdff 0%, var(--n-cyan) 50%, #06384a 100%);
+  box-shadow: 0 0 calc(var(--u) * 1.2) rgba(39, 232, 255, 0.6);
+  opacity: 0.5;
+  filter: none !important;
+  animation: none;
+}
+html.neon .cabinet.fx-spin .side-lamp,
+html.neon .cabinet.fx-win .side-lamp { opacity: 1; background: radial-gradient(circle at 40% 35%, #fffbe0, var(--n-gold) 50%, #6a4400); box-shadow: 0 0 calc(var(--u) * 2.4) rgba(255, 211, 77, 0.85); }
+html.neon .cabinet.fx-reach .side-lamp,
+html.neon .cabinet.fx-expect .side-lamp,
+html.neon .cabinet.fx-fever .side-lamp {
+  opacity: 1;
+  background: radial-gradient(circle at 40% 35%, #ffe8fb, var(--n-mag) 50%, #5a0646);
+  box-shadow: 0 0 calc(var(--u) * 2.6) rgba(255, 63, 216, 0.9);
+  animation: neonSoftPulse 0.8s ease-in-out infinite alternate;
+}
+@keyframes neonSoftPulse { from { opacity: 0.55; } to { opacity: 1; } }
+
+/* ---------- marquee: glass header with icon-coded meters ---------- */
+html.neon .marquee {
+  background: var(--n-glass);
+  box-shadow:
+    inset 0 1px 0 rgba(255, 255, 255, 0.22),
+    inset 0 0 0 1px rgba(160, 180, 255, 0.25),
+    0 0 0 calc(var(--u) * 0.35) #0a0c18,
+    0 0 0 calc(var(--u) * 0.6) rgba(200, 210, 240, 0.45);
+}
+html.neon .meter { flex-direction: row; gap: calc(var(--u) * 0.9); justify-content: center; }
+html.neon .meter-plate { display: none; }
+html.neon .meter::before {
+  content: "";
+  flex: 0 0 auto;
+  width: calc(var(--u) * 4.6);
+  height: calc(var(--u) * 4.6);
+  background: center / contain no-repeat;
+}
+/* WIN = gold trophy, CREDIT = cyan coin stack (shape + colour, not colour alone) */
+html.neon .meter-win::before {
+  background-image: url("data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' viewBox='0 0 48 48'%3E%3Cdefs%3E%3ClinearGradient id='g' x1='0' y1='0' x2='0' y2='1'%3E%3Cstop offset='0' stop-color='%23fff6c0'/%3E%3Cstop offset='.5' stop-color='%23ffd34d'/%3E%3Cstop offset='1' stop-color='%23b07800'/%3E%3C/linearGradient%3E%3C/defs%3E%3Cpath d='M14 6h20v6h7v4c0 6-4 10-9.5 10.6C30 30 27.5 32 26 32.6V37h6v5H16v-5h6v-4.4c-1.5-.6-4-2.6-5.5-6C11 26 7 22 7 16v-4h7z M14 16h-3c0 3 1.4 5.2 3.6 6.2C14.2 20.4 14 18.4 14 16z M34 16c0 2.4-.2 4.4-.6 6.2C35.6 21.2 37 19 37 16z' fill='url(%23g)' stroke='%23523600' stroke-width='1.6' stroke-linejoin='round'/%3E%3Cpath d='M19 9v10' stroke='%23fff' stroke-width='2' stroke-linecap='round' opacity='.6'/%3E%3C/svg%3E");
+}
+html.neon .meter-credit::before {
+  background-image: url("data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' viewBox='0 0 48 48'%3E%3Cdefs%3E%3ClinearGradient id='c' x1='0' y1='0' x2='0' y2='1'%3E%3Cstop offset='0' stop-color='%23d8fbff'/%3E%3Cstop offset='.5' stop-color='%2327e8ff'/%3E%3Cstop offset='1' stop-color='%23076a88'/%3E%3C/linearGradient%3E%3C/defs%3E%3Cg fill='url(%23c)' stroke='%2303303f' stroke-width='1.6'%3E%3Cellipse cx='24' cy='36' rx='15' ry='5.5'/%3E%3Cpath d='M9 36v-6c0 3 6.7 5.5 15 5.5S39 33 39 30v6'/%3E%3Cellipse cx='24' cy='26' rx='15' ry='5.5'/%3E%3Cpath d='M9 26v-6c0 3 6.7 5.5 15 5.5S39 23 39 20v6'/%3E%3Cellipse cx='24' cy='16' rx='15' ry='5.5'/%3E%3C/g%3E%3Cpath d='M17 15.5c2-1.6 5-2 8-1.8' stroke='%23fff' stroke-width='2' stroke-linecap='round' fill='none' opacity='.7'/%3E%3C/svg%3E");
+}
+html.neon .led {
+  background: linear-gradient(180deg, #030612, #070b1e);
+  box-shadow: inset 0 0 0 1px rgba(39, 232, 255, 0.28), inset 0 2px 6px #000, 0 0 0 calc(var(--u) * 0.3) rgba(200, 210, 240, 0.35);
+}
+html.neon .led .seg.on { fill: var(--led-on); filter: drop-shadow(0 0 1.6px rgba(39, 232, 255, 0.95)); }
+html.neon .meter-win .led { --led-on: var(--n-gold); --led-off: rgba(255, 211, 77, 0.08); box-shadow: inset 0 0 0 1px rgba(255, 211, 77, 0.35), inset 0 2px 6px #000, 0 0 0 calc(var(--u) * 0.3) rgba(200, 210, 240, 0.35); }
+html.neon .meter-win .led .seg.on { filter: drop-shadow(0 0 1.6px rgba(255, 211, 77, 0.95)); }
+html.neon .knob {
+  background: radial-gradient(circle at 50% 35%, #2a3366 0%, #10142e 70%);
+  color: var(--n-cyan);
+  box-shadow:
+    inset 0 1px 0 rgba(255, 255, 255, 0.3),
+    0 0 0 calc(var(--u) * 0.3) rgba(200, 210, 240, 0.55),
+    0 0 calc(var(--u) * 1.6) rgba(39, 232, 255, 0.45);
+}
+html.neon .knob svg { color: var(--n-cyan); fill: currentColor; filter: drop-shadow(0 0 3px rgba(39, 232, 255, 0.8)); }
+html.neon #btnSettings { color: var(--n-gold); }
+html.neon #btnSettings svg { color: var(--n-gold); fill: var(--n-gold); filter: drop-shadow(0 0 3px rgba(255, 211, 77, 0.8)); }
+html.neon .knob.off { color: #6a7090; box-shadow: inset 0 1px 0 rgba(255, 255, 255, 0.15), 0 0 0 calc(var(--u) * 0.3) rgba(200, 210, 240, 0.3); }
+html.neon .knob.off svg { color: #8a90b0; filter: none; }
+
+/* ---------- topper: glass wings, icon meters, neon hold lamps ---------- */
+html.neon .topper {
+  background: transparent;
+  box-shadow: none;
+}
+html.neon .wing-panel {
+  background:
+    radial-gradient(circle at 50% 38%, rgba(255, 63, 216, 0.28), transparent 60%),
+    var(--n-glass) !important;
+  box-shadow:
+    inset 0 1px 0 rgba(255, 255, 255, 0.2),
+    inset 0 0 0 1px rgba(255, 63, 216, 0.45),
+    0 0 calc(var(--u) * 1.6) rgba(255, 63, 216, 0.25) !important;
+}
+html.neon .top-wing-r .wing-panel {
+  background:
+    radial-gradient(circle at 50% 38%, rgba(39, 232, 255, 0.26), transparent 60%),
+    var(--n-glass) !important;
+  box-shadow:
+    inset 0 1px 0 rgba(255, 255, 255, 0.2),
+    inset 0 0 0 1px rgba(39, 232, 255, 0.45),
+    0 0 calc(var(--u) * 1.6) rgba(39, 232, 255, 0.25) !important;
+}
+html.neon .wing-panel::before { opacity: 0.35; }
+html.neon .wing-caption,
+html.neon .mini-lab,
+html.neon .hold-plate,
+html.neon .mission-lab,
+html.neon .plaque-sub,
+html.neon .plaque-badge { display: none !important; }
+html.neon .mini-meter {
+  display: flex;
+  align-items: center;
+  gap: calc(var(--u) * 0.6);
+  background: rgba(3, 6, 18, 0.85) !important;
+  box-shadow: inset 0 0 0 1px rgba(255, 211, 77, 0.4) !important;
+}
+html.neon .mini-meter::before {
+  content: "";
+  width: calc(var(--u) * 2.6);
+  height: calc(var(--u) * 2.6);
+  flex: 0 0 auto;
+  background: center / contain no-repeat;
+}
+/* JP = crown, LINE = 3×3 bingo grid */
+html.neon .jp-mini::before {
+  background-image: url("data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' viewBox='0 0 24 24'%3E%3Cpath d='M3 8l4.5 4L12 5l4.5 7L21 8l-2 11H5z' fill='%23ffd34d' stroke='%23523600' stroke-width='1.2' stroke-linejoin='round'/%3E%3C/svg%3E");
+}
+html.neon .line-mini::before {
+  background-image: url("data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' viewBox='0 0 24 24'%3E%3Cg fill='%2327e8ff'%3E%3Crect x='2' y='2' width='6' height='6' rx='1.2'/%3E%3Crect x='9' y='2' width='6' height='6' rx='1.2' opacity='.45'/%3E%3Crect x='16' y='2' width='6' height='6' rx='1.2' opacity='.45'/%3E%3Crect x='2' y='9' width='6' height='6' rx='1.2' opacity='.45'/%3E%3Crect x='9' y='9' width='6' height='6' rx='1.2'/%3E%3Crect x='16' y='9' width='6' height='6' rx='1.2' opacity='.45'/%3E%3Crect x='2' y='16' width='6' height='6' rx='1.2' opacity='.45'/%3E%3Crect x='9' y='16' width='6' height='6' rx='1.2' opacity='.45'/%3E%3Crect x='16' y='16' width='6' height='6' rx='1.2'/%3E%3C/g%3E%3C/svg%3E");
+}
+html.neon .line-mini { box-shadow: inset 0 0 0 1px rgba(39, 232, 255, 0.4) !important; }
+html.neon .mini-val { color: #fff; text-shadow: 0 0 6px rgba(255, 211, 77, 0.8); }
+html.neon .line-mini .mini-val { text-shadow: 0 0 6px rgba(39, 232, 255, 0.8); }
+html.neon .wing-lamp { background: #1a1f3a; box-shadow: inset 0 0 0 1px rgba(200, 210, 240, 0.3); }
+html.neon .wing-lamp.on { background: var(--n-gold); box-shadow: 0 0 calc(var(--u) * 1) rgba(255, 211, 77, 0.9); }
+html.neon .hold-strip {
+  background: rgba(3, 6, 18, 0.85);
+  box-shadow: inset 0 0 0 1px rgba(155, 92, 255, 0.55), 0 0 calc(var(--u) * 1) rgba(155, 92, 255, 0.25);
+}
+html.neon .hold-lamp { background: #0a0d20; box-shadow: 0 0 0 calc(var(--u) * 0.25) rgba(200, 210, 240, 0.35); }
+html.neon .hold-lamp > i { background: radial-gradient(circle at 40% 35%, #3a4066, #141830 70%); box-shadow: none; }
+html.neon .hold-lamp.on { box-shadow: 0 0 0 calc(var(--u) * 0.25) var(--n-violet), 0 0 calc(var(--u) * 1.6) rgba(155, 92, 255, 0.8); }
+html.neon .hold-lamp.on > i { background: radial-gradient(circle at 40% 35%, #fff, #d4b8ff 35%, var(--n-violet) 70%, #4a1aa0); box-shadow: 0 0 calc(var(--u) * 1) rgba(155, 92, 255, 0.9); }
+html.neon .hold-lamp.flash { animation: neonSoftPulse 0.45s ease-in-out infinite alternate; filter: none; }
+html.neon .bingo-board {
+  background: rgba(3, 6, 18, 0.85) !important;
+  box-shadow: inset 0 0 0 1px rgba(39, 232, 255, 0.35), 0 0 calc(var(--u) * 1) rgba(39, 232, 255, 0.2) !important;
+}
+html.neon .bingo-cell {
+  background: linear-gradient(180deg, #1c2350, #0c1030) !important;
+  box-shadow: inset 0 0 0 1px rgba(160, 180, 255, 0.28) !important;
+  opacity: 1;
+}
+html.neon .bingo-cell .bingo-ic { opacity: 0.55; }
+html.neon .bingo-cell.on {
+  background: radial-gradient(circle, #3a2e00 0%, #1a1400 100%) !important;
+  box-shadow: inset 0 0 0 calc(var(--u) * 0.3) var(--n-gold), 0 0 calc(var(--u) * 1.2) rgba(255, 211, 77, 0.75) !important;
+}
+html.neon .bingo-cell.on .bingo-ic { opacity: 1; }
+html.neon .bingo-cell.line { box-shadow: inset 0 0 0 calc(var(--u) * 0.35) var(--n-lime), 0 0 calc(var(--u) * 1.6) rgba(77, 255, 154, 0.8) !important; }
+html.neon .mission-bar::before {
+  content: "";
+  width: calc(var(--u) * 2.2);
+  height: calc(var(--u) * 2.2);
+  flex: 0 0 auto;
+  background: center / contain no-repeat url("data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' viewBox='0 0 24 24'%3E%3Ccircle cx='12' cy='12' r='9.5' fill='none' stroke='%2327e8ff' stroke-width='2.2'/%3E%3Ccircle cx='12' cy='12' r='5' fill='none' stroke='%2327e8ff' stroke-width='2.2'/%3E%3Ccircle cx='12' cy='12' r='1.8' fill='%23ffd34d'/%3E%3C/svg%3E");
+}
+html.neon .mission-bar { display: flex; align-items: center; gap: calc(var(--u) * 0.6); }
+html.neon .mission-bar[hidden] { display: none; }
+html.neon .mission-track { background: #0a0d20; box-shadow: inset 0 0 0 1px rgba(39, 232, 255, 0.3); }
+html.neon .mission-fill { background: linear-gradient(90deg, var(--n-cyan), var(--n-lime)); box-shadow: 0 0 6px rgba(39, 232, 255, 0.8); }
+html.neon .mission-cnt { color: #dff9ff; }
+html.neon .top-plaque {
+  background: rgba(3, 6, 18, 0.85);
+  box-shadow: inset 0 0 0 1px rgba(255, 63, 216, 0.55), 0 0 calc(var(--u) * 1.4) rgba(255, 63, 216, 0.35);
+}
+html.neon .plaque-title {
+  color: #fff;
+  text-shadow: 0 0 4px var(--n-mag), 0 0 12px rgba(255, 63, 216, 0.8);
+}
+
+/* kill wood / felt / turbulence textures (also cheaper to rasterise) */
+html.neon .topper,
+html.neon .topper::before,
+html.neon .topper::after { background: none !important; border: 0 !important; filter: none !important; box-shadow: none !important; }
+html.neon .top-core {
+  background:
+    radial-gradient(ellipse 80% 70% at 50% 30%, rgba(155, 92, 255, 0.22), transparent 70%),
+    var(--n-glass) !important;
+  box-shadow: inset 0 1px 0 rgba(255, 255, 255, 0.18), inset 0 0 0 1px rgba(155, 92, 255, 0.5), 0 0 calc(var(--u) * 1.4) rgba(155, 92, 255, 0.25) !important;
+}
+html.neon .pgroup,
+html.neon .pgroup-win,
+html.neon .deck-func .pgroup-win,
+html.neon .deck-func .pgroup-win:has(.btn.flash),
+html.neon .deck-func .pgroup-win:has(.btn.on) { background: rgba(3, 6, 18, 0.55) !important; }
+html.neon .deck-bets,
+html.neon .deck-main {
+  background: rgba(3, 6, 18, 0.55) !important;
+  box-shadow: inset 0 0 0 1px rgba(160, 180, 255, 0.18), inset 0 calc(var(--u) * 0.6) calc(var(--u) * 1.2) rgba(0, 0, 0, 0.5) !important;
+}
+html.neon .deck-func .pgroup-win:has(.btn.flash),
+html.neon .deck-func .pgroup-win:has(.btn.on) { box-shadow: inset 0 0 0 calc(var(--u) * 0.28) var(--n-gold), 0 0 calc(var(--u) * 1.6) rgba(255, 211, 77, 0.5) !important; }
+html.neon .deck-func .pgroup-win .btn.off::before { filter: none; }
+
+/* ---------- glass: smoked panel in chrome bezel ---------- */
+html.neon .glass {
+  background: linear-gradient(180deg, #0d1130, #05061a);
+  box-shadow:
+    inset 0 0 0 1px rgba(39, 232, 255, 0.35),
+    0 0 0 calc(var(--u) * 0.35) #0a0c18,
+    0 0 0 calc(var(--u) * 0.6) rgba(200, 210, 240, 0.5),
+    0 0 calc(var(--u) * 2) rgba(39, 232, 255, 0.25);
+}
+html.neon .board {
+  background:
+    radial-gradient(circle at 50% 50%, rgba(61, 123, 255, 0.35) 0%, transparent 62%),
+    repeating-conic-gradient(from 0deg at 50% 50%, rgba(39, 232, 255, 0.05) 0 6deg, transparent 6deg 12deg),
+    linear-gradient(180deg, #0a0e2a, #04051a);
+  box-shadow: inset 0 0 0 1px rgba(39, 232, 255, 0.45), inset 0 0 calc(var(--u) * 3) rgba(0, 0, 0, 0.7);
+}
+
+/* ---------- lamps (track tiles): dark glass cells, bloom when lit ---------- */
+html.neon .tile {
+  background:
+    radial-gradient(ellipse 90% 50% at 50% 0%, rgba(255, 255, 255, 0.16), transparent 70%),
+    linear-gradient(170deg, #1d2552 0%, #111633 55%, #0a0d24 100%) !important;
+  box-shadow:
+    inset 0 0 0 1px rgba(160, 180, 255, 0.3),
+    inset 0 calc(var(--u) * -0.6) calc(var(--u) * 1) rgba(0, 0, 0, 0.45),
+    0 calc(var(--u) * 0.2) calc(var(--u) * 0.4) rgba(0, 0, 0, 0.5) !important;
+  filter: none !important;
+  opacity: 1 !important;
+  animation: none;
+  transition: box-shadow 70ms linear, transform 90ms ease-out;
+}
+html.neon .tile .ic { filter: drop-shadow(0 1px 1px rgba(0, 0, 0, 0.6)); }
+/* inner-edge lamp → small LED pip */
+html.neon .tile::after {
+  width: calc(var(--u) * 1.5);
+  height: calc(var(--u) * 1.5);
+  background: radial-gradient(circle at 40% 35%, #5b6aa8, #1c2350 70%) !important;
+  box-shadow: 0 0 0 calc(var(--u) * 0.2) #070917 !important;
+  opacity: 1 !important;
+}
+html.neon .side-t::after  { bottom: calc(var(--u) * -1.05); }
+html.neon .side-b::after  { top: calc(var(--u) * -1.05); }
+html.neon .side-l::after  { right: calc(var(--u) * -1.05); }
+html.neon .side-r::after  { left: calc(var(--u) * -1.05); }
+html.neon .side-tl::after { bottom: calc(var(--u) * -1.05); right: calc(var(--u) * -1.05); }
+html.neon .side-tr::after { bottom: calc(var(--u) * -1.05); left: calc(var(--u) * -1.05); }
+html.neon .side-bl::after { top: calc(var(--u) * -1.05); right: calc(var(--u) * -1.05); }
+html.neon .side-br::after { top: calc(var(--u) * -1.05); left: calc(var(--u) * -1.05); }
+/* bet link: magenta frame + corner chevron (shape, not colour only) */
+html.neon .tile.bet-framed {
+  box-shadow:
+    inset 0 0 0 calc(var(--u) * 0.35) var(--n-mag),
+    inset 0 0 calc(var(--u) * 1.6) rgba(255, 63, 216, 0.35),
+    0 0 calc(var(--u) * 1.2) rgba(255, 63, 216, 0.45) !important;
+}
+html.neon .tile.bet-framed::before {
+  content: "";
+  position: absolute;
+  left: calc(var(--u) * 0.45);
+  top: calc(var(--u) * 0.45);
+  width: calc(var(--u) * 1.5);
+  height: calc(var(--u) * 1.5);
+  border-left: calc(var(--u) * 0.45) solid var(--n-mag);
+  border-top: calc(var(--u) * 0.45) solid var(--n-mag);
+  border-radius: calc(var(--u) * 0.3) 0 0 0;
+  background: none;
+  animation: none;
+  inset: auto;
+  z-index: 3;
+}
+html.neon .board.is-chasing .tile:not(.lit):not(.trail1):not(.trail2):not(.trail3):not(.win):not(.sym-hit) { opacity: 0.55 !important; }
+html.neon .tile.trail3 { box-shadow: inset 0 0 0 1px rgba(39, 232, 255, 0.4), 0 0 calc(var(--u) * 0.8) rgba(39, 232, 255, 0.25) !important; opacity: 0.75 !important; }
+html.neon .tile.trail2 { box-shadow: inset 0 0 0 calc(var(--u) * 0.2) rgba(39, 232, 255, 0.6), 0 0 calc(var(--u) * 1.2) rgba(39, 232, 255, 0.4) !important; opacity: 0.88 !important; }
+html.neon .tile.trail1 {
+  background: linear-gradient(170deg, #1f5c8a, #0e2a52) !important;
+  box-shadow: inset 0 0 0 calc(var(--u) * 0.28) rgba(39, 232, 255, 0.85), 0 0 calc(var(--u) * 1.8) rgba(39, 232, 255, 0.6) !important;
+}
+html.neon .tile.trail1::after, html.neon .tile.trail2::after { background: radial-gradient(circle at 40% 35%, #e8fdff, var(--n-cyan) 60%, #06384a) !important; box-shadow: 0 0 6px rgba(39, 232, 255, 0.9) !important; }
+html.neon .tile.lit {
+  background:
+    radial-gradient(circle at 50% 45%, rgba(255, 255, 255, 0.95) 0%, rgba(160, 250, 255, 0.85) 35%, rgba(39, 232, 255, 0.55) 70%, rgba(20, 90, 200, 0.6) 100%) !important;
+  box-shadow:
+    inset 0 0 0 calc(var(--u) * 0.3) #fff,
+    0 0 calc(var(--u) * 1.4) calc(var(--u) * 0.3) rgba(39, 232, 255, 0.95),
+    0 0 calc(var(--u) * 4) rgba(39, 232, 255, 0.6) !important;
+  transform: scale(1.06);
+  z-index: 3;
+}
+html.neon .tile.lit::before, html.neon .board.is-chasing .tile.lit::before { display: none; }
+html.neon .tile.lit::after, html.neon .tile.win::after, html.neon .tile.sym-hit::after {
+  background: radial-gradient(circle at 40% 35%, #fff, #fff6c0 40%, var(--n-gold) 80%) !important;
+  box-shadow: 0 0 0 calc(var(--u) * 0.2) #070917, 0 0 8px 3px rgba(255, 230, 140, 0.95) !important;
+}
+html.neon .tile.lit2 {
+  box-shadow: inset 0 0 0 calc(var(--u) * 0.35) var(--n-mag), 0 0 calc(var(--u) * 3) rgba(255, 63, 216, 0.85) !important;
+}
+/* winning lamp: gold bloom, smooth 1.25 Hz breathing (no strobe) */
+html.neon .tile.win,
+html.neon .tile.sym-hit {
+  background: radial-gradient(circle at 50% 45%, #fffbe6 0%, #ffe680 40%, #ffb800 80%, #a86a00 100%) !important;
+  box-shadow:
+    inset 0 0 0 calc(var(--u) * 0.32) #fff,
+    0 0 calc(var(--u) * 1.6) calc(var(--u) * 0.4) rgba(255, 211, 77, 0.95),
+    0 0 calc(var(--u) * 5) rgba(255, 170, 0, 0.6) !important;
+  animation: neonBreath 0.8s ease-in-out infinite alternate !important;
+  z-index: 3;
+}
+@keyframes neonBreath { from { transform: scale(1); } to { transform: scale(1.09); } }
+html.neon .tile.cascade { box-shadow: inset 0 0 0 calc(var(--u) * 0.3) var(--n-gold), 0 0 calc(var(--u) * 2) rgba(255, 211, 77, 0.7) !important; filter: none !important; }
+html.neon .tile.cascade-core { filter: none !important; }
+html.neon .tile .badge {
+  background: linear-gradient(180deg, #ff5c8a, #c4004a);
+  box-shadow: 0 0 0 1px rgba(255, 255, 255, 0.6), 0 0 6px rgba(255, 63, 140, 0.7);
+  border-radius: 999px;
+}
+
+/* ---------- center screen: video-slot window ---------- */
+html.neon .center {
+  background:
+    radial-gradient(ellipse at 50% 0%, rgba(155, 92, 255, 0.45), transparent 60%),
+    radial-gradient(ellipse at 50% 100%, rgba(39, 232, 255, 0.25), transparent 60%),
+    linear-gradient(180deg, #121a4a 0%, #070a26 100%);
+  box-shadow:
+    inset 0 0 0 calc(var(--u) * 0.3) #03040e,
+    inset 0 0 0 calc(var(--u) * 0.55) rgba(200, 210, 240, 0.65),
+    inset 0 0 calc(var(--u) * 2.5) rgba(39, 232, 255, 0.35);
+  filter: none;
+}
+html.neon .cabinet.center-focus .center,
+html.neon .cabinet.stage-open .center,
+html.neon .cabinet.fx-win .center {
+  box-shadow:
+    inset 0 0 0 calc(var(--u) * 0.3) #03040e,
+    inset 0 0 0 calc(var(--u) * 0.55) var(--n-gold),
+    inset 0 0 calc(var(--u) * 3) rgba(255, 211, 77, 0.45),
+    0 0 calc(var(--u) * 3) rgba(255, 211, 77, 0.45);
+}
+html.neon .reel {
+  background: linear-gradient(90deg, #c9d2ea 0%, #ffffff 30%, #ffffff 70%, #c9d2ea 100%);
+  box-shadow: inset 0 0 0 calc(var(--u) * 0.25) #0a0d24, 0 0 0 1px rgba(39, 232, 255, 0.5);
+}
+html.neon .jp-row {
+  background: linear-gradient(180deg, #1a0630, #07020f) !important;
+  box-shadow: inset 0 0 0 1px rgba(255, 63, 216, 0.7), 0 0 calc(var(--u) * 1.4) rgba(255, 63, 216, 0.5) !important;
+}
+html.neon .jp-label {
+  color: transparent !important;
+  font-size: 0 !important;
+  width: calc(var(--u) * 3.4);
+  height: calc(var(--u) * 3.4);
+  background: center / contain no-repeat url("data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' viewBox='0 0 24 24'%3E%3Cpath d='M3 8l4.5 4L12 5l4.5 7L21 8l-2 11H5z' fill='%23ffd34d' stroke='%23523600' stroke-width='1.2' stroke-linejoin='round'/%3E%3C/svg%3E") !important;
+  text-shadow: none !important;
+}
+html.neon .jp-val {
+  color: #ffe9ff;
+  font-variant-numeric: tabular-nums;
+  text-shadow: 0 0 4px var(--n-mag), 0 0 10px rgba(255, 63, 216, 0.85);
+}
+html.neon .ds-label em { display: none; }
+html.neon .ds-label {
+  background: radial-gradient(circle at 50% 35%, #2a3366, #10142e 70%) !important;
+  box-shadow: 0 0 0 calc(var(--u) * 0.25) rgba(200, 210, 240, 0.45) !important;
+  color: var(--n-violet);
+}
+html.neon .ds-label.on { box-shadow: 0 0 0 calc(var(--u) * 0.3) var(--n-gold), 0 0 calc(var(--u) * 1.4) rgba(255, 211, 77, 0.8) !important; color: var(--n-gold); }
+html.neon .dice { --led-on: var(--n-red); --led-off: rgba(255, 58, 92, 0.1); }
+html.neon .dice .seg.on { filter: drop-shadow(0 0 1.6px rgba(255, 58, 92, 0.95)); }
+html.neon .mw-lab,
+html.neon .bl-lab { display: none !important; }
+html.neon .bonus-lamp:not(.is-on):not(.is-fever) .bl-sub { display: none !important; }
+html.neon .bonus-lamp { background: rgba(3, 6, 18, 0.7) !important; box-shadow: inset 0 0 0 1px rgba(160, 180, 255, 0.3) !important; }
+html.neon .bonus-lamp.is-on { box-shadow: inset 0 0 0 1px var(--n-gold), 0 0 calc(var(--u) * 1.2) rgba(255, 211, 77, 0.6) !important; }
+html.neon .msg {
+  background: linear-gradient(180deg, #03040e, #080b22) !important;
+  box-shadow: inset 0 0 0 1px rgba(39, 232, 255, 0.4) !important;
+  color: #bff7ff;
+  text-shadow: 0 0 5px rgba(39, 232, 255, 0.85);
+}
+html.neon .msg.hot { color: #fff6c0; text-shadow: 0 0 6px rgba(255, 211, 77, 0.95); animation: neonSoftPulse 0.6s ease-in-out infinite alternate; }
+html.neon .msg.bad { color: #ff9fb0; text-shadow: 0 0 5px rgba(255, 58, 92, 0.85); }
+html.neon .once-banner {
+  background: linear-gradient(180deg, #06244a, #030c1e) !important;
+  box-shadow: inset 0 0 0 1px var(--n-cyan), 0 0 calc(var(--u) * 1.6) rgba(39, 232, 255, 0.6) !important;
+}
+
+/* ---------- payout strip: multiplier chips + LED bet counters ---------- */
+html.neon .payout {
+  background: linear-gradient(180deg, #070a20, #03040e);
+  box-shadow: inset 0 0 0 1px rgba(255, 211, 77, 0.45);
+}
+html.neon .paycell {
+  background: #04061a;
+  box-shadow: inset 0 0 0 1px rgba(160, 180, 255, 0.22);
+}
+html.neon .paycell .mult,
+html.neon .paycell:nth-child(even) .mult {
+  background: linear-gradient(180deg, rgba(255, 211, 77, 0.22), rgba(255, 211, 77, 0.05));
+  color: var(--n-gold);
+  text-shadow: 0 0 6px rgba(255, 211, 77, 0.6);
+}
+html.neon .paycell .mult::before { content: "×"; font-family: -apple-system, system-ui, sans-serif; font-weight: 800; font-size: 0.95em; margin-right: 0.06em; }
+html.neon .paycell .led { --led-on: var(--n-cyan); }
+html.neon .paycell.is-bet { box-shadow: inset 0 0 0 calc(var(--u) * 0.25) var(--n-mag), 0 0 calc(var(--u) * 1) rgba(255, 63, 216, 0.45); }
+html.neon .paycell.is-bet .led .seg.on { fill: #fff; filter: drop-shadow(0 0 1.6px rgba(255, 63, 216, 0.95)); }
+html.neon .paycell.hit .mult { animation: neonSoftPulse 0.45s ease-in-out infinite alternate; color: #fff; background: linear-gradient(180deg, var(--n-gold), #b07800); }
+html.neon .paycell.stale .led .seg.on { fill: #3a6a80; filter: none; }
+
+/* ---------- control deck: smoked glass, neon-rim keys ---------- */
+html.neon .deck {
+  background:
+    radial-gradient(ellipse 80% 60% at 50% 0%, rgba(61, 123, 255, 0.18), transparent 70%),
+    var(--n-glass);
+  box-shadow:
+    inset 0 1px 0 rgba(255, 255, 255, 0.2),
+    inset 0 0 0 1px rgba(160, 180, 255, 0.25),
+    0 0 0 calc(var(--u) * 0.35) #0a0c18,
+    0 0 0 calc(var(--u) * 0.6) rgba(200, 210, 240, 0.45),
+    0 calc(var(--u) * 0.6) calc(var(--u) * 1.2) rgba(0, 0, 0, 0.6);
+}
+/* group plates (CREDIT / WIN / BET) → colour-coded neon underline */
+html.neon .plate { display: none !important; }
+html.neon .pgroup {
+  padding-top: calc(var(--u) * 0.9);
+  background: rgba(3, 6, 18, 0.55);
+  box-shadow: inset 0 0 0 1px rgba(160, 180, 255, 0.18), inset 0 calc(var(--u) * 0.45) 0 var(--pg), 0 calc(var(--u) * -0.2) calc(var(--u) * 1.2) -0.2em var(--pg);
+}
+html.neon .pgroup { --pg: rgba(39, 232, 255, 0.85); }
+html.neon .pgroup-win { --pg: rgba(255, 211, 77, 0.9); }
+html.neon .pgroup:nth-child(3) { --pg: rgba(255, 63, 216, 0.85); }
+
+html.neon .btn {
+  border: 0;
+  background: linear-gradient(180deg, rgba(255, 255, 255, 0.35), rgba(120, 130, 170, 0.25) 50%, rgba(20, 24, 50, 0.9));
+  box-shadow: 0 0 0 1px rgba(0, 0, 0, 0.6), 0 calc(var(--u) * 0.5) calc(var(--u) * 0.8) rgba(0, 0, 0, 0.7);
+  text-shadow: 0 1px 0 rgba(0, 0, 0, 0.7), 0 0 6px var(--glow);
+}
+html.neon .btn::before {
+  inset: calc(var(--u) * 0.35);
+  background:
+    radial-gradient(ellipse 90% 60% at 50% 110%, color-mix(in srgb, var(--c1) 55%, transparent) 0%, transparent 65%),
+    linear-gradient(180deg, color-mix(in srgb, var(--c2) 70%, #0a0d24) 0%, color-mix(in srgb, var(--c3) 55%, #05061a) 100%);
+  box-shadow:
+    inset 0 0 0 calc(var(--u) * 0.22) color-mix(in srgb, var(--c1) 85%, transparent),
+    inset 0 0 calc(var(--u) * 1.4) color-mix(in srgb, var(--c2) 60%, transparent),
+    0 0 calc(var(--u) * 1.2) var(--glow),
+    0 calc(var(--u) * 0.45) 0 #04050f;
+}
+html.neon .btn::after { opacity: 0.45; height: 26%; }
+html.neon .btn:disabled::before,
+html.neon .btn.off::before {
+  filter: none;
+  background: linear-gradient(180deg, #1a1f3a, #0c0f24);
+  box-shadow: inset 0 0 0 calc(var(--u) * 0.2) color-mix(in srgb, var(--c2) 45%, #3a4060), 0 calc(var(--u) * 0.45) 0 #04050f;
+}
+html.neon .btn:disabled, html.neon .btn.off { color: color-mix(in srgb, var(--c1) 55%, #8a90b0); text-shadow: none; }
+html.neon .btn-yellow { color: #fff; text-shadow: 0 1px 0 rgba(0, 0, 0, 0.7), 0 0 6px var(--glow); }
+html.neon .btn-yellow:disabled, html.neon .btn-yellow.off { color: color-mix(in srgb, var(--c1) 55%, #8a90b0); }
+/* hero START: big glowing play key, label replaced by the play glyph */
+html.neon .btn-start .btn-lab { display: none; }
+html.neon .btn-start .btn-svg-lg { width: calc(var(--u) * 7.2) !important; height: calc(var(--u) * 7.2) !important; filter: drop-shadow(0 0 4px rgba(255, 255, 255, 0.8)); }
+html.neon .btn-start::before {
+  background:
+    radial-gradient(ellipse 80% 70% at 50% 120%, rgba(200, 255, 230, 0.75) 0%, transparent 60%),
+    linear-gradient(180deg, #3dffa0 0%, #10c070 50%, #06703e 100%);
+  box-shadow:
+    inset 0 0 0 calc(var(--u) * 0.25) #c8ffe4,
+    0 0 calc(var(--u) * 2) rgba(77, 255, 154, 0.75),
+    0 calc(var(--u) * 0.45) 0 #04050f;
+}
+html.neon .btn-start:not(.off):not(:disabled)::after {
+  /* slow "press me" shimmer — opacity only */
+  animation: neonSoftPulse 1.2s ease-in-out infinite alternate;
+}
+html.neon .btn-start.off::before, html.neon .btn-start:disabled::before {
+  background: linear-gradient(180deg, #17402e, #0a2018);
+  box-shadow: inset 0 0 0 calc(var(--u) * 0.22) rgba(77, 255, 154, 0.45), 0 calc(var(--u) * 0.45) 0 #04050f;
+}
+
+/* bet keys: glass caps; bet = magenta ring + count badge; hit = gold */
+html.neon .betkey {
+  border: 0;
+  background: linear-gradient(180deg, rgba(255, 255, 255, 0.3), rgba(20, 24, 50, 0.9));
+  box-shadow: 0 0 0 1px rgba(0, 0, 0, 0.6), 0 calc(var(--u) * 0.5) calc(var(--u) * 0.8) rgba(0, 0, 0, 0.7);
+}
+html.neon .betkey::before {
+  inset: calc(var(--u) * 0.3);
+  background:
+    radial-gradient(ellipse 100% 45% at 50% 0%, rgba(255, 255, 255, 0.22) 0%, transparent 70%),
+    linear-gradient(180deg, #232c5e 0%, #121738 60%, #0a0d24 100%);
+  box-shadow: inset 0 0 0 1px rgba(160, 180, 255, 0.35), 0 calc(var(--u) * 0.45) 0 #04050f;
+}
+html.neon .betkey.is-bet::before {
+  background:
+    radial-gradient(ellipse 100% 60% at 50% 100%, rgba(255, 63, 216, 0.45) 0%, transparent 70%),
+    linear-gradient(180deg, #3a1d5e 0%, #1c0f38 100%);
+  box-shadow: inset 0 0 0 calc(var(--u) * 0.32) var(--n-mag), 0 0 calc(var(--u) * 1.4) rgba(255, 63, 216, 0.7), 0 calc(var(--u) * 0.45) 0 #04050f;
+}
+html.neon .betkey .bbet {
+  background: linear-gradient(180deg, #ff6be3, #c4009e) !important;
+  color: #fff !important;
+  box-shadow: 0 0 0 1px #fff, 0 0 6px rgba(255, 63, 216, 0.9) !important;
+  border-radius: 999px !important;
+  text-shadow: none !important;
+}
+html.neon .betkey:disabled::before, html.neon .betkey.off::before { filter: none; opacity: 0.7; }
+html.neon .betkey.hit::before {
+  animation: neonSoftPulse 0.45s ease-in-out infinite alternate !important;
+  background: radial-gradient(circle, #5a4400, #2a1c00) !important;
+  box-shadow: inset 0 0 0 calc(var(--u) * 0.32) var(--n-gold), 0 0 calc(var(--u) * 1.6) rgba(255, 211, 77, 0.85) !important;
+}
+
+/* footer disclaimer: quiet neon line (kept: required copy) */
+html.neon .note {
+  background: none !important;
+  clip-path: none;
+  color: #9fb0e0;
+  text-shadow: none;
+  letter-spacing: 0.06em;
+}
+
+/* ---------- win celebration layer ---------- */
+html.neon .screen-flash {
+  background: radial-gradient(circle at 50% 42%, rgba(220, 255, 255, 0.75) 0%, rgba(39, 232, 255, 0.28) 30%, transparent 62%);
+}
+html.neon .screen-flash.tier-3, html.neon .screen-flash.tier-4, html.neon .screen-flash.tier-5 {
+  background:
+    radial-gradient(circle at 50% 40%, rgba(255, 255, 240, 0.85) 0%, rgba(255, 211, 77, 0.4) 22%, transparent 58%),
+    linear-gradient(180deg, rgba(255, 63, 216, 0.16), transparent 40%, rgba(39, 232, 255, 0.16));
+}
+.win-burst {
+  position: absolute;
+  width: var(--sz, 200px);
+  height: var(--sz, 200px);
+  margin: calc(var(--sz, 200px) / -2) 0 0 calc(var(--sz, 200px) / -2);
+  pointer-events: none;
+  z-index: 11;
+}
+.win-burst > i { position: absolute; inset: 0; border-radius: 50%; }
+.win-burst .wb-rays {
+  background: repeating-conic-gradient(from 0deg, rgba(255, 230, 140, 0.55) 0 7deg, transparent 7deg 22deg);
+  -webkit-mask-image: radial-gradient(circle, #000 0%, #000 30%, transparent 70%);
+  mask-image: radial-gradient(circle, #000 0%, #000 30%, transparent 70%);
+  animation: wbRays 1.2s ease-out forwards;
+}
+.win-burst .wb-ring {
+  box-shadow: 0 0 0 3px rgba(39, 232, 255, 0.9), 0 0 18px 4px rgba(39, 232, 255, 0.6), inset 0 0 18px 4px rgba(255, 63, 216, 0.5);
+  animation: wbRing 0.9s cubic-bezier(0.2, 0.7, 0.3, 1) forwards;
+}
+.win-burst.tier-3 .wb-ring, .win-burst.tier-4 .wb-ring, .win-burst.tier-5 .wb-ring {
+  box-shadow: 0 0 0 4px rgba(255, 211, 77, 0.95), 0 0 24px 6px rgba(255, 211, 77, 0.7), inset 0 0 24px 6px rgba(255, 63, 216, 0.55);
+}
+@keyframes wbRays { 0% { transform: scale(0.3) rotate(0deg); opacity: 0; } 15% { opacity: 1; } 100% { transform: scale(1.15) rotate(50deg); opacity: 0; } }
+@keyframes wbRing { 0% { transform: scale(0.15); opacity: 1; } 100% { transform: scale(1.1); opacity: 0; } }
+.win-pop {
+  position: absolute;
+  transform: translate(-50%, -50%);
+  pointer-events: none;
+  z-index: 13;
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  font-family: -apple-system, "SF Pro Rounded", "Arial Black", system-ui, sans-serif;
+  font-weight: 900;
+  font-variant-numeric: tabular-nums;
+  line-height: 1;
+  animation: winPop 1.4s cubic-bezier(0.2, 0.9, 0.3, 1) forwards;
+}
+.win-pop b {
+  font-size: max(28px, calc(var(--u) * 9));
+  color: #fff;
+  -webkit-text-stroke: 1.5px #7a4a00;
+  paint-order: stroke fill;
+  text-shadow: 0 0 6px rgba(255, 211, 77, 0.95), 0 0 18px rgba(255, 140, 0, 0.75), 0 3px 0 #7a4a00;
+}
+.win-pop.tier-3 b, .win-pop.tier-4 b, .win-pop.tier-5 b { font-size: max(36px, calc(var(--u) * 12)); }
+@keyframes winPop {
+  0% { transform: translate(-50%, -20%) scale(0.4); opacity: 0; }
+  18% { transform: translate(-50%, -60%) scale(1.15); opacity: 1; }
+  70% { transform: translate(-50%, -110%) scale(1); opacity: 1; }
+  100% { transform: translate(-50%, -140%) scale(1); opacity: 0; }
+}
+html.neon .sparkle { background: radial-gradient(circle, #fff 0%, var(--n-cyan) 40%, transparent 70%); }
+html.neon .particle-dot:nth-child(3n) { background: var(--n-mag); box-shadow: 0 0 6px var(--n-mag); }
+html.neon .particle-dot:nth-child(3n+1) { background: var(--n-gold); box-shadow: 0 0 6px var(--n-gold); }
+html.neon .particle-dot:nth-child(3n+2) { background: var(--n-cyan); box-shadow: 0 0 6px var(--n-cyan); }
+html.neon .fever-banner {
+  background: linear-gradient(90deg, transparent, rgba(255, 63, 216, 0.85), rgba(155, 92, 255, 0.85), transparent) !important;
+}
+html.neon .fever-tag { color: #fff; text-shadow: 0 0 6px #fff, 0 0 16px var(--n-mag); }
+
+/* WIN / FEVER wing lamps blinked at 3.6 Hz (holdFlash 0.28s steps) → smooth 1.25 Hz */
+html.neon .cabinet.fx-win .wing-lamp,
+html.neon .cabinet.fx-fever .wing-lamp { animation: neonSoftPulse 0.4s ease-in-out infinite alternate !important; filter: none !important; }
+
+/* ---------- landscape tweaks ---------- */
+html.neon.land .note { letter-spacing: 0.04em; }
+
+/* ---------- reduced motion: no chases / bursts / breathing; static glows ---------- */
+@media (prefers-reduced-motion: reduce) {
+  html.neon .rail-dot,
+  html.neon .cabinet.fx-spin .rail-dot,
+  html.neon .cabinet.fx-win .rail-dot,
+  html.neon .cabinet.fx-reach .rail-dot,
+  html.neon .cabinet.fx-expect .rail-dot { animation: none !important; opacity: 0.6; transform: none; }
+  html.neon .cabinet.fx-win .rail-dot { opacity: 1; }
+  html.neon .tile.win, html.neon .tile.sym-hit,
+  html.neon .betkey.hit::before, html.neon .paycell.hit .mult,
+  html.neon .hold-lamp.flash, html.neon .msg.hot,
+  html.neon .side-lamp, html.neon .btn-start::after,
+  html.neon .cabinet.fx-win .wing-lamp, html.neon .cabinet.fx-fever .wing-lamp { animation: none !important; }
+  html.neon .tile.lit { transform: none; }
+  .win-burst { display: none; }
+  .win-pop { animation: winPopStatic 1.4s linear forwards; }
+  @keyframes winPopStatic { 0%, 80% { opacity: 1; } 100% { opacity: 0; } }
+}

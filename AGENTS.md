@@ -12,6 +12,7 @@ Repo: https://github.com/chenchihcu/xiaomali-game
 | File | Role |
 |---|---|
 | `index.html` | Real-cabinet layout: `.cabinet` → `.marquee` → `.topper` … → `#flourishLayer` → `.glass` (`#stageOverlay` bonus UIs; `#board` track; `#center` = JP + **3 reels** + dice + `#onceBanner` + VFD) → `#betpanel` → `.deck` → disclaimer. Settings/help. Scripts: `engine.js` then `game.js` (`defer`). |
+| `theme-neon.css` | **Neon cabinet skin** (loaded after `styles.css`, scoped to `html.neon`): glass/chrome/neon look, LED chase, bloom states, icon-coded meters (WIN trophy / CREDIT coins / JP crown / LINE grid), win burst + rising `+N`. Only transform/opacity animate; every blink ≤2.5 Hz (WCAG 2.3.1); `prefers-reduced-motion` stops chases/bursts. Remove `class="neon"` on `<html>` to fall back to the classic wood skin. |
 | `styles.css` | `--u` = 1/100 of `--W`. `--W` fitted by `fitCabinet()` to safe viewport (iPhone 16 Pro Max 430×932 first). Textured wood/metal/felt + original painted art (SVG). Portrait-first; `fit-1`/`fit-2` density. |
 | `engine.js` | Pure logic → `XiaomaliEngine`. `resolveRound(...)` → steps: `once` / `land` / `bonus` / `jp` / `super` / `slot` / `fever` / `bingo` / `luckyWheel` / `gacha` / `sicbo` / `pachinko` / `ballDraw` / `roulette`. Cap `MAX_ONCE_MORE_CHAIN`; ≤1 mini-stage/round. |
 | `game.js` | UI: light FX, reels + slot stop-feel, FEVER/bingo, **cabinet stage overlays** (wheel/gacha/sicbo/pachinko/draw/roulette), flourishes, settings. Animates engine steps only. |
@@ -92,7 +93,8 @@ Bingo marks and stage pays are real (fake credit); flourishes are not.
 - Prefer short Traditional Chinese UI copy on portrait.
 - Layout follows real 小瑪莉 cabinets — don't reintroduce app-style top bars.
 - Controls: `.btn` arcade push-button; bet keys on deck; LEDs in payout strip.
-- Track / bet icons: CSS/SVG glossy fruit (`iconHTML`), not copyrighted IP.
+- Track / bet icons: CSS/SVG glossy fruit (`iconHTML`), not copyrighted IP. 77 / BAR / ONCE MORE are vector SVG too (no text nodes); names live in `aria-label`.
+- Neon skin hides name-only labels (WIN/CREDIT/HOLD/KEEP/MISSION/WHEEL/BONUS/BET plates, 開始 label) — keep the element + its `aria-label`/`title`; don't re-add text where an icon/colour+shape already says it.
 
 ## Viewport / iPhone 16 Pro Max
 - Target CSS: **430×932** portrait, `viewport-fit=cover`, safe-area insets for notch / home indicator.

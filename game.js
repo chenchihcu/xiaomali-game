@@ -688,6 +688,8 @@
       for (let i = 0; i < n; i++) {
         const d = document.createElement('i');
         d.className = 'rail-dot';
+        d.style.setProperty('--i', String(i));
+        d.style.setProperty('--n', String(n));
         el.appendChild(d);
       }
     }
@@ -771,10 +773,21 @@
   /** Classic 小瑪莉 cabinet tile icons: glossy molded plastic on cream face. */
   let _icUid = 0;
   function iconHTML(symId) {
-    if (symId === 'once') return '<span class="ic-once">ONCE<br>MORE</span>';
-    if (symId === 'seven') return '<span class="ic-77">77</span>';
-    if (symId === 'bar') return '<span class="ic-bar"><i>BAR</i><i>BAR</i><i>BAR</i></span>';
     const u = 'i' + (++_icUid);
+    // Neon cabinet (20261017n): 77 / BAR / ONCE MORE are vector art, not text,
+    // so they stay crisp at DPR 3 and read as symbols (aria-label carries the name).
+    if (symId === 'once') {
+      return `<svg class="ic-svg ic-sym ic-sym-once" viewBox="0 0 64 64" aria-hidden="true"><defs><linearGradient id="${u}r" x1="0" y1="0" x2="1" y2="1"><stop offset="0%" stop-color="#9ffcff"/><stop offset="55%" stop-color="#16d2ff"/><stop offset="100%" stop-color="#2a5bff"/></linearGradient><radialGradient id="${u}c" cx="50%" cy="40%" r="60%"><stop offset="0%" stop-color="#1b2a6b"/><stop offset="100%" stop-color="#070b24"/></radialGradient></defs><circle cx="32" cy="32" r="27" fill="url(#${u}c)" stroke="#0a1238" stroke-width="2"/><path d="M44.9 16.7A20 20 0 1 1 19.1 16.7" fill="none" stroke="#04102e" stroke-width="10" stroke-linecap="round"/><path d="M44.9 16.7A20 20 0 1 1 19.1 16.7" fill="none" stroke="url(#${u}r)" stroke-width="6" stroke-linecap="round"/><path d="M25.6 11.4L21.6 23.6 13.3 13.6z" fill="url(#${u}r)" stroke="#04102e" stroke-width="1.6" stroke-linejoin="round"/><path d="M24 33h9M28.5 28.5v9" stroke="#ffffff" stroke-width="3.4" stroke-linecap="round"/><path d="M36.5 27.5l4-2.6v16.2" fill="none" stroke="#ffffff" stroke-width="3.4" stroke-linecap="round" stroke-linejoin="round"/></svg>`;
+    }
+    if (symId === 'seven') {
+      const seven = 'M0 0H26V7L13 42H4L16 9H7V13H0Z';
+      return `<svg class="ic-svg ic-sym ic-sym-seven" viewBox="0 0 64 64" aria-hidden="true"><defs><linearGradient id="${u}s" x1="0" y1="0" x2="0" y2="1"><stop offset="0%" stop-color="#ff9fb0"/><stop offset="35%" stop-color="#ff2448"/><stop offset="75%" stop-color="#c4001f"/><stop offset="100%" stop-color="#6a0010"/></linearGradient><linearGradient id="${u}g" x1="0" y1="0" x2="0" y2="1"><stop offset="0%" stop-color="#fff6c0"/><stop offset="100%" stop-color="#e0a000"/></linearGradient></defs><g transform="translate(4.5 11)"><path d="${seven}" fill="none" stroke="#2a0008" stroke-width="5.4" stroke-linejoin="round"/><path d="${seven}" fill="url(#${u}s)" stroke="url(#${u}g)" stroke-width="1.8" stroke-linejoin="round"/><path d="M2 2.2H23" stroke="#fff" stroke-width="1.6" stroke-linecap="round" opacity=".6"/></g><g transform="translate(33.5 11)"><path d="${seven}" fill="none" stroke="#2a0008" stroke-width="5.4" stroke-linejoin="round"/><path d="${seven}" fill="url(#${u}s)" stroke="url(#${u}g)" stroke-width="1.8" stroke-linejoin="round"/><path d="M2 2.2H23" stroke="#fff" stroke-width="1.6" stroke-linecap="round" opacity=".6"/></g></svg>`;
+    }
+    if (symId === 'bar') {
+      const word = 'M0 0V9H4.2Q6.6 9 6.6 6.8Q6.6 4.6 4.4 4.5Q6.2 4.4 6.2 2.3Q6.2 0 4 0ZM0 4.5H4.4M10 9L13.5 0L17 9M11.3 6H15.7M21 9V0H25Q27.4 0 27.4 2.4Q27.4 4.8 25 4.8H21M24.6 4.8L27.6 9';
+      const plate = (y) => `<rect x="6" y="${y}" width="52" height="14" rx="3.5" fill="url(#${u}b)" stroke="#2a1a00" stroke-width="1.8"/><rect x="8" y="${y + 1.4}" width="48" height="4" rx="2" fill="#fff" opacity=".45"/><path d="${word}" transform="translate(18.2 ${y + 2.5})" fill="none" stroke="#1a1030" stroke-width="2.1" stroke-linecap="round" stroke-linejoin="round"/>`;
+      return `<svg class="ic-svg ic-sym ic-sym-bar" viewBox="0 0 64 64" aria-hidden="true"><defs><linearGradient id="${u}b" x1="0" y1="0" x2="0" y2="1"><stop offset="0%" stop-color="#fff4b8"/><stop offset="45%" stop-color="#ffc62a"/><stop offset="100%" stop-color="#b87800"/></linearGradient></defs>${plate(8)}${plate(25)}${plate(42)}</svg>`;
+    }
     // Thick outline + plastic gloss = arcade-sticker look (not flat emoji).
     const SVGS = {
       apple: `<svg class="ic-svg" viewBox="0 0 64 64" aria-hidden="true"><defs><radialGradient id="${u}a" cx="36%" cy="28%" r="72%"><stop offset="0%" stop-color="#ff9a88"/><stop offset="18%" stop-color="#f23a32"/><stop offset="48%" stop-color="#d01818"/><stop offset="78%" stop-color="#8a080c"/><stop offset="100%" stop-color="#3a0204"/></radialGradient><radialGradient id="${u}ac" cx="78%" cy="58%" r="42%"><stop offset="0%" stop-color="#ff6048" stop-opacity=".5"/><stop offset="100%" stop-color="#ff6048" stop-opacity="0"/></radialGradient><linearGradient id="${u}ag" x1="0" y1="0" x2="0" y2="1"><stop offset="0%" stop-color="#fff" stop-opacity=".72"/><stop offset="50%" stop-color="#fff" stop-opacity="0"/></linearGradient><linearGradient id="${u}al" x1="0" y1="0" x2="1" y2="1"><stop offset="0%" stop-color="#9ae04a"/><stop offset="45%" stop-color="#3cb028"/><stop offset="100%" stop-color="#1a6a12"/></linearGradient></defs><path d="M32 21C28 11.5 19.5 10.5 14.5 16.5 6.5 24 5.5 39 14 49c6 7.5 13.5 10.5 18 10.5s12-3 18-10.5C58.5 39 57.5 24 49.5 16.5 44.5 10.5 36 11.5 32 21z" fill="url(#${u}a)" stroke="#2e0000" stroke-width="2.15" stroke-linejoin="round"/><path d="M42 30c5.5 3 9 11 6.5 19-3.5 9-13 13-18.5 9 8-1.5 15.5-13 12-28z" fill="url(#${u}ac)"/><path d="M31.2 22.5c.6-7.2 4.8-12.2 10.3-13.4" stroke="#4a2c12" stroke-width="2.7" fill="none" stroke-linecap="round"/><path d="M40.5 9.2c6.2-.8 12.2 3.2 13.2 9.4-6.4.6-11.2-1.4-13.2-9.4z" fill="url(#${u}al)" stroke="#165210" stroke-width="1.15" stroke-linejoin="round"/><path d="M41.5 11.2c3.8 2.2 7.8 5.2 9.8 8" fill="none" stroke="#145010" stroke-width="1" opacity=".5" stroke-linecap="round"/><ellipse cx="21.5" cy="30" rx="7.2" ry="4.1" fill="url(#${u}ag)" transform="rotate(-36 21.5 30)"/><ellipse cx="33" cy="53.5" rx="13.5" ry="3" fill="#000" opacity=".15"/></svg>`,
@@ -812,7 +825,7 @@
     const cells = root.querySelectorAll('.bingo-cell');
     const needsRebuild = force
       || cells.length !== BINGO_CELLS.length
-      || [...cells].some((el, i) => !el.querySelector('.bingo-ic .ic-svg, .bingo-ic .ic-77, .bingo-ic .ic-bar, .bingo-ic .ic-once')
+      || [...cells].some((el, i) => !el.querySelector('.bingo-ic .ic-svg')
         || el.dataset.sym !== BINGO_CELLS[i]
         || /[蘋橙芒鈴西星]/.test(el.textContent || ''));
     if (!needsRebuild && cells.length === BINGO_CELLS.length) return;
@@ -908,7 +921,7 @@
   $('paytable').innerHTML = SYMBOLS.map((s) =>
     `<tr><td>${iconHTML(s.id)}</td><td>${s.name}</td><td>× ${s.mult}</td></tr>`).join('') +
     '<tr><td><span class="pt-glyph">×3</span></td><td>小圖／BAR50</td><td>×3／×50</td></tr>' +
-    '<tr><td><span class="ic-once">ONCE<br>MORE</span></td><td>再跑／連跑</td><td>FREE</td></tr>' +
+    '<tr><td>' + iconHTML('once') + '</td><td>再跑／連跑</td><td>FREE</td></tr>' +
     `<tr><td><span class="pt-glyph pt-jp">JP</span></td><td>大 BAR＋押 BAR</td><td>彩金</td></tr>` +
     '<tr><td><span class="pt-glyph">★</span></td><td>送燈／火車／三元</td><td>中彩</td></tr>' +
     // was emoji 🎰 / 💡 — off-style next to the painted symbols
@@ -1780,14 +1793,62 @@
   }
 
   /** Screen flash overlay (CSS only — never Camera / torch). */
+  // WCAG 2.3.1: never more than 3 flashes per second, even when chained
+  // celebrations (super run / FEVER) fire back-to-back.
+  let _lastFlashAt = 0;
   function flourishScreenFlash(tier = 1) {
     const host = $('flourishLayer');
     if (!host || reduceMotion()) return;
+    const now = performance.now();
+    if (now - _lastFlashAt < 400) return;
+    _lastFlashAt = now;
     const t = Math.max(0, Math.min(5, tier | 0));
     const flash = document.createElement('div');
     flash.className = 'screen-flash tier-' + t;
     host.appendChild(flash);
     setTimeout(() => flash.remove(), 650 + t * 40);
+  }
+
+  function _originIn(host, originEl) {
+    const cr = (cabinetEl || host).getBoundingClientRect();
+    let x = cr.width * 0.5, y = cr.height * 0.42;
+    if (originEl) {
+      const r = originEl.getBoundingClientRect();
+      x = r.left + r.width / 2 - cr.left;
+      y = r.top + r.height / 2 - cr.top;
+    }
+    return { x, y, cr };
+  }
+  /** Neon light burst (rotating rays + ring) behind the winning lamp. */
+  function flourishBurst(tier = 1, originEl = null) {
+    const host = $('flourishLayer');
+    if (!host || reduceMotion()) return;
+    const { x, y, cr } = _originIn(host, originEl);
+    const b = document.createElement('div');
+    b.className = 'win-burst tier-' + Math.max(0, Math.min(5, tier | 0));
+    b.style.left = x + 'px';
+    b.style.top = y + 'px';
+    b.style.setProperty('--sz', Math.round(Math.min(cr.width, cr.height) * (0.45 + tier * 0.1)) + 'px');
+    b.innerHTML = '<i class="wb-rays"></i><i class="wb-ring"></i>';
+    host.appendChild(b);
+    setTimeout(() => b.remove(), 1300);
+  }
+  /** Rising "+N" counter — shown even with reduced motion (static fade). */
+  function flourishWinPop(amount = 0, mult = 0, tier = 1, originEl = null) {
+    const host = $('flourishLayer');
+    const a = Math.max(0, Math.floor(amount || 0));
+    if (!host || a <= 0) return;
+    // Anchor on the centre screen (always fully inside the cabinet in portrait
+    // and landscape) — the lamp itself can sit on the top edge.
+    const { x, y } = _originIn(host, $('center') || originEl);
+    const p = document.createElement('div');
+    p.className = 'win-pop tier-' + Math.max(0, Math.min(5, tier | 0));
+    p.style.left = x + 'px';
+    p.style.top = y + 'px';
+    // amount only: some callers pass a synthetic mult for tiering, not the real payout multiple
+    p.innerHTML = '<b>+' + a + '</b>';
+    host.appendChild(p);
+    setTimeout(() => p.remove(), 1500);
   }
 
   /** Multi-light cascade outward from winning tile. */
@@ -1887,6 +1948,8 @@
     hapticVibrate(tier);
     FX.win(tier);
     flourishScreenFlash(tier);
+    flourishBurst(tier, origin);
+    flourishWinPop(amount, mult, tier, origin);
     flourishParticles(tier, origin);
     if (target >= 0) flourishCascade(target, tier);
     if (splash && tier >= 2) {
@@ -4176,7 +4239,7 @@
   setTimeout(maybeFirstRunTip, 500);
 
   window.__xiaomali = {
-    build: '20261017a',
+    build: '20261017n',
     state, settings, TRACK, SYMBOLS, pickTarget, resetCredit, Music, Sound, E, fitCabinet,
     setSettings(s) {
       const v = validateSettings(s);
