@@ -1,6 +1,6 @@
 # 小瑪莉 Little Mary 🍎🍊🔔
 
-經典「小瑪莉」水果機的網頁版小遊戲。純 HTML／CSS／JavaScript，**不需要安裝、不需要編譯**，直接用瀏覽器打開就能玩。畫面以 **iPhone 16 Pro Max 直式（Safari）** 為主設計，其他手機與電腦也能玩。外圈彩燈與操作鍵採 **擬真街機** 立體亮面（CSS／SVG，無外部圖檔）。在小瑪莉核心之上，融合柏青嫂風三輪 Bonus、Medal 彩池／FEVER、賓果任務、幸運轉輪／轉蛋／骰寶／彈珠台／抽球機／電子輪盤等舞台（特殊停燈觸發），以及倒跑／跳格／假停／雙燈／超跑等跑燈模式（皆可在設定開關）。機框另有跑馬 LED、側燈、假保留燈、FEVER／READY，以及輕量推幣／賽馬視覺點綴。
+經典「小瑪莉」水果機的網頁版小遊戲。純 HTML／CSS／JavaScript，**不需要安裝、不需要編譯**，直接用瀏覽器打開就能玩。畫面以 **iPhone 16 Pro Max 直式（Safari）** 為主設計，其他手機與電腦也能玩。外觀為 **霓虹機台** 風格（`theme-neon.css`：玻璃面板、鉻框、霓虹邊光、LED 追光、中獎光爆與上升分數；CSS／SVG，無外部圖檔）。在小瑪莉核心之上，融合柏青嫂風三輪 Bonus、Medal 彩池／FEVER、賓果任務、幸運轉輪／轉蛋／骰寶／彈珠台／抽球機／電子輪盤等舞台（特殊停燈觸發），以及倒跑／跳格／假停／雙燈／超跑等跑燈模式（皆可在設定開關）。機框另有跑馬 LED、側燈、假保留燈、FEVER／READY，以及輕量推幣／賽馬視覺點綴。
 
 > ⚠️ **免責聲明：本遊戲僅供娛樂。所有分數（CREDIT／WIN／JP）皆為虛擬點數，不能儲值、不能兌換任何金錢或獎品，非真實賭博。**
 
@@ -107,7 +107,8 @@ python3 -m http.server 8000
 
 ```
 index.html     頁面骨架（含設定／玩法 dialog、中央三轉盤）
-styles.css     直式實體機台版面（木框機殼、上方 WIN/CREDIT、跑燈盤、倍率列、按鍵台）
+styles.css     直式實體機台版面（上方 WIN/CREDIT、跑燈盤、倍率列、按鍵台）
+theme-neon.css 霓虹機台外觀（覆蓋 styles.css 的顏色與材質；動畫只用 transform／opacity）
 engine.js      純邏輯：盤面權重、設定、中彩、JP、舞台（三輪／FEVER／賓果／超跑等）、RTP 模擬（無 DOM）
 game.js        UI：跑燈模式、轉盤、舞台演出、賓果板、音效／BGM、設定、押注與比大小
 sim.js         Node 平衡檢查：node sim.js [rounds]
