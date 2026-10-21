@@ -265,7 +265,7 @@
     normal: {
       label: '標準',
       // small>1 = more ×3 stops = house edge (stages add RTP on top)
-      weights: { ...ones(), small: 2.45 },
+      weights: { ...ones(), small: 2.8 },
       bonusRate: 1,
     },
     hard: {
