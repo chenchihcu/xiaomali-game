@@ -103,6 +103,7 @@
     'slotBonus', 'fever', 'bingo',
     'luckyWheel', 'gacha', 'sicbo', 'pachinko', 'ballDraw', 'roulette',
     'reverse', 'skip', 'doubleRun', 'fakeStop', 'superRun',
+    'lockBonus',
   ];
   const MODE_LABELS = {
     once: 'ONCE MORE',
@@ -126,6 +127,7 @@
     doubleRun: '雙燈同停',
     fakeStop: '假停',
     superRun: '超跑連停',
+    lockBonus: 'HOLD 鎖燈 Bonus',
   };
   /** One-line Traditional Chinese hints for settings mode toggles (must match engine). */
   const MODE_HINTS = {
@@ -150,6 +152,7 @@
     doubleRun: '同局再停一盞獨立燈',
     fakeStop: '減速時假停再繼續',
     superRun: '有中／特殊→連停 3–8 格',
+    lockBonus: '約 1/500 局→鎖燈重轉 3 次（新鎖重置）；全亮＝JP',
   };
 
   /** Probabilities for optional light FX / stage entries (× bonusRate / onceRate where noted). */
@@ -160,6 +163,24 @@
     doubleRun: 0.028,
   };
   const SUPER_RUN = { chance: 0.014, min: 3, max: 8 };
+  /**
+   * HOLD 鎖燈 Bonus (Link&Win-style hold-and-respin on the 24-lamp track).
+   * Trigger: after any land, rng < chance × bonusRate (≤1 per round, mode-gated so
+   * the rng is not consumed when off). Start with `seed` locked lamps and `respins`.
+   * Each respin every unlocked lamp locks with `lockP`; any new lock resets respins
+   * to `respins`. Each locked lamp carries a coin = max(1, round(totalBet × m)).
+   * All 24 locked → JP pot (when JP mode on and pot > 0) else `grandMult` × totalBet.
+   */
+  const LOCK_BONUS = {
+    chance: 0.002,
+    seed: 3,
+    respins: 3,
+    lockP: 0.075,
+    coins: [
+      { m: 0.1, w: 40 }, { m: 0.25, w: 30 }, { m: 0.5, w: 20 }, { m: 1, w: 8 }, { m: 3, w: 2 },
+    ],
+    grandMult: 50,
+  };
   const SLOT_BONUS = {
     // Rolled on special full tiles + ONCE MORE; keep ≥~1%/round when enabled.
     chance: 0.12,
@@ -244,7 +265,7 @@
     normal: {
       label: '標準',
       // small>1 = more ×3 stops = house edge (stages add RTP on top)
-      weights: { ...ones(), small: 2.45 },
+      weights: { ...ones(), small: 2.8 },
       bonusRate: 1,
     },
     hard: {
@@ -276,6 +297,7 @@
       slotBonus: true, fever: true, bingo: true,
       luckyWheel: true, gacha: true, sicbo: true, pachinko: true, ballDraw: true, roulette: true,
       reverse: true, skip: true, doubleRun: true, fakeStop: true, superRun: true,
+      lockBonus: true,
     },
   };
 
@@ -666,6 +688,38 @@
     return null;
   }
 
+  /** Hold-and-respin bonus; pure (rng only). See LOCK_BONUS. */
+  function resolveLockBonus(totalBet, rng, jpPot = 0, jpOn = true) {
+    const coin = () => Math.max(1, Math.round(totalBet * pickWeightedItems(LOCK_BONUS.coins, rng).m));
+    const locked = new Array(N).fill(0);
+    const seed = [];
+    while (seed.length < LOCK_BONUS.seed) {
+      const i = Math.floor(rng() * N);
+      if (locked[i]) continue;
+      locked[i] = coin();
+      seed.push({ i, value: locked[i] });
+    }
+    let left = LOCK_BONUS.respins;
+    let count = seed.length;
+    const spins = [];
+    while (left > 0 && count < N) {
+      const newLocks = [];
+      for (let i = 0; i < N; i++) {
+        if (locked[i] || rng() >= LOCK_BONUS.lockP) continue;
+        locked[i] = coin();
+        newLocks.push({ i, value: locked[i] });
+      }
+      count += newLocks.length;
+      left = newLocks.length ? LOCK_BONUS.respins : left - 1;
+      spins.push({ newLocks, respinsLeft: left });
+    }
+    const coins = locked.reduce((a, b) => a + b, 0);
+    const full = count >= N;
+    const jpAward = full && jpOn && jpPot > 0 ? Math.floor(jpPot) : 0;
+    const grand = full && !jpAward ? LOCK_BONUS.grandMult * totalBet : 0;
+    return { type: 'lockBonus', seed, spins, count, full, coins, jpAward, grand, gained: coins + grand };
+  }
+
   /** Mark bingo cell for a landed symbol; return completed lines (clears those cells). */
   function applyBingoMark(board, symId, totalBet, _rng) {
     if (!board || board.length !== 9) board = new Array(9).fill(false);
@@ -718,6 +772,7 @@
     let feverDone = false;
     let slotOpens = 0;
     let stageOpens = 0;
+    let lockDone = false;
     const totalBet = bets.reduce((a, b) => a + b, 0);
     let bingoBoard = Array.isArray(opts.bingoBoard) && opts.bingoBoard.length === 9
       ? opts.bingoBoard.map(Boolean)
@@ -848,6 +903,15 @@
       steps.push(landStep);
       win += p.gained;
 
+      // HOLD 鎖燈 Bonus (≤1/round; rng consumed only when the mode is on)
+      if (s.modes.lockBonus && !lockDone && rng() < LOCK_BONUS.chance * (s.bonusRate || 1)) {
+        lockDone = true;
+        const lb = resolveLockBonus(totalBet, rng, jpWin === 0 && s.modes.jp ? jpPot : 0, !!s.modes.jp);
+        steps.push(lb);
+        win += lb.gained;
+        if (lb.jpAward > 0) jpWin = lb.jpAward; // pot resets via nextJpPot like a normal JP
+      }
+
       // Bingo mark only when the land paid (mission progress, not free fills)
       if (p.gained > 0) pushBingoPay(TRACK[target].s);
       // 雙燈 second pay also marks bingo (same 「有中標格」 rule as primary)
@@ -977,7 +1041,7 @@
       won += r.win;
       if (r.win > total) hits++;
       if (r.steps.some((st) => st.type === 'bonus' || st.type === 'slot' || st.type === 'fever' || st.type === 'super'
-        || STAGE_KEYS.includes(st.type))) bonuses++;
+        || st.type === 'lockBonus' || STAGE_KEYS.includes(st.type))) bonuses++;
       if (r.jpWin > 0) jps++;
       pot = nextJpPot(pot, total, r.jpWin, s);
     }
@@ -987,11 +1051,11 @@
   const api = {
     SYMBOLS, SYM_INDEX, TRACK, N, MAX_ONCE_MORE_CHAIN, ONCE_GRANT, WEIGHT_KEYS, WEIGHT_LABELS,
     BONUS, JP, BIG_BAR_TILE, MODE_KEYS, MODE_LABELS, MODE_HINTS, PRESETS, DEFAULT_SETTINGS,
-    LIGHT_FX, SUPER_RUN, SLOT_BONUS, FEVER_STAGE, BINGO_CELLS, BINGO_LINES, BINGO_LINE_MULT,
+    LIGHT_FX, SUPER_RUN, LOCK_BONUS, SLOT_BONUS, FEVER_STAGE, BINGO_CELLS, BINGO_LINES, BINGO_LINE_MULT,
     STAGE_KEYS, STAGE_ENTRY, WHEEL_SEGS, GACHA_TIERS, SICBO_PAY, PACHINKO_POCKETS, BALL_DRAW, ROULETTE_N, ROULETTE_PAY,
     normalizeSettings, applyPreset, effectiveWeights, landingOdds, pickWeighted,
     tilePay, rollOnceGrant, rollLightFx, isSlotSpecial, resolveSlotBonus,
-    resolveLuckyWheel, resolveGacha, resolveSicbo, resolvePachinko, resolveBallDraw, resolveRoulette,
+    resolveLuckyWheel, resolveGacha, resolveSicbo, resolvePachinko, resolveBallDraw, resolveRoulette, resolveLockBonus,
     pickStageKind, resolveStage, applyBingoMark, resolveRound, nextJpPot, simulate,
   };
   if (typeof module === 'object' && module.exports) module.exports = api;

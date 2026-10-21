@@ -16,7 +16,7 @@ Repo: https://github.com/chenchihcu/xiaomali-game
 | `styles.css` | `--u` = 1/100 of `--W`. `--W` fitted by `fitCabinet()` to safe viewport (iPhone 16 Pro Max 430×932 first). Textured wood/metal/felt + original painted art (SVG). Portrait-first; `fit-1`/`fit-2` density. |
 | `engine.js` | Pure logic → `XiaomaliEngine`. `resolveRound(...)` → steps: `once` / `land` / `bonus` / `jp` / `super` / `slot` / `fever` / `bingo` / `luckyWheel` / `gacha` / `sicbo` / `pachinko` / `ballDraw` / `roulette`. Cap `MAX_ONCE_MORE_CHAIN`; ≤1 mini-stage/round. |
 | `game.js` | UI: light FX, reels + slot stop-feel, FEVER/bingo, **cabinet stage overlays** (wheel/gacha/sicbo/pachinko/draw/roulette), flourishes, settings. Animates engine steps only. |
-| `sim.js` | `node sim.js [rounds]` balance check (not loaded in browser). |
+| `sim.js` | `node sim.js [rounds]` balance check (not loaded in browser). Also prints HOLD lock-bonus RTP contribution / trigger / fill rate and a rules self-check. |
 | `icon*`, `manifest.webmanifest` | PWA-ish home screen (no service worker). |
 
 ## Settings (localStorage `xiaomali.settings.v1`)
@@ -58,6 +58,8 @@ Visual: denser procedural textures, DPR `--dpr` hairlines, sharper deck/knob SVG
 
 ## Cabinet FX (mostly visual)
 Frame LED rails, side lamps, 假保留燈, FEVER/READY, coin cascade / horse dash flourishes.
+
+**Win tiers** (`showWinTier`, game.js, visual only): roundWin ÷ totalBet ≥3 NICE / ≥10 BIG / ≥25 MEGA, any JP → JACKPOT; burst + count-up + coins, tap to skip, reduced motion = static number. **HOLD 鎖燈 Bonus** (engine `LOCK_BONUS` + `resolveLockBonus`, step `lockBonus`, mode `lockBonus`): rolled after a non-ONCE land (≤1/round; rng drawn only when the mode is on, so mode-off results are bit-identical to before). Seed 3 locks, 3 respins, any new lock resets to 3; all 24 → JP pot (sets `jpWin`, pot resets) else 50× bet. QA hooks: `__xiaomali.debugWinTier(id, amount)`, `debugLockBonus(full)`, `debugStage(kind)` — visual only, no credit.
 Classes on `#cabinet`: `fx-spin` / `fx-reach` / `fx-expect` / `fx-win` / `fx-fever`
 (+ brief `haptic-bump` / `haptic-bump-big` CSS bounce on hits).
 Special / ONCE MORE land → engine tags `step.trigger` on `slot` / cabinet stages; UI `cueStageEntry()` pulses that lamp then opens the stage; stage pays call `celebrateHit()` again.
