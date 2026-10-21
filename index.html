@@ -12,14 +12,14 @@
   <meta name="color-scheme" content="dark">
   <meta name="format-detection" content="telephone=no">
   <meta http-equiv="Cache-Control" content="no-cache">
-  <meta name="x-xiaomali-build" content="20261021r">
+  <meta name="x-xiaomali-build" content="20261021s">
   <meta name="description" content="小瑪莉水果機 — 純前端網頁小遊戲（虛擬分數，娛樂用）">
   <title>小瑪莉 Little Mary</title>
   <link rel="icon" href="icon.svg" type="image/svg+xml">
   <link rel="apple-touch-icon" sizes="180x180" href="icon-180.png">
-  <link rel="manifest" href="manifest.webmanifest?v=20261021r">
-  <link rel="stylesheet" href="styles.css?v=20261021r">
-  <link rel="stylesheet" href="theme-neon.css?v=20261021r">
+  <link rel="manifest" href="manifest.webmanifest?v=20261021s">
+  <link rel="stylesheet" href="styles.css?v=20261021s">
+  <link rel="stylesheet" href="theme-neon.css?v=20261021s">
 </head>
 <body>
   <div class="app" id="app">
@@ -421,6 +421,8 @@
         <li>JP＝停大 BAR 且有押 BAR：押 BAR ≥10 吃全池，不足按 押/10 比例。</li>
         <li>FEVER＝JP／高倍／特殊／大贏後連跑；賓果＝有中／雙燈／超跑／FEVER 標格、連線 max(1,floor(押/4))。</li>
         <li>跑燈可倒跑／跳格／假停；雙燈同停；超跑連停 3–8（連跑機率加乘）。</li>
+        <li>HOLD 鎖燈 Bonus（約 1/500 局）：先鎖 3 盞，重轉 3 次，有新鎖就重置次數；每盞給分。24 盞全亮＝GRAND 總押×50，或 JP（依押 BAR 比例，取較大者）。</li>
+        <li>中獎等級：本局得分 ≥ 總押×3 NICE、×10 BIG、×25 MEGA，JP＝JACKPOT；點畫面可略過。</li>
         <li>WIN→得分或比大小（小1–4／大6–9，開 5 和局不輸不贏）；開分加分、洗分歸零。</li>
       </ol>
       <table class="paytable" id="paytable"></table>
@@ -441,7 +443,7 @@
     </div>
   </div>
 
-  <script src="engine.js?v=20261021r" defer></script>
-  <script src="game.js?v=20261021r" defer></script>
+  <script src="engine.js?v=20261021s" defer></script>
+  <script src="game.js?v=20261021s" defer></script>
 </body>
 </html>

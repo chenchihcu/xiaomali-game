@@ -690,8 +690,61 @@
     return null;
   }
 
+  /**
+   * NaN-safe progress sanitizer for localStorage saves and imported backups.
+   * Returns null when there is no usable credit (caller keeps defaults), else a
+   * fully clamped object. Never yields NaN/null/negative numbers.
+   */
+  const PROGRESS_LIMITS = { creditCap: 999999, maxBet: 99, holdMax: 4, lineMax: 9999 };
+  function finiteNum(v, d = 0) {
+    if (typeof v === 'boolean' || v === null || v === '' || Array.isArray(v)) return d;
+    const n = Number(v);
+    return Number.isFinite(n) ? n : d;
+  }
+  function sanitizeBets(a) {
+    if (!Array.isArray(a) || a.length !== SYMBOLS.length) return null;
+    return a.map((n) => Math.min(PROGRESS_LIMITS.maxBet, Math.max(0, Math.floor(finiteNum(n, 0)))));
+  }
+  function sanitizeProgress(d) {
+    if (!d || typeof d !== 'object') return null;
+    const credit = finiteNum(d.credit, NaN);
+    if (!Number.isFinite(credit)) return null;
+    const cap = PROGRESS_LIMITS.creditCap;
+    const clampInt = (v, lo, hi, def) => Math.min(hi, Math.max(lo, Math.floor(finiteNum(v, def))));
+    const out = {
+      credit: clampInt(credit, 0, cap, 0),
+      win: clampInt(d.win, 0, cap, 0),
+      pos: ((Math.floor(finiteNum(d.pos, 0)) % N) + N) % N,
+      jp: null,
+      bets: sanitizeBets(d.lastBets),
+      lastPlayedBets: sanitizeBets(d.lastPlayedBets),
+      bingo: Array.isArray(d.bingo) && d.bingo.length === 9 ? d.bingo.map(Boolean) : null,
+      bingoLineWins: clampInt(d.bingoLineWins, 0, PROGRESS_LIMITS.lineMax, 0),
+      holdCount: d.holdCount === undefined ? null : clampInt(d.holdCount, 0, PROGRESS_LIMITS.holdMax, 0),
+      sound: typeof d.sound === 'boolean' ? d.sound : null,
+      savedAt: Number.isFinite(d.savedAt) ? d.savedAt : null,
+      pending: null,
+    };
+    const jp = finiteNum(d.jp, NaN);
+    if (Number.isFinite(jp) && jp >= 0) out.jp = Math.min(JP.max, jp);
+    // A round that was in flight when the page died: its result was fixed at spin
+    // start and the stake already taken → settle it (no refund, no re-roll).
+    const p = d.pending;
+    if (p && typeof p === 'object' && Number.isFinite(finiteNum(p.win, NaN))) {
+      out.pending = {
+        win: clampInt(p.win, 0, cap, 0),
+        gained: clampInt(p.gained, 0, cap, 0),
+        jp: Number.isFinite(finiteNum(p.jp, NaN)) && finiteNum(p.jp, 0) >= 0 ? Math.min(JP.max, finiteNum(p.jp, 0)) : out.jp,
+        bingo: Array.isArray(p.bingo) && p.bingo.length === 9 ? p.bingo.map(Boolean) : out.bingo,
+        bingoLineWins: clampInt(p.bingoLineWins, 0, PROGRESS_LIMITS.lineMax, out.bingoLineWins),
+        kind: p.kind === 'gamble' ? 'gamble' : 'round',
+      };
+    }
+    return out;
+  }
+
   /** Hold-and-respin bonus; pure (rng only). See LOCK_BONUS. */
-  function resolveLockBonus(totalBet, rng, jpPot = 0, jpOn = true) {
+  function resolveLockBonus(totalBet, rng, jpPot = 0, jpOn = true, jpShare = 1) {
     const coin = () => Math.max(1, Math.round(totalBet * pickWeightedItems(LOCK_BONUS.coins, rng).m));
     const locked = new Array(N).fill(0);
     const seed = [];
@@ -717,8 +770,13 @@
     }
     const coins = locked.reduce((a, b) => a + b, 0);
     const full = count >= N;
-    const jpAward = full && jpOn && jpPot > 0 ? Math.floor(jpPot) : 0;
-    const grand = full && !jpAward ? LOCK_BONUS.grandMult * totalBet : 0;
+    // Same BAR-bet-proportional share as the normal JP (押 BAR ≥ JP.fullBet 吃全池).
+    const share = Math.max(0, Math.min(1, Number.isFinite(jpShare) ? jpShare : 0));
+    const grandPay = LOCK_BONUS.grandMult * totalBet;
+    const jpShareAward = full && jpOn && jpPot > 0 ? Math.floor(jpPot * share) : 0;
+    // Pay the larger of the BAR-share JP and the fixed GRAND (JP pot only resets when it pays).
+    const jpAward = jpShareAward > grandPay ? jpShareAward : 0;
+    const grand = full && !jpAward ? grandPay : 0;
     return { type: 'lockBonus', seed, spins, count, full, coins, jpAward, grand, gained: coins + grand };
   }
 
@@ -908,7 +966,8 @@
       // HOLD 鎖燈 Bonus (≤1/round; rng consumed only when the mode is on)
       if (s.modes.lockBonus && !lockDone && rng() < LOCK_BONUS.chance * (s.bonusRate || 1)) {
         lockDone = true;
-        const lb = resolveLockBonus(totalBet, rng, jpWin === 0 && s.modes.jp ? jpPot : 0, !!s.modes.jp);
+        const lb = resolveLockBonus(totalBet, rng, jpWin === 0 && s.modes.jp ? jpPot : 0, !!s.modes.jp,
+          (bets[SYM_INDEX.bar] || 0) / JP.fullBet);
         steps.push(lb);
         win += lb.gained;
         if (lb.jpAward > 0) jpWin = lb.jpAward; // pot resets via nextJpPot like a normal JP
@@ -1057,7 +1116,7 @@
     STAGE_KEYS, STAGE_ENTRY, WHEEL_SEGS, GACHA_TIERS, SICBO_PAY, PACHINKO_POCKETS, BALL_DRAW, ROULETTE_N, ROULETTE_PAY,
     normalizeSettings, applyPreset, effectiveWeights, landingOdds, pickWeighted,
     tilePay, rollOnceGrant, rollLightFx, isSlotSpecial, resolveSlotBonus,
-    resolveLuckyWheel, resolveGacha, resolveSicbo, resolvePachinko, resolveBallDraw, resolveRoulette, resolveLockBonus,
+    resolveLuckyWheel, resolveGacha, resolveSicbo, resolvePachinko, resolveBallDraw, resolveRoulette, resolveLockBonus, sanitizeProgress, finiteNum, PROGRESS_LIMITS,
     pickStageKind, resolveStage, applyBingoMark, resolveRound, nextJpPot, simulate,
   };
   if (typeof module === 'object' && module.exports) module.exports = api;
