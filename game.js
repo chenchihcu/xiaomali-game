@@ -1837,7 +1837,8 @@
   function flourishWinPop(amount = 0, mult = 0, tier = 1, originEl = null) {
     const host = $('flourishLayer');
     const a = Math.max(0, Math.floor(amount || 0));
-    if (!host || a <= 0) return;
+    // stage overlays print their own "+N" in the result line → no duplicate pop
+    if (!host || a <= 0 || cabinetEl?.classList.contains('stage-open')) return false;
     // Anchor on the centre screen (always fully inside the cabinet in portrait
     // and landscape) — the lamp itself can sit on the top edge.
     const { x, y } = _originIn(host, $('center') || originEl);
@@ -1849,6 +1850,7 @@
     p.innerHTML = '<b>+' + a + '</b>';
     host.appendChild(p);
     setTimeout(() => p.remove(), 1500);
+    return true;
   }
 
   /** Multi-light cascade outward from winning tile. */
@@ -1939,7 +1941,10 @@
    * particles + FEVER splash + Vibration API + cabinet haptic bounce.
    * Scales by win size. Audio respects Sound.on (silent/mute); no Camera API.
    */
-  function celebrateHit({ amount = 0, mult = 0, kind = 'win', originEl = null, target = -1, splash = true } = {}) {
+  // `amount` doubles as a tier hint (some callers pass a synthetic value); `pop` is
+  // the real credited amount shown as the rising "+N" (0 = no pop).
+  let _popLiveTimer = 0;
+  function celebrateHit({ amount = 0, mult = 0, kind = 'win', originEl = null, target = -1, splash = true, pop = amount } = {}) {
     const tier = winTierFrom(amount, mult, kind);
     const origin = originEl || (target >= 0 ? tileEls[target] : null)
       || document.querySelector('.tile.lit, .tile.win') || $('center');
@@ -1949,7 +1954,14 @@
     FX.win(tier);
     flourishScreenFlash(tier);
     flourishBurst(tier, origin);
-    flourishWinPop(amount, mult, tier, origin);
+    if (flourishWinPop(pop, mult, tier, origin)) {
+      // R-neon: the fever banner sits at the same spot as the pop → keep it out
+      // of the way for the pop's lifetime (and any READY flash it overlaps).
+      const holdMs = Math.max(1450, (splash && tier >= 3 ? 900 + tier * 200 : 0) + 80);
+      cabinetEl?.classList.add('pop-live');
+      clearTimeout(_popLiveTimer);
+      _popLiveTimer = setTimeout(() => cabinetEl?.classList.remove('pop-live'), holdMs);
+    }
     flourishParticles(tier, origin);
     if (target >= 0) flourishCascade(target, tier);
     if (splash && tier >= 2) {
@@ -1988,6 +2000,7 @@
     if (result) { result.textContent = ''; result.className = 'stage-result'; }
     body.innerHTML = '';
     body.dataset.kind = kind;
+    overlay.dataset.kind = kind; // neon theme: per-stage emblem + accent colour
     overlay.hidden = false;
     overlay.setAttribute('aria-hidden', 'false');
     cabinetEl?.classList.add('fx-expect', 'stage-open');
@@ -2035,7 +2048,7 @@
     const segAngle = 360 / n;
     const wrap = document.createElement('div');
     wrap.className = 'sw-wheel-wrap';
-    wrap.innerHTML = `<div class="sw-pointer"></div><div class="sw-wheel" id="swWheel"><div class="sw-hub">GO</div></div>`;
+    wrap.innerHTML = `<div class="sw-pointer"></div><div class="sw-wheel" id="swWheel"><div class="sw-hub" aria-hidden="true"><svg class="sw-go" viewBox="0 0 24 24"><path d="M8 5.5v13l10.5-6.5z" fill="currentColor"/></svg></div></div>`;
     ui.body.appendChild(wrap);
     const wheel = wrap.querySelector('.sw-wheel');
     const swHub = wrap.querySelector('.sw-hub');
@@ -2134,6 +2147,16 @@
     closeStageOverlay();
   }
 
+  // Dice faces are drawn as pips (3×3 grid); the number stays for screen readers.
+  const DIE_PIPS = '<span class="sr-only ss-num">?</span>'
+    + Array.from({ length: 9 }, (_, i) => `<i class="pip p${i + 1}" aria-hidden="true"></i>`).join('');
+  function setDie(el, v) {
+    el.dataset.v = String(v);
+    const n = el.querySelector('.ss-num');
+    if (n) n.textContent = String(v);
+    else el.textContent = String(v);
+  }
+
   async function playSicbo(step) {
     const ui = openStageOverlay('sicbo');
     if (!ui) return;
@@ -2141,14 +2164,15 @@
     stage.className = 'ss-stage';
     stage.innerHTML = `
       <div class="ss-tray">
-        <div class="ss-die rolling" data-d="0">?</div>
-        <div class="ss-die rolling" data-d="1">?</div>
-        <div class="ss-die rolling" data-d="2">?</div>
+        <div class="ss-die rolling" data-d="0">${DIE_PIPS}</div>
+        <div class="ss-die rolling" data-d="1">${DIE_PIPS}</div>
+        <div class="ss-die rolling" data-d="2">${DIE_PIPS}</div>
       </div>
       <div class="ss-sum" id="ssSum">擲骰中…</div>
       <div class="ss-tag" id="ssTag">—</div>`;
     ui.body.appendChild(stage);
     const diceEls = [...stage.querySelectorAll('.ss-die')];
+    diceEls.forEach((el) => setDie(el, 1 + Math.floor(randomFloat() * 6)));
     const reduced = window.matchMedia('(prefers-reduced-motion: reduce)').matches;
     const rollMs = reduced ? 200 : 900;
     const t0 = performance.now();
@@ -2157,8 +2181,12 @@
       const tick = (now) => {
         if (gen !== stageGen) { resolve(); return; }
         if (now - t0 < rollMs) {
-          diceEls.forEach((el) => { el.textContent = String(1 + Math.floor(randomFloat() * 6)); });
-          if (Math.floor((now - t0) / 80) !== Math.floor((now - t0 - 16) / 80)) Sound.dice();
+          // faces change every ~340 ms (was every frame ≈ 60/s → flicker); ≤ 3 changes/s
+          const step80 = Math.floor((now - t0) / 80) !== Math.floor((now - t0 - 16) / 80);
+          if (Math.floor((now - t0) / 340) !== Math.floor((now - t0 - 16) / 340)) {
+            diceEls.forEach((el) => setDie(el, 1 + Math.floor(randomFloat() * 6)));
+          }
+          if (step80) Sound.dice();
           requestAnimationFrame(tick);
         } else resolve();
       };
@@ -2167,7 +2195,7 @@
     if (gen !== stageGen) return;
     diceEls.forEach((el, i) => {
       el.classList.remove('rolling');
-      el.textContent = String(step.dice[i]);
+      setDie(el, step.dice[i]);
       if (step.triple) el.classList.add('triple');
     });
     const sumEl = stage.querySelector('#ssSum');
@@ -2379,6 +2407,7 @@
     Sound.lucky();
     celebrateHit({
       amount: 20,
+      pop: 0, // tier hint only — nothing is credited on stage entry
       mult: 12,
       kind: 'win',
       target: ti,
@@ -2696,7 +2725,7 @@
       }
 
       if (step.type === 'fever') {
-        celebrateHit({ amount: 200, mult: 40, kind: 'fever', originEl: $('center'), splash: true });
+        celebrateHit({ amount: 200, pop: 0, mult: 40, kind: 'fever', originEl: $('center'), splash: true });
         FX.showFever('fever');
         setMsg(`FEVER ×${step.count}`, 'hot');
         for (let i = 0; i < step.runs.length; i++) {
@@ -2730,6 +2759,7 @@
           state.bingoLineWins = Math.min(9999, (state.bingoLineWins | 0) + step.lines.length);
           celebrateHit({
             amount: step.gained || 30,
+            pop: step.gained || 0,
             mult: 15 * step.lines.length,
             kind: 'win',
             originEl: $('bingoBoard'),
@@ -2753,6 +2783,7 @@
       if (step.type === 'bonus') {
         celebrateHit({
           amount: step.gained || 40,
+          pop: step.gained || 0,
           mult: 25,
           kind: 'win',
           originEl: $('center'),
@@ -3345,8 +3376,13 @@
   WEIGHT_KEYS.forEach((k) => {
     const lab = document.createElement('label');
     lab.className = 'range-label';
-    lab.innerHTML = `${WEIGHT_LABELS[k] || k}
-      <input type="range" data-weight="${k}" min="0" max="3" step="0.1" value="1">
+    // icon instead of the fruit name (name kept for screen readers + settings search)
+    const name = WEIGHT_LABELS[k] || k;
+    const ic = SYMBOLS.some((x) => x.id === k) || k === 'once'
+      ? `<span class="w-ic" aria-hidden="true">${iconHTML(k)}</span><span class="sr-only">${name}</span>`
+      : `<span class="w-ic w-ic-small" aria-hidden="true"><i class="w-tile"></i><b>×3</b></span><span class="sr-only">${name}</span>`;
+    lab.innerHTML = `${ic}
+      <input type="range" data-weight="${k}" min="0" max="3" step="0.1" value="1" aria-label="${name} 權重">
       <span data-weight-val="${k}">1.0</span>`;
     weightList.appendChild(lab);
   });
@@ -4239,7 +4275,7 @@
   setTimeout(maybeFirstRunTip, 500);
 
   window.__xiaomali = {
-    build: '20261017n',
+    build: '20261017o',
     state, settings, TRACK, SYMBOLS, pickTarget, resetCredit, Music, Sound, E, fitCabinet,
     setSettings(s) {
       const v = validateSettings(s);
@@ -4249,6 +4285,16 @@
       return { fixed: v.fixed, errors: v.errors, warnings: v.warnings };
     },
     validateSettings, toast, save, load, buildBackup, applyProgressData,
+    /** Audit/QA only: play one stage overlay visually (no round, no credit, no state change). */
+    async debugStage(kind) {
+      const Eng = window.XiaomaliEngine;
+      const fn = Eng && Eng['resolve' + kind[0].toUpperCase() + kind.slice(1)];
+      if (state.busy || !fn) return false;
+      const bets = SYMBOLS.map(() => 1);
+      const step = kind === 'gacha' || kind === 'ballDraw' ? fn(bets, Math.random) : fn(8, Math.random);
+      await playCabinetStage(step);
+      return true;
+    },
     /** Audit/QA only: show three symbols on the payline (no round, no credit). */
     debugReels(ids) {
       if (state.busy || !Array.isArray(ids)) return false;

@@ -12,14 +12,14 @@
   <meta name="color-scheme" content="dark">
   <meta name="format-detection" content="telephone=no">
   <meta http-equiv="Cache-Control" content="no-cache">
-  <meta name="x-xiaomali-build" content="20261017n">
+  <meta name="x-xiaomali-build" content="20261017o">
   <meta name="description" content="小瑪莉水果機 — 純前端網頁小遊戲（虛擬分數，娛樂用）">
   <title>小瑪莉 Little Mary</title>
   <link rel="icon" href="icon.svg" type="image/svg+xml">
   <link rel="apple-touch-icon" sizes="180x180" href="icon-180.png">
-  <link rel="manifest" href="manifest.webmanifest?v=20261017n">
-  <link rel="stylesheet" href="styles.css?v=20261017n">
-  <link rel="stylesheet" href="theme-neon.css?v=20261017n">
+  <link rel="manifest" href="manifest.webmanifest?v=20261017o">
+  <link rel="stylesheet" href="styles.css?v=20261017o">
+  <link rel="stylesheet" href="theme-neon.css?v=20261017o">
 </head>
 <body>
   <div class="app" id="app">
@@ -336,11 +336,11 @@
 
         <section class="set-sec" data-sec="audio" id="sec-audio">
           <h3>音量</h3>
-          <label class="range-label">音效
+          <label class="range-label"><span class="r-ic r-ic-sfx" aria-hidden="true"></span><span class="sr-only">音效</span>
             <input type="range" id="sfxVol" min="0" max="1" step="0.05" value="1">
             <span id="sfxVolVal">100%</span>
           </label>
-          <label class="range-label">BGM
+          <label class="range-label"><span class="r-ic r-ic-bgm" aria-hidden="true"></span><span class="sr-only">BGM</span>
             <input type="range" id="bgmVol" min="0" max="1" step="0.05" value="1">
             <span id="bgmVolVal">100%</span>
           </label>
@@ -357,12 +357,12 @@
           <div class="prog-card" id="progStatus" aria-live="polite">
             <div class="prog-row"><span>狀態</span><strong id="progSavedAt">自動儲存中</strong></div>
             <div class="prog-grid">
-              <div><span>CREDIT</span><b id="progCredit">—</b></div>
-              <div><span>WIN</span><b id="progWin">—</b></div>
-              <div><span>JP</span><b id="progJp">—</b></div>
-              <div><span>押注</span><b id="progBets">—</b></div>
-              <div><span>賓果</span><b id="progBingo">—</b></div>
-              <div><span>保留燈</span><b id="progHold">—</b></div>
+              <div><span class="pg-lab" data-ic="credit"><span class="sr-only">CREDIT</span></span><b id="progCredit">—</b></div>
+              <div><span class="pg-lab" data-ic="win"><span class="sr-only">WIN</span></span><b id="progWin">—</b></div>
+              <div><span class="pg-lab" data-ic="jp"><span class="sr-only">JP</span></span><b id="progJp">—</b></div>
+              <div><span class="pg-lab" data-ic="bets"><span class="sr-only">押注</span></span><b id="progBets">—</b></div>
+              <div><span class="pg-lab" data-ic="bingo"><span class="sr-only">賓果</span></span><b id="progBingo">—</b></div>
+              <div><span class="pg-lab" data-ic="hold"><span class="sr-only">保留燈</span></span><b id="progHold">—</b></div>
             </div>
             <p class="prog-note" id="progNote">含設定（難度／玩法／音量）</p>
           </div>
@@ -438,7 +438,7 @@
     </div>
   </div>
 
-  <script src="engine.js?v=20261017n" defer></script>
-  <script src="game.js?v=20261017n" defer></script>
+  <script src="engine.js?v=20261017o" defer></script>
+  <script src="game.js?v=20261017o" defer></script>
 </body>
 </html>
