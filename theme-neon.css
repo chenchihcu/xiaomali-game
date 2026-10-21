@@ -1188,3 +1188,33 @@ html.neon .first-tip-text b { color: var(--n-lime); }
   .tier-celebrate, .tier-celebrate .tc-card { animation: none !important; }
   .tier-celebrate .tc-rays, .tier-celebrate .tc-coins { display: none; }
 }
+
+/* ===========================================================================
+   Sound / haptics UI + performance pass (v20261021r)
+   =========================================================================== */
+/* --ri (reel offset, cell units) must NOT inherit: it changes every frame while
+   the reels spin, and an inherited custom property restyled all ~1,900 SVG
+   nodes inside the strips on every frame (≈3,360-element style recalc). */
+@property --ri { syntax: '<number>'; inherits: false; initial-value: 0; }
+/* isolate reel windows + lamp tiles so per-frame changes stay local */
+.reel-mask { contain: layout paint; }
+.reel-strip { will-change: transform; }
+.board .tile { contain: layout style; }
+/* lock bonus: dimmed lamps fade on their own compositor layer (no repaint) */
+.board.lb-on .tile { will-change: opacity, transform; }
+/* tier rays: smaller raster surface (was 170% of the cabinet at DPR 3) */
+.tc-rays { width: 130%; margin: -65% 0 0 -65%; }
+
+/* hidden iOS 18 switch used only for the haptic tap (never focusable) */
+.haptic-switch { position: fixed; left: -200px; top: 0; width: 1px; height: 1px; overflow: hidden; opacity: 0; pointer-events: none; }
+.haptics-row { margin-top: 10px; }
+.r-ic-haptic { display: inline-block; width: 20px; height: 20px; vertical-align: -4px; margin-right: 6px; background: center / contain no-repeat url("data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' viewBox='0 0 24 24'%3E%3Crect x='7' y='3' width='10' height='18' rx='2.5' fill='none' stroke='%2327e8ff' stroke-width='2'/%3E%3Cpath d='M3.5 8v8M20.5 8v8' stroke='%23ff3fd8' stroke-width='2' stroke-linecap='round'/%3E%3C/svg%3E"); }
+/* perf: no blur filter on the 600-node reel strips while spinning (re-rastered
+   every frame); motion is conveyed by the strip speed + a soft fade instead */
+.reel.spinning .reel-strip { filter: none !important; opacity: 0.9; }
+@keyframes reelFree {
+  from { transform: translateY(calc((var(--reel-win) - var(--reel-cell)) / 2)); }
+  to   { transform: translateY(calc((var(--reel-win) - var(--reel-cell)) / 2 - var(--reel-cell) * var(--loop, 36))); }
+}
+.reel.spinning .reel-strip { animation: reelFree var(--spd, 200ms) linear infinite; }
+@media (prefers-reduced-motion: reduce) { .reel.spinning .reel-strip { animation: none; } }

@@ -143,6 +143,28 @@
       }
       return Promise.resolve(after());
     },
+    /** Master SFX bus: soft limiter so stacked stingers never clip. */
+    bus() {
+      const ctx = this.ctx;
+      if (this._bus && this._busCtx === ctx) return this._bus;
+      try {
+        const comp = ctx.createDynamicsCompressor();
+        comp.threshold.value = -14; comp.knee.value = 10; comp.ratio.value = 6;
+        comp.attack.value = 0.003; comp.release.value = 0.12;
+        comp.connect(ctx.destination);
+        this._bus = comp;
+      } catch { this._bus = ctx.destination; }
+      this._busCtx = ctx;
+      return this._bus;
+    },
+    /** Voice budget: drop new voices while ≥ 28 are sounding (perf + clipping). */
+    _active: 0,
+    _voice(node, stopAt) {
+      if (this._active >= 28) return false;
+      this._active++;
+      node.onended = () => { this._active = Math.max(0, this._active - 1); };
+      return true;
+    },
     /** Run `fn` only when Sound is on and AudioContext is running. */
     whenReady(fn) {
       if (!this.on) return;
@@ -172,7 +194,8 @@
         o.frequency.setValueAtTime(freq, t);
         g.gain.setValueAtTime(Math.max(v, 0.0001), t);
         g.gain.exponentialRampToValueAtTime(0.0001, t + Math.max(dur, 0.01));
-        o.connect(g).connect(ctx.destination);
+        if (!this._voice(o)) return;
+        o.connect(g).connect(this.bus());
         o.start(t);
         o.stop(t + dur + 0.02);
       });
@@ -190,7 +213,8 @@
           o.frequency.setValueAtTime(f, t);
           g.gain.setValueAtTime(Math.max(v, 0.0001), t);
           g.gain.exponentialRampToValueAtTime(0.0001, t + step * 0.9);
-          o.connect(g).connect(this.ctx.destination);
+          if (!this._voice(o)) return;
+          o.connect(g).connect(this.bus());
           o.start(t);
           o.stop(t + step * 0.9 + 0.02);
         });
@@ -213,7 +237,8 @@
           g.gain.setValueAtTime(0.0001, t);
           g.gain.exponentialRampToValueAtTime(Math.max(v, 0.0001), t + Math.max(0.004, attack));
           g.gain.exponentialRampToValueAtTime(0.0001, t + Math.max(dur, 0.02));
-          o.connect(g).connect(ctx.destination);
+          if (!this._voice(o)) return;
+          o.connect(g).connect(this.bus());
           o.start(t);
           o.stop(t + dur + 0.03);
         };
@@ -231,10 +256,14 @@
         const v = vol * this.sfxScale();
         if (v <= 0) return;
         const t = ctx.currentTime + when;
-        const len = Math.max(1, Math.floor(ctx.sampleRate * Math.max(dur, 0.04)));
-        const buf = ctx.createBuffer(1, len, ctx.sampleRate);
-        const data = buf.getChannelData(0);
-        for (let i = 0; i < len; i++) data[i] = Math.random() * 2 - 1;
+        if (!this._noise || this._noise.sampleRate !== ctx.sampleRate) {
+          // one shared 1 s white-noise buffer (was re-generated on every call)
+          const len = ctx.sampleRate;
+          this._noise = ctx.createBuffer(1, len, ctx.sampleRate);
+          const data = this._noise.getChannelData(0);
+          for (let i = 0; i < len; i++) data[i] = Math.random() * 2 - 1;
+        }
+        const buf = this._noise;
         const src = ctx.createBufferSource();
         src.buffer = buf;
         const f = ctx.createBiquadFilter();
@@ -244,7 +273,8 @@
         const g = ctx.createGain();
         g.gain.setValueAtTime(Math.max(v, 0.0001), t);
         g.gain.exponentialRampToValueAtTime(0.0001, t + dur);
-        src.connect(f).connect(g).connect(ctx.destination);
+        if (!this._voice(src)) return;
+        src.connect(f).connect(g).connect(this.bus());
         src.start(t);
         src.stop(t + dur + 0.02);
       });
@@ -291,6 +321,59 @@
       this.tone(1568, 0.1, 'square', 0.03, 0.08);
     },
     tick()  { this.beep(1320, 0.025, 'square', 0.03); },
+    /** Chase lamp tick: throttled (≥45 ms) and pitch follows progress 0..1
+     *  (ramps up while cruising, falls during the final decel steps). */
+    _chaseAt: 0,
+    chase(progress = 0, decel = false) {
+      const now = performance.now();
+      if (now - this._chaseAt < 45) return;
+      this._chaseAt = now;
+      const p = Math.max(0, Math.min(1, progress));
+      const f = decel ? 1500 - Math.max(0, p - 0.85) * 2600 : 900 + p * 700;
+      this.beep(Math.max(700, Math.min(1700, f)), 0.022, 'square', 0.026);
+    },
+    spinStart() {
+      this.tone(330, 0.22, 'sawtooth', 0.03, 0, { slideTo: 990, attack: 0.02 });
+      this.noiseBurst(0.12, 0.018, 0.02, { freq: 1800, type: 'bandpass', Q: 1.4 });
+    },
+    stop()  {
+      this.tone(196, 0.09, 'triangle', 0.07, 0, { slideTo: 140 });
+      this.beep(1175, 0.05, 'square', 0.03, 0.01);
+    },
+    tapUI() { this.beep(1760, 0.018, 'triangle', 0.03); },
+    /** Win-tier stingers (NICE / BIG / MEGA / JACKPOT) — layered, original synth. */
+    tier(id) {
+      if (id === 'nice') { this.seq([784, 1047, 1319], 0.07, 'triangle', 0.05); return; }
+      if (id === 'big') {
+        this.seq([523, 659, 784, 1047, 1319], 0.065, 'square', 0.045);
+        this.chord([523, 659, 784], 0.32, 'triangle', 0.035, 0.34);
+        return;
+      }
+      if (id === 'mega') {
+        this.noiseBurst(0.2, 0.04, 0, { freq: 900, type: 'lowpass', Q: 0.7 });
+        this.seq([392, 523, 659, 784, 1047, 1319, 1568], 0.06, 'square', 0.048);
+        this.chord([784, 988, 1175, 1568], 0.5, 'sawtooth', 0.026, 0.42);
+        return;
+      }
+      this.celebrate(5, 'jp');
+      this.chord([523, 659, 784, 1047], 0.9, 'triangle', 0.03, 1.1);
+    },
+    /** Count-up coin tick, throttled to ≤ 14/s; pitch rises with progress. */
+    _countAt: 0,
+    count(progress = 0) {
+      const now = performance.now();
+      if (now - this._countAt < 70) return;
+      this._countAt = now;
+      this.beep(1200 + Math.min(1, progress) * 900, 0.025, 'square', 0.022);
+    },
+    lockSeed() { this.tone(523, 0.12, 'triangle', 0.05, 0, { detune: 6 }); },
+    lockOn()   { this.seq([1047, 1568], 0.05, 'triangle', 0.045); },
+    respin()   { this.tone(440, 0.16, 'sawtooth', 0.022, 0, { slideTo: 880, attack: 0.01 }); },
+    lockFull() {
+      this.noiseBurst(0.25, 0.045, 0, { freq: 700, type: 'lowpass', Q: 0.7 });
+      this.seq([523, 659, 784, 1047, 1319, 1568, 2093], 0.07, 'square', 0.05);
+      this.chord([1047, 1319, 1568, 2093], 0.6, 'triangle', 0.035, 0.5);
+    },
     bet()   { this.beep(880, 0.04, 'triangle', 0.08); },
     error() { this.seq([220, 165], 0.12, 'sawtooth', 0.04); },
     win()   { this.celebrate(1, 'win'); },
@@ -956,6 +1039,7 @@
   // the old px value was measured once and went stale → half-cells showed.
   function setReelOffset(ri, index, animate) {
     const r = reelStrips[ri];
+    if (r.idx === index && r.el.classList.contains('settle') === !!animate) return;
     r.el.classList.toggle('settle', !!animate);
     r.el.style.removeProperty('transform');
     r.el.style.setProperty('--ri', String(index));
@@ -1009,30 +1093,24 @@
       r.el.classList.remove('settle');
     });
 
-    const start = performance.now();
-    const baseSpeed = [2.8, 3.4, 3.0]; // cells per frame-ish via time
-    let raf = 0;
+    // Free spin runs as a compositor CSS animation (theme-neon.css `reelFree`):
+    // the old rAF loop rewrote the strip offset every frame, which re-laid-out
+    // all ~600 SVG nodes per strip per frame. Same speed (cells/ms) as before.
+    const baseSpeed = [2.8, 3.4, 3.0]; // cells per 16 ms
+    reelStrips.forEach((r, ri) => {
+      const loop = REEL_IDS.length * 4;
+      r.el.style.setProperty('--loop', String(loop));
+      r.el.style.setProperty('--spd', Math.round((loop / baseSpeed[ri]) * 16) + 'ms');
+      r.el.style.setProperty('--ri', '0');
+      r.idx = 0;
+    });
     await new Promise((resolve) => {
-      const tick = (now) => {
-        if (gen !== animGen) {
-          cancelAnimationFrame(raf);
-          resolve();
-          return;
-        }
-        const t = now - start;
-        if (t >= durationMs) {
-          cancelAnimationFrame(raf);
-          resolve();
-          return;
-        }
-        reelStrips.forEach((r, ri) => {
-          const cells = (t / 16) * baseSpeed[ri];
-          const idx = Math.floor(cells) % r.seq.length;
-          setReelOffset(ri, idx, false);
-        });
-        raf = requestAnimationFrame(tick);
+      const t0 = performance.now();
+      const poll = () => {
+        if (gen !== animGen || performance.now() - t0 >= durationMs) { resolve(); return; }
+        setTimeout(poll, Math.min(120, Math.max(16, durationMs - (performance.now() - t0))));
       };
-      raf = requestAnimationFrame(tick);
+      poll();
     });
 
     if (gen !== animGen) return;
@@ -1130,14 +1208,25 @@
     $('center')?.classList.remove('once-on');
   }
 
+  // perf: only touch tiles whose lamp state actually changes. classList.remove()
+  // on all 24 tiles rewrote every class attribute each chase step (24 style
+  // invalidations + SVG relayout per step).
+  const LIT_CLASSES = ['lit', 'trail1', 'trail2', 'trail3'];
   function setLight(pos, trail = 0, trailDir = -1) {
-    for (const el of tileEls) el.classList.remove('lit', 'trail1', 'trail2', 'trail3');
-    tileEls[pos].classList.add('lit');
     const dir = (trailDir === 1 || trailDir === -1) ? trailDir : -1;
     // trailDir -1 = forward chase tail behind; +1 = reverse chase
-    if (trail >= 1) tileEls[(pos + dir + N) % N].classList.add('trail1');
-    if (trail >= 2) tileEls[(pos + dir * 2 + N) % N].classList.add('trail2');
-    if (trail >= 3) tileEls[(pos + dir * 3 + N) % N].classList.add('trail3');
+    const want = new Map([[pos, 'lit']]);
+    if (trail >= 1) want.set((pos + dir + N) % N, 'trail1');
+    if (trail >= 2) want.set((pos + dir * 2 + N) % N, 'trail2');
+    if (trail >= 3) want.set((pos + dir * 3 + N) % N, 'trail3');
+    tileEls.forEach((el, i) => {
+      const w = want.get(i);
+      for (const c of LIT_CLASSES) {
+        const has = el.classList.contains(c);
+        if (c === w && !has) el.classList.add(c);
+        else if (c !== w && has) el.classList.remove(c);
+      }
+    });
   }
 
   // --- 防呆: availability rules. Each returns a reason string (blocked) or null.
@@ -1582,7 +1671,7 @@
       const trailDir = rev ? 1 : -1;
       // Always main lamp + 2-step comet tail (100% / ~45% / ~15%)
       setLight(state.pos, 2, trailDir);
-      Sound.tick();
+      Sound.chase(s / totalSteps, remaining < DECEL);
       await sleep(delay);
     }
     } finally {
@@ -1591,6 +1680,8 @@
     // Snap exactly onto target (parity / rounding safety)
     state.pos = target;
     setLight(state.pos, 0);
+    Sound.stop();
+    hapticVibrate(0);
   }
 
   /** Estimate light-run duration so reels can finish roughly together. */
@@ -1705,25 +1796,58 @@
   }
 
   /** Public Vibration API only (no private CoreHaptics). No-op if unsupported / reduced. */
-  function hapticVibrate(tier = 1) {
-    try {
-      if (typeof navigator === 'undefined' || typeof navigator.vibrate !== 'function') return;
-      if (reduceMotion()) {
-        navigator.vibrate(8);
-        return;
-      }
+  /**
+   * Haptics: navigator.vibrate where it exists (Android); on iOS 18+ Safari
+   * (no vibrate) a hidden <input type=checkbox switch> toggled via its <label>
+   * gives a system "light tap". Key moments only (stop / win / lock), throttled
+   * ≥140 ms, never from the chase loop. Off when settings.haptics === false.
+   */
+  const Haptics = {
+    _at: 0,
+    _label: null,
+    canVibrate: typeof navigator !== 'undefined' && typeof navigator.vibrate === 'function',
+    canSwitch: (() => {
+      try { return typeof HTMLInputElement !== 'undefined' && 'switch' in HTMLInputElement.prototype; } catch { return false; }
+    })(),
+    enabled() { return !(settings && settings.haptics === false); },
+    _iosTap() {
+      try {
+        if (!this._label) {
+          const lab = document.createElement('label');
+          lab.className = 'haptic-switch';
+          lab.setAttribute('aria-hidden', 'true');
+          const inp = document.createElement('input');
+          inp.type = 'checkbox';
+          inp.setAttribute('switch', '');
+          inp.tabIndex = -1;
+          lab.appendChild(inp);
+          document.body.appendChild(lab);
+          this._label = lab;
+        }
+        this._label.click();
+      } catch { /* ignore */ }
+    },
+    /** tier 0..5 → pattern (vibrate) or 1–2 light taps (iOS switch). */
+    pulse(tier = 1) {
+      if (!this.enabled()) return;
+      const now = performance.now();
+      if (now - this._at < 140) return;
+      this._at = now;
       const t = Math.max(0, Math.min(5, tier | 0));
-      const patterns = [
-        [10],
-        [16],
-        [20, 36, 20],
-        [28, 36, 28, 36, 48],
-        [36, 28, 36, 28, 55, 36, 70],
-        [48, 28, 48, 28, 48, 28, 90, 45, 110],
-      ];
-      navigator.vibrate(patterns[t]);
-    } catch { /* ignore */ }
-  }
+      try {
+        if (this.canVibrate) {
+          if (reduceMotion()) { navigator.vibrate(8); return; }
+          const patterns = [[10], [16], [20, 36, 20], [28, 36, 28, 36, 48], [36, 28, 36, 28, 55, 36, 70], [48, 28, 48, 28, 48, 28, 90, 45, 110]];
+          navigator.vibrate(patterns[t]);
+        } else if (this.canSwitch) {
+          this._iosTap();
+          if (t >= 3) setTimeout(() => this._iosTap(), 160);
+        }
+      } catch { /* ignore */ }
+    },
+  };
+  function hapticVibrate(tier = 1) { Haptics.pulse(tier); }
+
 
   /** Win intensity 0..5 from credit gained + multiplier (or forced kind). */
   function winTierFrom(amount = 0, mult = 0, kind = 'win') {
@@ -1807,6 +1931,8 @@
       }
       flourishBurst(tier.burst, $('center'));
     }
+    Sound.tier(tier.id);
+    hapticVibrate(tier.id === 'nice' ? 1 : tier.id === 'big' ? 3 : 5);
     return new Promise((resolve) => {
       let raf = 0, done = false;
       const t0 = performance.now(), countMs = rm ? 0 : Math.min(tier.ms * 0.6, 2200);
@@ -1822,6 +1948,7 @@
       const tick = (now) => {
         const k = Math.min(1, (now - t0) / countMs);
         num.textContent = '+' + Math.round(amount * (1 - Math.pow(1 - k, 3)));
+        if (countMs) Sound.count(k);
         if (k < 1) raf = requestAnimationFrame(tick);
       };
       if (countMs) raf = requestAnimationFrame(tick);
@@ -2535,7 +2662,6 @@
       c.className = 'lb-coin';
       c.textContent = '+' + it.value;
       t.appendChild(c);
-      flourishCascade(it.i, 0);
     };
     const setLeft = (n) => {
       FX.holdsSet(n);
@@ -2543,21 +2669,25 @@
     };
     setMsg('鎖燈 BONUS！', 'hot');
     Sound.lucky();
-    for (const it of step.seed) { lock(it); Sound.bet(); await sleep(260 * pace); }
+    for (const it of step.seed) { lock(it); Sound.lockSeed(); await sleep(260 * pace); }
+    hapticVibrate(2);
     setLeft(3);
     await sleep(600 * pace);
     for (const sp of step.spins) {
       // respin: brief sweep over unlocked lamps (opacity only)
       board?.classList.add('lb-spin');
-      Sound.tick?.();
+      Sound.respin();
       await sleep(520 * pace);
       board?.classList.remove('lb-spin');
-      for (const it of sp.newLocks) { lock(it); Sound.coin(); await sleep(160 * pace); }
+      for (const it of sp.newLocks) { lock(it); Sound.lockOn(); await sleep(160 * pace); }
+      if (sp.newLocks.length) hapticVibrate(1);
       setLeft(sp.respinsLeft);
       await sleep((sp.newLocks.length ? 420 : 300) * pace);
     }
     if (step.full) {
       setMsg('全亮！JACKPOT', 'hot');
+      Sound.lockFull();
+      hapticVibrate(4);
       board?.classList.add('lb-full');
       await sleep(700 * pace);
     }
@@ -2674,6 +2804,7 @@
     roundPersist = { win: state.win, bingo: state.bingo.slice(), jp: state.jp, bingoLineWins: state.bingoLineWins, holdCount };
     setCenterFocus(false); // chase: outer lamps are the hero
     FX.spin();
+    Sound.spinStart();
     render();
     save();
 
@@ -3552,6 +3683,7 @@
     modeList.querySelectorAll('input[data-mode]').forEach((inp) => {
       inp.checked = !!settings.modes[inp.dataset.mode];
     });
+    if ($('hapticsOn')) $('hapticsOn').checked = settings.haptics !== false;
     weightList.querySelectorAll('input[data-weight]').forEach((inp) => {
       const k = inp.dataset.weight;
       const v = settings.weights[k] ?? 1;
@@ -3879,6 +4011,22 @@
     render();
     Sound.bet();
   });
+
+  const hapticsEl = $('hapticsOn');
+  if (hapticsEl) {
+    hapticsEl.checked = settings.haptics !== false;
+    hapticsEl.addEventListener('change', () => {
+      settings.haptics = !!hapticsEl.checked;
+      saveSettings();
+      if (settings.haptics) hapticVibrate(1);
+    });
+  }
+  // UI tap tick for chrome buttons (bet keys / start have their own sounds)
+  document.addEventListener('pointerdown', (e) => {
+    const b = e.target.closest?.('.btn, .knob, .chip, .sheet button, .tab');
+    if (!b || b.closest('.betkey') || b.id === 'btnStart' || b.disabled) return;
+    Sound.tapUI();
+  }, { capture: true, passive: true });
 
   modeList.addEventListener('change', (e) => {
     const inp = e.target.closest('input[data-mode]');
@@ -4422,8 +4570,8 @@
   setTimeout(maybeFirstRunTip, 500);
 
   window.__xiaomali = {
-    build: '20261021q',
-    state, settings, TRACK, SYMBOLS, pickTarget, resetCredit, Music, Sound, E, fitCabinet,
+    build: '20261021r',
+    state, settings, TRACK, SYMBOLS, pickTarget, resetCredit, Music, Sound, Haptics, E, fitCabinet,
     setSettings(s) {
       const v = validateSettings(s);
       settings = v.s;

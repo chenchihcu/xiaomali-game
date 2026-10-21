@@ -12,14 +12,14 @@
   <meta name="color-scheme" content="dark">
   <meta name="format-detection" content="telephone=no">
   <meta http-equiv="Cache-Control" content="no-cache">
-  <meta name="x-xiaomali-build" content="20261021q">
+  <meta name="x-xiaomali-build" content="20261021r">
   <meta name="description" content="小瑪莉水果機 — 純前端網頁小遊戲（虛擬分數，娛樂用）">
   <title>小瑪莉 Little Mary</title>
   <link rel="icon" href="icon.svg" type="image/svg+xml">
   <link rel="apple-touch-icon" sizes="180x180" href="icon-180.png">
-  <link rel="manifest" href="manifest.webmanifest?v=20261021q">
-  <link rel="stylesheet" href="styles.css?v=20261021q">
-  <link rel="stylesheet" href="theme-neon.css?v=20261021q">
+  <link rel="manifest" href="manifest.webmanifest?v=20261021r">
+  <link rel="stylesheet" href="styles.css?v=20261021r">
+  <link rel="stylesheet" href="theme-neon.css?v=20261021r">
 </head>
 <body>
   <div class="app" id="app">
@@ -337,13 +337,16 @@
         <section class="set-sec" data-sec="audio" id="sec-audio">
           <h3>音量</h3>
           <label class="range-label"><span class="r-ic r-ic-sfx" aria-hidden="true"></span><span class="sr-only">音效</span>
-            <input type="range" id="sfxVol" min="0" max="1" step="0.05" value="1">
-            <span id="sfxVolVal">100%</span>
+            <input type="range" id="sfxVol" min="0" max="1" step="0.05" value="0.35">
+            <span id="sfxVolVal">35%</span>
           </label>
           <label class="range-label"><span class="r-ic r-ic-bgm" aria-hidden="true"></span><span class="sr-only">BGM</span>
             <input type="range" id="bgmVol" min="0" max="1" step="0.05" value="1">
             <span id="bgmVolVal">100%</span>
           </label>
+          <div class="mode-list haptics-row">
+            <label><input type="checkbox" id="hapticsOn" checked autocomplete="off"> <span class="mode-text"><span class="mode-name"><span class="r-ic r-ic-haptic" aria-hidden="true"></span>觸覺回饋</span><small class="mode-hint">停燈／中獎／鎖燈時輕震（Android 震動；iOS 18 輕觸）</small></span></label>
+          </div>
         </section>
 
         <section class="set-sec" data-sec="music" id="sec-music">
@@ -438,7 +441,7 @@
     </div>
   </div>
 
-  <script src="engine.js?v=20261021q" defer></script>
-  <script src="game.js?v=20261021q" defer></script>
+  <script src="engine.js?v=20261021r" defer></script>
+  <script src="game.js?v=20261021r" defer></script>
 </body>
 </html>
