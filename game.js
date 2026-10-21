@@ -38,6 +38,7 @@
   const START_CREDIT = 1000;
   const CREDIT_CAP = 999999;
   const MAX_BET_PER_SYMBOL = 99;
+  const BUILD = '20261021s';
   const STORAGE_KEY = 'xiaomali.v1';
   const SETTINGS_KEY = 'xiaomali.settings.v1';
 
@@ -645,7 +646,10 @@
   let lastSavedAt = 0; // ms epoch of last successful localStorage write
 
   function progressPayload() {
-    const refund = state.betsPaid ? sum(state.bets) : 0;
+    // A round in flight has a fixed result (roundPersist.final): persist the stake as
+    // spent + the pending settlement, so reload/tab-kill neither refunds nor loses it.
+    const fin = roundPersist && roundPersist.final;
+    const refund = !fin && state.betsPaid ? sum(state.bets) : 0;
     const win = roundPersist ? roundPersist.win : state.win;
     const bingo = roundPersist ? roundPersist.bingo : state.bingo;
     const jp = roundPersist ? roundPersist.jp : state.jp;
@@ -664,54 +668,60 @@
       bingo: bingo.slice ? bingo.slice() : bingo,
       bingoLineWins,
       holdCount: holdSave,
+      pending: fin ? { ...fin, bingo: fin.bingo ? fin.bingo.slice() : undefined } : undefined,
     };
   }
 
-  function applyProgressData(d, { restoreHold = true } = {}) {
-    if (!d || !Number.isFinite(d.credit)) return false;
-    state.credit = Math.min(CREDIT_CAP, Math.max(0, Math.floor(d.credit)));
-    state.win = Math.min(CREDIT_CAP, Math.max(0, Math.floor(d.win || 0)));
-    state.pos = (d.pos | 0) % N;
-    if (d.sound !== undefined) Sound.on = d.sound !== false;
-    if (Number.isFinite(d.jp) && d.jp >= 0) state.jp = Math.min(JP.max, d.jp);
-    if (Array.isArray(d.bingo) && d.bingo.length === 9) state.bingo = d.bingo.map(Boolean);
-    if (Number.isFinite(d.bingoLineWins)) state.bingoLineWins = Math.max(0, Math.min(9999, d.bingoLineWins | 0));
-    if (Array.isArray(d.lastBets) && d.lastBets.length === SYMBOLS.length) {
-      state.bets = d.lastBets.map((n) => Math.min(MAX_BET_PER_SYMBOL, Math.max(0, n | 0)));
-      state.betsPaid = false;
-    } else {
-      state.bets = new Array(SYMBOLS.length).fill(0);
-      state.betsPaid = true;
+  /** Pending-round settlement notice (set by applyProgressData, shown after boot). */
+  let settledNotice = '';
+  function applyProgressData(raw, { restoreHold = true } = {}) {
+    const d = E.sanitizeProgress(raw);
+    if (!d) return false;
+    state.credit = d.credit;
+    state.win = d.win;
+    state.pos = d.pos;
+    if (d.sound !== null) Sound.on = d.sound;
+    if (d.jp !== null) state.jp = d.jp;
+    if (d.bingo) state.bingo = d.bingo;
+    state.bingoLineWins = d.bingoLineWins;
+    // Restored bets are never pre-paid (refund already folded into credit on save).
+    state.bets = d.bets || new Array(SYMBOLS.length).fill(0);
+    state.betsPaid = false;
+    state.lastPlayedBets = d.lastPlayedBets || (sum(state.bets) > 0 ? state.bets.slice() : new Array(SYMBOLS.length).fill(0));
+    if (d.pending) {
+      const p = d.pending;
+      state.win = p.win;
+      if (p.jp !== null && p.jp !== undefined) state.jp = p.jp;
+      if (p.bingo) state.bingo = p.bingo;
+      state.bingoLineWins = p.bingoLineWins;
+      settledNotice = p.kind === 'gamble'
+        ? `上次比大小已結算・WIN ${p.win}`
+        : `上局已結算${p.gained > 0 ? `・+${p.gained}` : ''}`;
     }
-    if (Array.isArray(d.lastPlayedBets) && d.lastPlayedBets.length === SYMBOLS.length) {
-      state.lastPlayedBets = d.lastPlayedBets.map((n) => Math.min(MAX_BET_PER_SYMBOL, Math.max(0, n | 0)));
-    } else if (sum(state.bets) > 0) {
-      state.lastPlayedBets = state.bets.slice();
-    } else {
-      state.lastPlayedBets = new Array(SYMBOLS.length).fill(0);
-    }
-    if (Number.isFinite(d.holdCount)) {
-      const h = Math.max(0, Math.min(4, d.holdCount | 0));
+    if (d.holdCount !== null) {
+      const h = d.holdCount;
       if (restoreHold && typeof FX !== 'undefined' && FX.holdsSet) FX.holdsSet(h);
       else state._pendingHold = h;
     }
-    if (Number.isFinite(d.savedAt)) lastSavedAt = d.savedAt;
+    if (d.savedAt !== null) lastSavedAt = d.savedAt;
     return true;
   }
 
   function load() {
     try {
       const d = JSON.parse(localStorage.getItem(STORAGE_KEY) || 'null');
-      if (d && Number.isFinite(d.credit)) {
-        applyProgressData(d, { restoreHold: false });
-        if (Number.isFinite(d.savedAt)) lastSavedAt = d.savedAt;
-      }
+      if (applyProgressData(d, { restoreHold: false }) && settledNotice) save(); // commit settlement
     } catch { /* ignore */ }
   }
 
   function save() {
     try {
       const payload = progressPayload();
+      // Never persist a corrupt snapshot (NaN → null credit would wipe progress on next load).
+      if (!Number.isFinite(payload.credit) || !Number.isFinite(payload.win) || !Number.isFinite(payload.jp)) {
+        console.warn('[xiaomali] save skipped: non-finite state', payload);
+        return;
+      }
       localStorage.setItem(STORAGE_KEY, JSON.stringify(payload));
       lastSavedAt = payload.savedAt;
       try { refreshProgressUI(); } catch (_) { /* settings UI may not exist yet */ }
@@ -1827,11 +1837,17 @@
         this._label.click();
       } catch { /* ignore */ }
     },
-    /** tier 0..5 → pattern (vibrate) or 1–2 light taps (iOS switch). */
-    pulse(tier = 1) {
+    /**
+     * tier 0..5 → pattern (vibrate) or 1–2 light taps (iOS switch).
+     * iOS only honours the switch tap inside a user gesture (transient activation),
+     * so key taps (開始 / 停 / 略過) call pulse(t, true) synchronously from their
+     * pointer handler; post-animation calls stay as a best-effort fallback
+     * (works on Android vibrate; may be silent on iOS — see README 實機檢查).
+     */
+    pulse(tier = 1, gesture = false) {
       if (!this.enabled()) return;
       const now = performance.now();
-      if (now - this._at < 140) return;
+      if (!gesture && now - this._at < 140) return;
       this._at = now;
       const t = Math.max(0, Math.min(5, tier | 0));
       try {
@@ -1954,7 +1970,7 @@
       if (countMs) raf = requestAnimationFrame(tick);
       const timer = setTimeout(finish, rm ? 2000 : tier.ms);
       // tap-to-skip: first tap jumps to the final number, then closes
-      el.addEventListener('pointerdown', (e) => { e.preventDefault(); finish(); }, { once: true });
+      el.addEventListener('pointerdown', (e) => { e.preventDefault(); Haptics.pulse(1, true); finish(); }, { once: true });
       _tierSkip = finish;
     });
   }
@@ -2802,6 +2818,18 @@
     state.busy = true;
     // Snapshot for mid-spin persist + exception rollback (see roundPersist / save).
     roundPersist = { win: state.win, bingo: state.bingo.slice(), jp: state.jp, bingoLineWins: state.bingoLineWins, holdCount };
+    // Result is fixed now → persist its settlement before any animation (M1).
+    const potBefore = settings.modes.jp ? state.jp : 0;
+    const result = E.resolveRound(state.bets, settings, randomFloat, potBefore, { bingoBoard: state.bingo });
+    roundPersist.final = {
+      kind: 'round',
+      gained: result.win,
+      win: Math.min(CREDIT_CAP, state.win + result.win),
+      jp: settings.modes.jp ? E.nextJpPot(state.jp, total, result.jpWin, settings) : state.jp,
+      bingo: Array.isArray(result.bingoBoard) ? result.bingoBoard.map(Boolean) : state.bingo.slice(),
+      bingoLineWins: Math.min(9999, (state.bingoLineWins | 0)
+        + result.steps.reduce((a, st) => a + (st.type === 'bingo' && Array.isArray(st.lines) ? st.lines.length : 0), 0)),
+    };
     setCenterFocus(false); // chase: outer lamps are the hero
     FX.spin();
     Sound.spinStart();
@@ -2810,8 +2838,6 @@
 
     let roundOk = false;
     try {
-    const potBefore = settings.modes.jp ? state.jp : 0;
-    const result = E.resolveRound(state.bets, settings, randomFloat, potBefore, { bingoBoard: state.bingo });
     // Apply bingo snapshots per step (not the final board) so marks / lines animate.
     let roundWin = 0;
     let lockJpPaid = false;
@@ -3160,11 +3186,13 @@
         reelStrips.forEach((r) => r.parent.classList.remove('landed', 'spinning'));
       } catch (_) { /* boot race */ }
       if (!roundOk && roundPersist) {
-        // Aborted mid-round: roll back animated WIN / bingo before persist.
-        state.win = roundPersist.win;
-        state.bingo = roundPersist.bingo.slice();
-        state.jp = roundPersist.jp;
-        state.bingoLineWins = roundPersist.bingoLineWins;
+        // Aborted mid-round (exception): settle the fixed result, same as a reload would.
+        const fin = roundPersist.final;
+        state.win = fin ? fin.win : roundPersist.win;
+        state.bingo = (fin ? fin.bingo : roundPersist.bingo).slice();
+        state.jp = fin ? fin.jp : roundPersist.jp;
+        state.bingoLineWins = fin ? fin.bingoLineWins : roundPersist.bingoLineWins;
+        state.betsPaid = false;
         try { FX.holdsSet(roundPersist.holdCount); FX.idle(); } catch (_) { /* */ }
       } else {
         // Success: drop stuck spin/expect/fever but keep end-of-round fx-win pulse
@@ -3237,6 +3265,15 @@
     try {
       setMsg(choice === 'small' ? '小…' : '大…');
       const result = 1 + Math.floor(randomFloat() * 9);
+      {
+        // Outcome is fixed now → persist it so a reload mid-dice can't re-roll (M1).
+        const hit = (choice === 'small' && result <= 4) || (choice === 'big' && result >= 6);
+        const w0 = state.win;
+        const fw = result === 5 ? w0 : hit ? Math.min(CREDIT_CAP, w0 >= CREDIT_CAP ? w0 : w0 * 2) : 0;
+        roundPersist.final = { kind: 'gamble', gained: Math.max(0, fw - w0), win: fw, jp: state.jp,
+          bingo: state.bingo.slice(), bingoLineWins: state.bingoLineWins };
+        save();
+      }
       for (let k = 0; k < 16; k++) {
         diceLed.set(String(1 + Math.floor(randomFloat() * 9)));
         $('lblSmall').classList.toggle('on', k % 2 === 0);
@@ -3887,9 +3924,9 @@
           const data = JSON.parse(text);
           const prog = data.progress || data;
           const set = data.settings;
-          if (!prog || !Number.isFinite(prog.credit)) throw new Error('格式不符');
+          if (!E.sanitizeProgress(prog)) throw new Error('格式不符');
           const ok = await confirmBox('匯入備份',
-            `將覆蓋目前進度${set ? '與設定' : ''}（CREDIT ${Math.floor(prog.credit)}）。確定？`, '匯入');
+            `將覆蓋目前進度${set ? '與設定' : ''}（CREDIT ${E.sanitizeProgress(prog).credit}）。確定？`, '匯入');
           if (!ok) { toast('已取消匯入', 'info'); return; }
           if (state.busy) { deny(BUSY_MSG); return; }
           applyProgressData(prog, { restoreHold: true });
@@ -4210,7 +4247,7 @@
   }
 
   const A = {
-    start: guarded('start', () => { if (state.auto && !state.busy) stopAuto(); start(); }, 450),
+    start: guarded('start', () => { Haptics.pulse(0, true); if (state.auto && !state.busy) stopAuto(); start(); }, 450),
     clear: guarded('clear', () => { stopAuto(); clearBets(); }),
     all: guarded('all', () => { stopAuto(); betAll(); }),
     collect: guarded('collect', () => collect(), 400),
@@ -4567,10 +4604,14 @@
   fitCabinet();
   requestAnimationFrame(() => { fitCabinet(); idleReels(); });
   if (settingsNotice) setTimeout(() => toast(settingsNotice, 'warn', 3200), 400);
+  if (settledNotice) setTimeout(() => toast(settledNotice, 'ok', 3200), settingsNotice ? 3700 : 400);
   setTimeout(maybeFirstRunTip, 500);
 
-  window.__xiaomali = {
-    build: '20261021r',
+  // QA / console hooks: only on localhost or with ?debug=1 (production exposes build only).
+  const DEBUG_HOOKS = /^(localhost|127\.0\.0\.1|\[::1\])$/.test(location.hostname)
+    || new URLSearchParams(location.search).get('debug') === '1';
+  window.__xiaomali = !DEBUG_HOOKS ? Object.freeze({ build: BUILD }) : {
+    build: BUILD,
     state, settings, TRACK, SYMBOLS, pickTarget, resetCredit, Music, Sound, Haptics, E, fitCabinet,
     setSettings(s) {
       const v = validateSettings(s);

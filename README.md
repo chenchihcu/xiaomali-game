@@ -141,3 +141,17 @@ iPhone：Safari 打開 → 分享 → **加入主畫面**。直式、橫式都�
 ## 版權說明
 
 美術以 Emoji、CSS、SVG 原創繪製，**未使用任何任天堂或其他公司的角色與商標**。「小瑪莉」為台灣對此類水果機的通稱。背景音樂為程序合成音，非商業曲目取樣。
+
+## 實機檢查（iPhone，模擬器無法驗證）
+
+- **觸覺回饋**：iOS 18+ Safari 用 `<input switch>` 的輕觸，只在使用者手勢內有效。「開始」與「略過中獎動畫」會在點擊當下震動；停燈、中獎、鎖燈的震動是在動畫結束後才觸發，iOS 上可能沒有感覺（Android 的 `navigator.vibrate` 不受影響）。請實機確認：開始和略過一定要有輕觸，設定裡關掉「觸覺回饋」後要完全沒有震動。
+- **靜音開關**：Web Audio 不受 iPhone 側邊靜音鍵控制，請確認畫面上的靜音鍵有效。
+- **120Hz／發熱**：連續自動 5 分鐘，看動畫是否順暢、機身是否明顯發燙。
+
+## 測試
+
+- `node --test tests/`：存檔／匯入的清洗（NaN、負數、超大值、局中結算）。
+- `node sim.js`：各難度 RTP 範圍、鎖燈規則、JP 凍結；任何一項失敗都會 exit 1。
+- CI 範本在 `ci/github-actions-ci.yml`：搬到 `.github/workflows/ci.yml` 就會在 PR 和 push 時跑（推送 workflow 檔需要有 `workflow` 權限的帳號）。
+- QA hook `window.__xiaomali` 的完整功能只在 localhost 或網址加 `?debug=1` 時開啟。
+- GitHub Pages 用 Jekyll 從 `main` 發佈，`_config.yml` 排除了 `*.md`、`sim.js`、`tests`、`ci`，所以網站上只有遊戲檔案。

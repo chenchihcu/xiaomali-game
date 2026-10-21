@@ -1,0 +1,16 @@
+# GitHub Pages (legacy branch build, Jekyll): publish only the game.
+# Docs, balance sim, tests and tooling are excluded from the site.
+exclude:
+  - "*.md"
+  - sim.js
+  - tests
+  - ci
+  - node_modules
+  - package.json
+  - package-lock.json
+  - .assetsignore
+  - .gitignore
+  - .wrangler
+  - wrangler.json
+  - wrangler.jsonc
+  - wrangler.toml

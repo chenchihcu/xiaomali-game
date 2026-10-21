@@ -11,3 +11,7 @@ wrangler.toml
 .gitignore
 *.md
 sim.js
+tests
+_site
+_config.yml
+ci
