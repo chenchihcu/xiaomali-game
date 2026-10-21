@@ -290,8 +290,9 @@
     jpRate: 1,      // JP 彩池累積倍率
     startCredit: 1000,
     betUnit: 1,
-    sfxVol: 1,
+    sfxVol: 0.35,  // low default (no Web Audio access to the iPhone silent switch)
     bgmVol: 1,
+    haptics: true, // UI only: navigator.vibrate / iOS 18 switch tap
     modes: {
       once: true, onceMulti: true, onceBig: true, song: true, train: true, sanyuan: true, jp: true,
       slotBonus: true, fever: true, bingo: true,
@@ -320,6 +321,7 @@
       betUnit: clamp(r.betUnit, 1, 10, d.betUnit),
       sfxVol: clamp(r.sfxVol, 0, 1, d.sfxVol),
       bgmVol: clamp(r.bgmVol, 0, 1, d.bgmVol),
+      haptics: typeof r.haptics === 'boolean' ? r.haptics : d.haptics,
       modes: Object.fromEntries(MODE_KEYS.map((k) => [k, typeof m[k] === 'boolean' ? m[k] : d.modes[k]])),
     };
   }
