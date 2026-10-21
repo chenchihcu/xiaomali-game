@@ -15,6 +15,34 @@ for (const k of Object.keys(E.PRESETS)) row(E.PRESETS[k].label, E.applyPreset(E.
 const off = E.normalizeSettings({ modes: { song: false, train: false, sanyuan: false, jp: false } });
 row('標準無彩蛋', off);
 
+
+// HOLD 鎖燈 Bonus: RTP impact (標準 on vs off) + trigger / fill stats.
+{
+  const on = E.applyPreset(E.normalizeSettings({}), 'normal');
+  const offL = E.applyPreset(E.normalizeSettings({ modes: { lockBonus: false } }), 'normal');
+  const a = E.simulate(on, rounds), b = E.simulate(offL, rounds);
+  let trig = 0, full = 0, gain = 0, jp = 0, locks = 0;
+  const bets = E.SYMBOLS.map(() => 1), total = bets.length;
+  for (let n = 0; n < rounds; n++) {
+    const st = E.resolveRound(bets, on, Math.random, E.JP.seed).steps.find((x) => x.type === 'lockBonus');
+    if (!st) continue;
+    trig++; locks += st.count; gain += st.gained; if (st.full) { full++; jp += st.jpAward; }
+  }
+  const lb = E.LOCK_BONUS;
+  const n = Math.max(1, trig);
+  console.log(`鎖燈Bonus  標準 開 ${pct(a.rtp)} / 關 ${pct(b.rtp)}（蒙地卡羅，含雜訊）  直接貢獻 +${((gain + jp) / (rounds * total) * 100).toFixed(2)}pt RTP`);
+  console.log(`           觸發 ${(trig / rounds * 100).toFixed(3)}%（約 1/${Math.round(rounds / n)} 局）  平均鎖 ${(locks / n).toFixed(1)}/24  平均獎 ${(gain / n / total).toFixed(2)}×押  全亮 ${(full / n * 100).toFixed(2)}%`);
+  // Isolated resolver sanity: respins reset rule + bounds
+  let ok = true;
+  for (let k = 0; k < 20000 && ok; k++) {
+    const r = E.resolveLockBonus(8, Math.random, 300, true);
+    let left = lb.respins;
+    for (const sp of r.spins) { left = sp.newLocks.length ? lb.respins : left - 1; if (sp.respinsLeft !== left) ok = false; }
+    if (r.count > 24 || r.count < lb.seed || (r.full && r.jpAward !== 300) || (!r.full && left !== 0)) ok = false;
+  }
+  console.log(ok ? 'lockBonus rules  OK' : 'lockBonus rules  FAIL');
+}
+
 // Sanity: JP pot must freeze when modes.jp is off (engine nextJpPot).
 {
   const off = E.normalizeSettings({ modes: { jp: false } });

@@ -1753,6 +1753,85 @@
     }
   }
 
+  // ---------------------------------------------------------------------------
+  // Tiered win celebration (NICE / BIG / MEGA / JP) — visual only, never credits.
+  // Tier by round multiple (roundWin ÷ totalBet); JP whenever a jackpot paid.
+  // Layers: light burst + count-up + coin shower; tap anywhere to skip.
+  // Reduced motion → static number only. No flashing (count-up + transforms).
+  // ---------------------------------------------------------------------------
+  const WIN_TIERS = [
+    { id: 'jp',   min: Infinity, label: 'JACKPOT',  ms: 4200, coins: 34, burst: 5 },
+    { id: 'mega', min: 25,       label: 'MEGA WIN', ms: 3400, coins: 26, burst: 4 },
+    { id: 'big',  min: 10,       label: 'BIG WIN',  ms: 2500, coins: 16, burst: 3 },
+    { id: 'nice', min: 3,        label: 'NICE',     ms: 1500, coins: 8,  burst: 2 },
+  ];
+  function pickWinTier(win, bet, jp = false) {
+    if (jp) return WIN_TIERS[0];
+    const m = bet > 0 ? win / bet : 0;
+    return WIN_TIERS.slice(1).find((t) => m >= t.min) || null;
+  }
+  const TIER_ICON = {
+    nice: '<path d="M12 2l2.9 6.6 7.1.6-5.4 4.7 1.6 7L12 17.3 5.8 20.9l1.6-7L2 9.2l7.1-.6z"/>',
+    big: '<path d="M4 18h16l1-10-5 4-4-7-4 7-5-4z"/><rect x="4" y="19.5" width="16" height="2.5" rx="1"/>',
+    mega: '<path d="M13 2L4 14h6l-1 8 9-12h-6z"/>',
+    jp: '<path d="M3 8l4.5 4L12 4l4.5 8L21 8l-2 11H5z"/><circle cx="12" cy="15" r="2"/>',
+  };
+  let _tierSkip = null;
+  function showWinTier(tier, amount) {
+    const cab = cabinetEl;
+    if (!tier || !cab || amount <= 0) return Promise.resolve();
+    if (_tierSkip) _tierSkip();
+    const rm = reduceMotion();
+    const el = document.createElement('div');
+    el.className = 'tier-celebrate tier-' + tier.id + (rm ? ' rm' : '');
+    el.setAttribute('role', 'status');
+    el.setAttribute('aria-live', 'polite');
+    el.innerHTML = `<div class="tc-rays" aria-hidden="true"></div>
+      <div class="tc-card">
+        <svg class="tc-ic" viewBox="0 0 24 24" aria-hidden="true">${TIER_ICON[tier.id]}</svg>
+        <span class="tc-lab">${tier.label}</span>
+        <b class="tc-num">+${rm ? amount : 0}</b>
+        <span class="tc-skip" aria-hidden="true"><svg viewBox="0 0 24 24"><path d="M5 5v14l8-7zM13 5v14l8-7z"/></svg></span>
+      </div><div class="tc-coins" aria-hidden="true"></div>`;
+    cab.appendChild(el);
+    const num = el.querySelector('.tc-num');
+    if (!rm) {
+      const coins = el.querySelector('.tc-coins');
+      for (let i = 0; i < tier.coins; i++) {
+        const c = document.createElement('i');
+        c.style.left = (4 + Math.random() * 92) + '%';
+        c.style.setProperty('--d', (0.9 + Math.random() * 0.9).toFixed(2) + 's');
+        c.style.setProperty('--dl', (Math.random() * (tier.ms / 1000 - 1.2)).toFixed(2) + 's');
+        c.style.setProperty('--r', Math.round(Math.random() * 720 - 360) + 'deg');
+        coins.appendChild(c);
+      }
+      flourishBurst(tier.burst, $('center'));
+    }
+    return new Promise((resolve) => {
+      let raf = 0, done = false;
+      const t0 = performance.now(), countMs = rm ? 0 : Math.min(tier.ms * 0.6, 2200);
+      const finish = () => {
+        if (done) return; done = true;
+        cancelAnimationFrame(raf); clearTimeout(timer);
+        num.textContent = '+' + amount;
+        el.classList.add('out');
+        _tierSkip = null;
+        setTimeout(() => el.remove(), rm ? 0 : 320);
+        resolve();
+      };
+      const tick = (now) => {
+        const k = Math.min(1, (now - t0) / countMs);
+        num.textContent = '+' + Math.round(amount * (1 - Math.pow(1 - k, 3)));
+        if (k < 1) raf = requestAnimationFrame(tick);
+      };
+      if (countMs) raf = requestAnimationFrame(tick);
+      const timer = setTimeout(finish, rm ? 2000 : tier.ms);
+      // tap-to-skip: first tap jumps to the final number, then closes
+      el.addEventListener('pointerdown', (e) => { e.preventDefault(); finish(); }, { once: true });
+      _tierSkip = finish;
+    });
+  }
+
   /** Tiny e-horse dash across the marquee during FEVER (visual only). */
   function flourishHorse() {
     const host = $('flourishLayer');
@@ -2437,6 +2516,58 @@
     }
   }
 
+  /**
+   * HOLD 鎖燈 Bonus (engine step `lockBonus`). Visual + credit via caller.
+   * Lamps lock with their coin values; HOLD strip shows respins left (≤3 lamps).
+   */
+  async function playLockBonus(step) {
+    const rm = reduceMotion();
+    const pace = rm ? 0.35 : 1;
+    const board = $('board');
+    cabinetEl?.classList.add('lb-open');
+    board?.classList.add('lb-on');
+    const lock = (it) => {
+      const t = tileEls[it.i];
+      if (!t) return;
+      t.classList.add('lb-lock');
+      t.dataset.coin = String(it.value);
+      const c = document.createElement('b');
+      c.className = 'lb-coin';
+      c.textContent = '+' + it.value;
+      t.appendChild(c);
+      flourishCascade(it.i, 0);
+    };
+    const setLeft = (n) => {
+      FX.holdsSet(n);
+      setMsg(`鎖燈 BONUS・重轉 ${n}`, 'hot');
+    };
+    setMsg('鎖燈 BONUS！', 'hot');
+    Sound.lucky();
+    for (const it of step.seed) { lock(it); Sound.bet(); await sleep(260 * pace); }
+    setLeft(3);
+    await sleep(600 * pace);
+    for (const sp of step.spins) {
+      // respin: brief sweep over unlocked lamps (opacity only)
+      board?.classList.add('lb-spin');
+      Sound.tick?.();
+      await sleep(520 * pace);
+      board?.classList.remove('lb-spin');
+      for (const it of sp.newLocks) { lock(it); Sound.coin(); await sleep(160 * pace); }
+      setLeft(sp.respinsLeft);
+      await sleep((sp.newLocks.length ? 420 : 300) * pace);
+    }
+    if (step.full) {
+      setMsg('全亮！JACKPOT', 'hot');
+      board?.classList.add('lb-full');
+      await sleep(700 * pace);
+    }
+    return () => {
+      cabinetEl?.classList.remove('lb-open');
+      board?.classList.remove('lb-on', 'lb-full', 'lb-spin');
+      tileEls.forEach((t) => { t.classList.remove('lb-lock'); delete t.dataset.coin; t.querySelector('.lb-coin')?.remove(); });
+    };
+  }
+
   async function playSlotBonus(step) {
     if (step.trigger) await cueStageEntry(step);
     setMsg(step.freeSpin ? '三輪 Bonus・FREE' : '三輪 Bonus', 'hot');
@@ -2552,6 +2683,7 @@
     const result = E.resolveRound(state.bets, settings, randomFloat, potBefore, { bingoBoard: state.bingo });
     // Apply bingo snapshots per step (not the final board) so marks / lines animate.
     let roundWin = 0;
+    let lockJpPaid = false;
     let payLines = 0;
     let lastPayText = '';
     let lastPayGain = 0;
@@ -2806,6 +2938,18 @@
         continue;
       }
 
+      if (step.type === 'lockBonus') {
+        const cleanup = await playLockBonus(step);
+        const pay = (step.gained || 0) + (step.jpAward || 0);
+        if (step.jpAward > 0) { $('jpRow')?.classList.add('jp-hit'); $('jpMini')?.classList.add('is-hit'); lockJpPaid = true; }
+        setMsg(`鎖燈 ${step.count}/24 +${pay}`, 'hot');
+        roundWin += pay;
+        await animateWin(state.win, state.win + pay);
+        await sleep(500);
+        cleanup();
+        continue;
+      }
+
       if (step.type === 'jp') {
         $('jpRow')?.classList.add('jp-hit');
         $('jpMini')?.classList.add('is-hit');
@@ -2847,6 +2991,9 @@
     }
 
     state.betsPaid = false;
+    if (roundWin > 0) {
+      await showWinTier(pickWinTier(roundWin, total, result.jpWin > 0 || lockJpPaid), roundWin);
+    }
     if (roundWin > 0) {
       const endTier = winTierFrom(roundWin, 0);
       FX.win(endTier);
@@ -4275,7 +4422,7 @@
   setTimeout(maybeFirstRunTip, 500);
 
   window.__xiaomali = {
-    build: '20261017o',
+    build: '20261021p',
     state, settings, TRACK, SYMBOLS, pickTarget, resetCredit, Music, Sound, E, fitCabinet,
     setSettings(s) {
       const v = validateSettings(s);
@@ -4285,6 +4432,24 @@
       return { fixed: v.fixed, errors: v.errors, warnings: v.warnings };
     },
     validateSettings, toast, save, load, buildBackup, applyProgressData,
+    /** Audit/QA only: show a win-tier celebration (visual only, no credit). */
+    debugWinTier(id, amount = 500) {
+      return showWinTier(WIN_TIERS.find((t) => t.id === id), amount);
+    },
+    /** Audit/QA only: play a HOLD lock bonus visually (no round, no credit). */
+    async debugLockBonus(full = false) {
+      if (state.busy) return false;
+      let st;
+      for (let k = 0; k < 20000; k++) {
+        st = E.resolveLockBonus(8, Math.random, state.jp, true);
+        if (!!st.full === !!full) break;
+      }
+      const cleanup = await playLockBonus(st);
+      setMsg(`鎖燈 ${st.count}/24 +${st.gained + st.jpAward}`, 'hot');
+      $('board')?.setAttribute('data-lb-end', st.count);
+      await sleep(900); $('board')?.removeAttribute('data-lb-end'); cleanup(); FX.holdsSet(0);
+      return { count: st.count, full: st.full };
+    },
     /** Audit/QA only: play one stage overlay visually (no round, no credit, no state change). */
     async debugStage(kind) {
       const Eng = window.XiaomaliEngine;
