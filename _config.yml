@@ -5,6 +5,7 @@ exclude:
   - sim.js
   - tests
   - ci
+  - .github
   - node_modules
   - package.json
   - package-lock.json

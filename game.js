@@ -38,7 +38,7 @@
   const START_CREDIT = 1000;
   const CREDIT_CAP = 999999;
   const MAX_BET_PER_SYMBOL = 99;
-  const BUILD = '20261021s';
+  const BUILD = '20261023a';
   const STORAGE_KEY = 'xiaomali.v1';
   const SETTINGS_KEY = 'xiaomali.settings.v1';
 
@@ -1463,6 +1463,8 @@
   const sleep = (ms) => new Promise((r) => setTimeout(r, ms));
 
   function clearHighlights() {
+    // Safety net: a settled tier card must never outlive its round.
+    document.querySelectorAll('.tier-celebrate.out').forEach((n) => n.remove());
     tileEls.forEach((el) => el.classList.remove('win', 'lit2', 'sym-hit'));
     betKeys.forEach((k) => setKeyHit(k, false));
     $('lblSmall').classList.remove('on');
@@ -1919,8 +1921,8 @@
   let _tierSkip = null;
   function showWinTier(tier, amount) {
     const cab = cabinetEl;
-    if (!tier || !cab || amount <= 0) return Promise.resolve();
     if (_tierSkip) _tierSkip();
+    if (!tier || !cab || amount <= 0) return Promise.resolve();
     const rm = reduceMotion();
     const el = document.createElement('div');
     el.className = 'tier-celebrate tier-' + tier.id + (rm ? ' rm' : '');
@@ -1956,9 +1958,14 @@
         if (done) return; done = true;
         cancelAnimationFrame(raf); clearTimeout(timer);
         num.textContent = '+' + amount;
+        // Settled: the fading card must never sit on top of the controls
+        // (it swallowed the next tap on 得分／全押／自動). Inert immediately,
+        // removed after the 0.3 s fade.
         el.classList.add('out');
+        el.style.pointerEvents = 'none';
+        el.setAttribute('aria-hidden', 'true');
         _tierSkip = null;
-        setTimeout(() => el.remove(), rm ? 0 : 320);
+        if (rm) el.remove(); else setTimeout(() => el.remove(), 320);
         resolve();
       };
       const tick = (now) => {
