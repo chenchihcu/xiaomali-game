@@ -1106,7 +1106,7 @@ html.neon .first-tip-text b { color: var(--n-lime); }
 .tier-celebrate.tier-big  { --tc: #ffd34d; --tc2: #fff1b8; }
 .tier-celebrate.tier-mega { --tc: #ff3fd8; --tc2: #ffc6f3; }
 .tier-celebrate.tier-jp   { --tc: #ffd34d; --tc2: #ffffff; }
-.tier-celebrate.out { animation: tcOut .3s ease-in both; }
+.tier-celebrate.out { animation: tcOut .3s ease-in both; pointer-events: none; }
 .tc-rays {
   position: absolute; left: 50%; top: 46%; width: 170%; aspect-ratio: 1; margin: -85% 0 0 -85%;
   background: repeating-conic-gradient(from 0deg, color-mix(in srgb, var(--tc) 30%, transparent) 0 7deg, transparent 7deg 20deg);

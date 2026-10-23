@@ -152,6 +152,7 @@ iPhone：Safari 打開 → 分享 → **加入主畫面**。直式、橫式都�
 
 - `node --test tests/`：存檔／匯入的清洗（NaN、負數、超大值、局中結算）。
 - `node sim.js`：各難度 RTP 範圍、鎖燈規則、JP 凍結；任何一項失敗都會 exit 1。
-- CI 範本在 `ci/github-actions-ci.yml`：搬到 `.github/workflows/ci.yml` 就會在 PR 和 push 時跑（推送 workflow 檔需要有 `workflow` 權限的帳號）。
+- CI 範本在 `ci/github-actions-ci.yml`：搬到 `.github/workflows/ci.yml` 就會在 PR 和 push 時跑 `node --test tests/` 和 `node sim.js` 斷言（推送 workflow 檔需要有 `workflow` 權限的帳號）。
+- 中獎慶祝動畫的點擊回歸測試（Playwright，不在 CI 跑）：`npm i playwright && node tests/e2e/tier-overlay.e2e.mjs http://localhost:8765/ 30`。
 - QA hook `window.__xiaomali` 的完整功能只在 localhost 或網址加 `?debug=1` 時開啟。
-- GitHub Pages 用 Jekyll 從 `main` 發佈，`_config.yml` 排除了 `*.md`、`sim.js`、`tests`、`ci`，所以網站上只有遊戲檔案。
+- GitHub Pages 用 Jekyll 從 `main` 發佈，`_config.yml` 排除了 `*.md`、`sim.js`、`tests`、`ci`、`.github`，所以網站上只有遊戲檔案。
