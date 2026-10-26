@@ -118,6 +118,31 @@ node sim.js 50000          # RTP / hit / LUCKY / JP rates per preset
 - Console: `__xiaomali.state`, `.settings`, `.Music`, `.setSettings(...)`, `.pickTarget()`.
 - iOS/WebKit: tap once to unlock; `Sound.unlock` awaits `resume` + silent buffer before BGM/SFX. Hardware mute still silences Web Audio. Tab-visible resumes suspended AudioContext.
 
+## 部署（給 AI／維護者）
+
+純靜態站點，無 build；遊戲原始碼變更後若要更新 Cloudflare，在 **repo 根目錄** 手動部署（repo 內沒有 wrangler 設定檔；Wrangler 以 `--assets .` 上傳根目錄，`.assetsignore` 排除 `.git`、文件與工具檔）。
+
+| 目標 | URL |
+|---|---|
+| GitHub Pages | https://chenchihcu.github.io/xiaomali-game/ |
+| Cloudflare Workers | https://xiaomali-game.chihfu-chen-tw.workers.dev/ |
+
+**Cloudflare 帳戶 ID**（識別用，非秘密）：`85d4c471e237f8ed4f932dac0c4aa18a`
+
+**API 權杖**：僅能透過環境變數 `CLOUDFLARE_API_TOKEN` 提供；**禁止**寫入 repo、禁止在 commit／PR／log／對話中列印或貼上 token 值。
+
+手動部署 Workers 靜態資產（執行前請確認本機已設定 `CLOUDFLARE_API_TOKEN`）：
+
+```bash
+CLOUDFLARE_ACCOUNT_ID=85d4c471e237f8ed4f932dac0c4aa18a \
+WRANGLER_CACHE_DIR=/tmp/wrangler-cache \
+npx wrangler deploy --name xiaomali-game --assets . --compatibility-date 2026-10-01
+```
+
+Agent 約束：
+- 未獲使用者明確要求時，不要代為 deploy；若需部署，使用上列指令與帳戶 ID，勿改 game 程式碼來「配合部署」。
+- GitHub Pages 若已接 repo 自動發布，Workers 需另依上列指令同步（兩端 URL 不同，皆可能需更新）。
+
 ## Conventions
 - Build-free: no bundler, framework, CDN, or external fonts.
 - UI copy: Traditional Chinese. Code/comments: English.
